@@ -1,6 +1,13 @@
 # castle-voice-engine - (c) 2026 Edward / BeyondPath
 # Built on PersonaPlex (NVIDIA, NOML) and Moshi (Kyutai, MIT)
 # castle/server/test_endpoints.py - v0.1.1 verification harness.
+# DEPRECATED v0.1.5 (2026-04-27) - PersonaPlex 7B confirmed OOD on system
+# prompt steering during Edward audit; voice backend swapped to OpenAI Realtime
+# API (see castle/server/realtime_endpoints.py). This file is kept on disk as
+# a reference archive but is NOT attached to app.py and its torch/moshi imports
+# WILL fail at runtime - those deps were removed from requirements.txt.
+# Do not re-attach without re-installing the PersonaPlex stack.
+#
 
 from __future__ import annotations
 import io, os, tarfile, traceback

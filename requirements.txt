@@ -1,24 +1,28 @@
-# castle-voice-engine — runtime deps (Python 3.11)
-# (c) 2026 Edward / BeyondPath. PersonaPlex (NVIDIA, NOML) + Moshi (Kyutai, MIT).
+# castle-voice-engine - runtime deps (Python 3.11)
+# (c) 2026 Edward / BeyondPath.
+#
+# v0.1.5 (2026-04-27): voice backend swapped to OpenAI Realtime API.
+#   - PersonaPlex (NVIDIA NOML) deps removed: torch, transformers, opuslib.
+#   - Moshi (Kyutai MIT) audio runtime removed.
+#   - HuggingFace download path removed (no 14GB cold-start cost).
+#   - Added: openai SDK + httpx (server-side ephemeral token mint).
+# Legacy archive: castle/server/test_endpoints.py kept on disk but no longer
+# wired into Modal app; its imports (torch / soundfile / moshi) are NOT
+# installed at runtime and will fail if loaded -- intentional, archive only.
 
 # --- Web framework + ASGI ---
 fastapi>=0.110,<0.116
 uvicorn[standard]>=0.29,<0.31
 
-# --- WebSocket / wire ---
+# --- WebSocket / wire (engine_server.py legacy /voice route) ---
 websockets>=12.0,<13.0
 
 # --- Persona registry ---
 PyYAML>=6.0
 
-# --- Audio runtime (TODO: Moshi pinned via git when public) ---
-# moshi @ git+https://github.com/kyutai-labs/moshi@main  # pin commit before prod
-opuslib>=3.0,<4.0
-
-# --- PersonaPlex inference (replace with NVIDIA package once published) ---
-# personaplex @ git+https://github.com/NVIDIA/personaplex@main
-torch>=2.2,<2.5
-transformers>=4.40,<4.46
+# --- OpenAI Realtime ephemeral token mint ---
+httpx>=0.27,<0.29
+openai>=1.40,<2.0
 
 # --- Modal deploy ---
 modal>=0.65,<1.0
