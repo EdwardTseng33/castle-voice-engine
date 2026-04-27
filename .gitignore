@@ -35,3 +35,4 @@ weights/
 *.bin
 *.pth
 *.pt
+test_outputs/
