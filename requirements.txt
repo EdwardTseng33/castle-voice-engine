@@ -1,0 +1,24 @@
+# castle-voice-engine — runtime deps (Python 3.11)
+# (c) 2026 Edward / BeyondPath. PersonaPlex (NVIDIA, NOML) + Moshi (Kyutai, MIT).
+
+# --- Web framework + ASGI ---
+fastapi>=0.110,<0.116
+uvicorn[standard]>=0.29,<0.31
+
+# --- WebSocket / wire ---
+websockets>=12.0,<13.0
+
+# --- Persona registry ---
+PyYAML>=6.0
+
+# --- Audio runtime (TODO: Moshi pinned via git when public) ---
+# moshi @ git+https://github.com/kyutai-labs/moshi@main  # pin commit before prod
+opuslib>=3.0,<4.0
+
+# --- PersonaPlex inference (replace with NVIDIA package once published) ---
+# personaplex @ git+https://github.com/NVIDIA/personaplex@main
+torch>=2.2,<2.5
+transformers>=4.40,<4.46
+
+# --- Modal deploy ---
+modal>=0.65,<1.0
