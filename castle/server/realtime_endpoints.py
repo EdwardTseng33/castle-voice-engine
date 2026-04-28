@@ -123,7 +123,7 @@ def attach_realtime_routes(app: FastAPI) -> None:
             # mic doesn't have to. Edward can keep mic on the whole session.
             "turn_detection": {
                 "type": "server_vad",
-                "threshold": 0.7,  # v0.1.10: 從 0.5 拉高、降低環境音 false trigger
+                "threshold": 0.8,  # v0.1.11: 從 0.7 再拉高（Edward 說 0.7 仍敏感）
                 "prefix_padding_ms": 300,
                 # v0.1.6.1: 從 500 → 1000ms 拉長靜音判斷、降低 echo loop 觸發
                 "silence_duration_ms": 1000,
