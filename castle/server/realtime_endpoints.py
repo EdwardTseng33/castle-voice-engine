@@ -125,7 +125,11 @@ def attach_realtime_routes(app: FastAPI) -> None:
                 "type": "server_vad",
                 "threshold": 0.5,
                 "prefix_padding_ms": 300,
-                "silence_duration_ms": 500,
+                # v0.1.6.1: 從 500 → 1000ms 拉長靜音判斷、降低 echo loop 觸發
+                "silence_duration_ms": 1000,
+                "create_response": True,
+                # v0.1.6.1: 關掉 echo barge-in（speaker 漏音不會自動 interrupt model）
+                "interrupt_response": False,
             },
             "temperature": 0.8,
         }
