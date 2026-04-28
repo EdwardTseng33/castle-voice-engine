@@ -53,19 +53,50 @@ def _load_persona(name: str) -> dict[str, Any]:
 
 
 def _build_instructions(persona_data: dict[str, Any]) -> str:
-    """Compose Realtime `instructions` from persona prompt + zh-TW hint."""
+    """Compose Realtime `instructions` from persona prompt + language hint.
+
+    v0.2.0: language hint now reads `persona_data.language` (zh-TW or en)
+    so Sophie stays in Mandarin while Lily stays in English.
+    """
     persona = persona_data.get("persona", {}) or {}
     prompt = (persona.get("prompt") or "").strip()
     if not prompt:
-        prompt = "You are Sophie, Edward's quiet, steady companion."
-    # Append explicit Mandarin output hint for Realtime to stay in zh-TW.
-    suffix = (
-        "\n\n--- Output language ---\n"
-        "Always respond in Traditional Chinese (zh-TW / Taiwan Mandarin) "
-        "unless Edward explicitly switches to English. Keep replies short, "
-        "conversational, and warm. Prefer 1-2 sentences over paragraphs."
-    )
+        prompt = "You are an attentive companion."
+    lang = (persona_data.get("language") or "zh-TW").strip().lower()
+    if lang.startswith("en"):
+        suffix = (
+            "\n\n--- Output language ---\n"
+            "Always respond in English. Keep replies short, conversational, "
+            "and warm. Prefer 1-2 sentences over paragraphs."
+        )
+    else:
+        suffix = (
+            "\n\n--- Output language ---\n"
+            "Always respond in Traditional Chinese (zh-TW / Taiwan Mandarin) "
+            "unless Edward explicitly switches to English. Keep replies short, "
+            "conversational, and warm. Prefer 1-2 sentences over paragraphs."
+        )
     return prompt + suffix
+
+
+def _build_transcription_config(persona_data: dict[str, Any]) -> dict[str, Any]:
+    """v0.2.0: transcription language + prompt now follow persona.language.
+
+    Sophie (zh-TW) -> language=zh + Taiwan-accent hint.
+    Lily   (en)    -> language=en + casual conversational English hint.
+    """
+    lang = (persona_data.get("language") or "zh-TW").strip().lower()
+    if lang.startswith("en"):
+        return {
+            "model": "gpt-4o-transcribe",
+            "language": "en",
+            "prompt": "Casual conversational English, may include some Mandarin words.",
+        }
+    return {
+        "model": "gpt-4o-transcribe",
+        "language": "zh",
+        "prompt": "繁體中文、台灣口音、可能混些英文 / 台語",
+    }
 
 
 def attach_realtime_routes(app: FastAPI) -> None:
@@ -104,7 +135,15 @@ def attach_realtime_routes(app: FastAPI) -> None:
                 status_code=e.status_code, content={"error": "persona_not_found", "detail": e.detail}
             )
 
-        voice = req.voice or DEFAULT_VOICE
+        # v0.2.0: persona may carry its own voice (Sophie=marin, Lily=alloy);
+        # explicit req.voice overrides; final fallback DEFAULT_VOICE.
+        # Whitelist current OpenAI Realtime voices (filter out legacy persona-internal
+        # presets like PersonaPlex "NATF1" which would 4xx the session create).
+        _VALID_REALTIME_VOICES = {"alloy", "ash", "ballad", "coral", "echo", "marin", "nova", "sage", "shimmer", "verse", "cedar"}
+        persona_voice = ((persona_data.get("voice") or {}).get("preset_id") or "").strip()
+        if persona_voice not in _VALID_REALTIME_VOICES:
+            persona_voice = ""
+        voice = req.voice or persona_voice or DEFAULT_VOICE
         model = req.model or DEFAULT_MODEL
         instructions = _build_instructions(persona_data)
 
@@ -118,11 +157,8 @@ def attach_realtime_routes(app: FastAPI) -> None:
             "modalities": ["audio", "text"],
             "input_audio_format": "pcm16",
             "output_audio_format": "pcm16",
-            "input_audio_transcription": {
-                "model": "gpt-4o-transcribe",  # v0.1.15: 升 newer model（比 whisper-1 準）
-                "language": "zh",  # v0.1.15: 強制中文、不再 auto-detect 誤判韓文 / 日文
-                "prompt": "繁體中文、台灣口音、可能混些英文 / 台語"
-            },
+            # v0.2.0: transcription language follows persona (Sophie=zh, Lily=en)
+            "input_audio_transcription": _build_transcription_config(persona_data),
             # Server-side VAD: OpenAI handles turn detection so the browser
             # mic doesn't have to. Edward can keep mic on the whole session.
             "turn_detection": {
