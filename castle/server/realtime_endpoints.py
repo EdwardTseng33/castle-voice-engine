@@ -118,7 +118,11 @@ def attach_realtime_routes(app: FastAPI) -> None:
             "modalities": ["audio", "text"],
             "input_audio_format": "pcm16",
             "output_audio_format": "pcm16",
-            "input_audio_transcription": {"model": "whisper-1"},
+            "input_audio_transcription": {
+                "model": "gpt-4o-transcribe",  # v0.1.15: 升 newer model（比 whisper-1 準）
+                "language": "zh",  # v0.1.15: 強制中文、不再 auto-detect 誤判韓文 / 日文
+                "prompt": "繁體中文、台灣口音、可能混些英文 / 台語"
+            },
             # Server-side VAD: OpenAI handles turn detection so the browser
             # mic doesn't have to. Edward can keep mic on the whole session.
             "turn_detection": {
