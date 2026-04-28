@@ -35,7 +35,7 @@ from pydantic import BaseModel
 PERSONAS_DIR = Path(__file__).resolve().parent.parent / "personas"
 OPENAI_REALTIME_SESSIONS_URL = "https://api.openai.com/v1/realtime/sessions"
 DEFAULT_MODEL = "gpt-realtime"
-DEFAULT_VOICE = "shimmer"  # warm female; Edward to A/B vs alloy/sage in v0.1.6
+DEFAULT_VOICE = "marin"  # Edward 拍板 2026-04-28; OpenAI Realtime 2025 new voice
 
 
 class TokenRequest(BaseModel):
