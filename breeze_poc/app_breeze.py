@@ -32,7 +32,7 @@ breeze_asr_image = (
 breeze_tts_image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("ffmpeg", "git", "wget", "sox", "libsox-dev", "build-essential")
-    .pip_install("setuptools<70", "wheel", "pip>=24")
+    .pip_install("setuptools>=70", "wheel", "pip>=24")
     # Aligned with BreezyVoice upstream requirements.txt
     .pip_install(
         "torch==2.3.1",
@@ -59,7 +59,6 @@ breeze_tts_image = (
         "hydra-core==1.3.2",
         "networkx==3.1",
         "pydantic==2.7.0",
-        "wget==3.2",
     )
     # Legacy build-isolation deps
     .run_commands(
