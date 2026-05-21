@@ -167,7 +167,7 @@ class BreezeASR:
     gpu="A10G",
     memory=24576,
     timeout=900,
-    scaledown_window=120,
+    scaledown_window=121,  # bump to force new class container
     secrets=[BREEZE_AUTH_TOKEN_SECRET, HF_SECRET],
     min_containers=0,
 )
@@ -215,14 +215,14 @@ class BreezyVoiceTTS:
             audio_arr = audio_arr.mean(axis=1)
         prompt_tensor = torch.from_numpy(audio_arr).unsqueeze(0).float()
         t_load = time.time()
-        if self.runtime == "cosyvoice_cli":
-            results = []
-            for chunk in self.cosyvoice.inference_zero_shot(text, prompt_text or "hi", prompt_tensor):
-                results.append(chunk["tts_speech"])
-            output_tensor = torch.cat(results, dim=1)
-            output_sr = getattr(self.cosyvoice, "sample_rate", 22050)
+        # Both runtimes provide inference_zero_shot. CustomCosyVoice returns dict, CosyVoice cli returns iterator/dict varies by version.
+        result = self.cosyvoice.inference_zero_shot(text, prompt_text or "hi", prompt_tensor)
+        if isinstance(result, dict):
+            output_tensor = result["tts_speech"]
         else:
-            output_tensor, output_sr = self.cosyvoice.inference(text, prompt_tensor, sr)
+            chunks = [c["tts_speech"] for c in result]
+            output_tensor = torch.cat(chunks, dim=1)
+        output_sr = getattr(self.cosyvoice, "sample_rate", 22050)
         t_inference = time.time()
         output_np = output_tensor.squeeze().cpu().numpy()
         if output_np.ndim > 1:
@@ -260,7 +260,7 @@ def breeze_fastapi():
     from fastapi.responses import Response, JSONResponse
     fastapi_app = FastAPI(
         title="castle-voice-engine-breeze-poc",
-        version="0.3.0-day3",
+        version="0.3.1-day3-async-fix",
     )
     AUTH_TOKEN = os.environ.get("BREEZE_AUTH_TOKEN", "")
 
@@ -297,7 +297,7 @@ def breeze_fastapi():
     def health():
         return {
             "status": "ok",
-            "version": "0.3.0-day3",
+            "version": "0.3.1-day3-fix",
             "day": 3,
             "stack": "breeze",
             "models": {
@@ -349,7 +349,7 @@ def breeze_fastapi():
         wav_bytes = _preprocess_to_16k_wav(raw)
         t_pp_end = time.time()
         asr = BreezeASR()
-        result = asr.transcribe.remote(wav_bytes, language=language)
+        result = await asr.transcribe.remote.aio(wav_bytes, language=language)
         result["preprocess_ms"] = round((t_pp_end - t_pp_start) * 1000, 1)
         result["total_e2e_ms"] = round(result["preprocess_ms"] + result["latency_ms"], 1)
         return JSONResponse(content=result)
@@ -369,7 +369,7 @@ def breeze_fastapi():
             raise HTTPException(400, "prompt_file empty")
         prompt_wav = _preprocess_to_16k_wav(prompt_raw)
         tts = BreezyVoiceTTS()
-        result = tts.synthesize.remote(text=text, prompt_wav_bytes=prompt_wav, prompt_text=prompt_text)
+        result = await tts.synthesize.remote.aio(text=text, prompt_wav_bytes=prompt_wav, prompt_text=prompt_text)
         wav_bytes = result.pop("wav_bytes")
         return Response(
             content=wav_bytes,

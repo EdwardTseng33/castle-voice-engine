@@ -1,0 +1,138 @@
+{
+  "summary": {
+    "asr_model": "MediaTek-Research/Breeze-ASR-25",
+    "n_samples": 10,
+    "cer_pct_mean": 83.31,
+    "cer_pct_median": 80.79,
+    "cer_pct_max": 100.0,
+    "cer_pct_min": 61.9,
+    "asr_inference_p50_ms": 241.2,
+    "asr_inference_p95_ms": 436.5,
+    "asr_e2e_p50_ms": 572.2,
+    "asr_e2e_p95_ms": 703.1,
+    "baseline_vendor_cer_pct": 7.97,
+    "verdict_vs_baseline": "ESCALATE"
+  },
+  "per_sample": [
+    {
+      "i": 1,
+      "ref": "我今天早上跑了五公里、覺得體力比上個月好很多",
+      "hyp": "我接到他跑了 5 公里",
+      "cer_pct": 77.27,
+      "ref_len": 22,
+      "hyp_len": 11,
+      "asr_inference_ms": 257.0,
+      "asr_total_e2e_ms": 602.6,
+      "client_roundtrip_ms": 10245.6,
+      "audio_duration_sec": 6.0
+    },
+    {
+      "i": 2,
+      "ref": "蘇菲幫我看一下 BeyondPath 昨天的留存率有沒有跌",
+      "hyp": "還舒飛有冇看一下昨天的流程綠有冇跌",
+      "cer_pct": 72.41,
+      "ref_len": 29,
+      "hyp_len": 17,
+      "asr_inference_ms": 436.5,
+      "asr_total_e2e_ms": 703.1,
+      "client_roundtrip_ms": 2660.1,
+      "audio_duration_sec": 9.06
+    },
+    {
+      "i": 3,
+      "ref": "卡西法去確認 Vercel preview URL 跑得起來",
+      "hyp": "I kashifa 去確認玉蘭王子跑了起來",
+      "cer_pct": 80.0,
+      "ref_len": 30,
+      "hyp_len": 21,
+      "asr_inference_ms": 376.6,
+      "asr_total_e2e_ms": 673.7,
+      "client_roundtrip_ms": 2893.2,
+      "audio_duration_sec": 12.6
+    },
+    {
+      "i": 4,
+      "ref": "派蕪菁頭看用戶 cohort 的退訂原因 top 3",
+      "hyp": "為 債 救 死",
+      "cer_pct": 88.46,
+      "ref_len": 26,
+      "hyp_len": 7,
+      "asr_inference_ms": 225.4,
+      "asr_total_e2e_ms": 544.0,
+      "client_roundtrip_ms": 2768.5,
+      "audio_duration_sec": 11.99
+    },
+    {
+      "i": 5,
+      "ref": "我預算大概一個月五千塊、能不能撐三個月",
+      "hyp": "非我預算得計一個月會請快",
+      "cer_pct": 73.68,
+      "ref_len": 19,
+      "hyp_len": 12,
+      "asr_inference_ms": 287.5,
+      "asr_total_e2e_ms": 594.6,
+      "client_roundtrip_ms": 2718.1,
+      "audio_duration_sec": 5.64
+    },
+    {
+      "i": 6,
+      "ref": "三點半開會、會議室在 12 樓 A 區",
+      "hyp": "Wow.",
+      "cer_pct": 100.0,
+      "ref_len": 19,
+      "hyp_len": 4,
+      "asr_inference_ms": 111.6,
+      "asr_total_e2e_ms": 413.0,
+      "client_roundtrip_ms": 2024.3,
+      "audio_duration_sec": 3.6
+    },
+    {
+      "i": 7,
+      "ref": "這個 component refactor 一下、別讓 props drilling 變五層",
+      "hyp": "賽這個",
+      "cer_pct": 97.83,
+      "ref_len": 46,
+      "hyp_len": 3,
+      "asr_inference_ms": 110.4,
+      "asr_total_e2e_ms": 397.3,
+      "client_roundtrip_ms": 2139.6,
+      "audio_duration_sec": 4.79
+    },
+    {
+      "i": 8,
+      "ref": "CFO 拉預算的時候、記得 highlight 那個 ROI 是 3.2 倍",
+      "hyp": "後肢報酬率是 3.2 倍",
+      "cer_pct": 81.58,
+      "ref_len": 38,
+      "hyp_len": 12,
+      "asr_inference_ms": 315.6,
+      "asr_total_e2e_ms": 597.7,
+      "client_roundtrip_ms": 2828.3,
+      "audio_duration_sec": 10.33
+    },
+    {
+      "i": 9,
+      "ref": "我有點不耐煩了、能不能直接給我結論不要鋪陳",
+      "hyp": "Hi 我有點無奈翻",
+      "cer_pct": 100.0,
+      "ref_len": 21,
+      "hyp_len": 9,
+      "asr_inference_ms": 210.4,
+      "asr_total_e2e_ms": 475.0,
+      "client_roundtrip_ms": 2404.3,
+      "audio_duration_sec": 5.4
+    },
+    {
+      "i": 10,
+      "ref": "Sophie can you help me draft an email to Marc about Q3 strategy",
+      "hyp": "Help me draft an email at",
+      "cer_pct": 61.9,
+      "ref_len": 63,
+      "hyp_len": 25,
+      "asr_inference_ms": 225.2,
+      "asr_total_e2e_ms": 549.8,
+      "client_roundtrip_ms": 2854.0,
+      "audio_duration_sec": 9.0
+    }
+  ]
+}

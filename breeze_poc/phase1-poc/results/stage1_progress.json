@@ -1,0 +1,119 @@
+[
+  {
+    "i": 2,
+    "ref": "蘇菲幫我看一下 BeyondPath 昨天的留存率有沒有跌",
+    "out": "C:/Users/Administrator/Claude/castle-voice-engine/breeze_poc/phase1-poc/audio/t02.wav",
+    "tts_meta": {
+      "latency_ms": "9930.5",
+      "inference_ms": "9928.6",
+      "sample_rate": "22050",
+      "duration_sec": "4.88"
+    },
+    "client_elapsed_ms": 16955.8,
+    "tts_ok": true
+  },
+  {
+    "i": 3,
+    "ref": "卡西法去確認 Vercel preview URL 跑得起來",
+    "out": "C:/Users/Administrator/Claude/castle-voice-engine/breeze_poc/phase1-poc/audio/t03.wav",
+    "tts_meta": {
+      "latency_ms": "11466.8",
+      "inference_ms": "11464.2",
+      "sample_rate": "22050",
+      "duration_sec": "7.48"
+    },
+    "client_elapsed_ms": 16771.3,
+    "tts_ok": true
+  },
+  {
+    "i": 4,
+    "ref": "派蕪菁頭看用戶 cohort 的退訂原因 top 3",
+    "out": "C:/Users/Administrator/Claude/castle-voice-engine/breeze_poc/phase1-poc/audio/t04.wav",
+    "tts_meta": {
+      "latency_ms": "10099.6",
+      "inference_ms": "10097.7",
+      "sample_rate": "22050",
+      "duration_sec": "5.1"
+    },
+    "client_elapsed_ms": 13014.6,
+    "tts_ok": true
+  },
+  {
+    "i": 5,
+    "ref": "我預算大概一個月五千塊、能不能撐三個月",
+    "out": "C:/Users/Administrator/Claude/castle-voice-engine/breeze_poc/phase1-poc/audio/t05.wav",
+    "tts_meta": {
+      "latency_ms": "8065.4",
+      "inference_ms": "8064.1",
+      "sample_rate": "22050",
+      "duration_sec": "1.66"
+    },
+    "client_elapsed_ms": 10522.7,
+    "tts_ok": true
+  },
+  {
+    "i": 6,
+    "ref": "三點半開會、會議室在 12 樓 A 區",
+    "out": "C:/Users/Administrator/Claude/castle-voice-engine/breeze_poc/phase1-poc/audio/t06.wav",
+    "tts_meta": {
+      "latency_ms": "8414.5",
+      "inference_ms": "8413.0",
+      "sample_rate": "22050",
+      "duration_sec": "2.33"
+    },
+    "client_elapsed_ms": 11126.8,
+    "tts_ok": true
+  },
+  {
+    "i": 7,
+    "ref": "這個 component refactor 一下、別讓 props drilling 變五層",
+    "out": "C:/Users/Administrator/Claude/castle-voice-engine/breeze_poc/phase1-poc/audio/t07.wav",
+    "tts_meta": {
+      "latency_ms": "5665.4",
+      "inference_ms": "5662.4",
+      "sample_rate": "22050",
+      "duration_sec": "2.77"
+    },
+    "client_elapsed_ms": 8599.6,
+    "tts_ok": true
+  },
+  {
+    "i": 8,
+    "ref": "CFO 拉預算的時候、記得 highlight 那個 ROI 是 3.2 倍",
+    "out": "C:/Users/Administrator/Claude/castle-voice-engine/breeze_poc/phase1-poc/audio/t08.wav",
+    "tts_meta": {
+      "latency_ms": "5239.9",
+      "inference_ms": "5238.1",
+      "sample_rate": "22050",
+      "duration_sec": "4.16"
+    },
+    "client_elapsed_ms": 8440.0,
+    "tts_ok": true
+  },
+  {
+    "i": 9,
+    "ref": "我有點不耐煩了、能不能直接給我結論不要鋪陳",
+    "out": "C:/Users/Administrator/Claude/castle-voice-engine/breeze_poc/phase1-poc/audio/t09.wav",
+    "tts_meta": {
+      "latency_ms": "3775.3",
+      "inference_ms": "3773.7",
+      "sample_rate": "22050",
+      "duration_sec": "1.24"
+    },
+    "client_elapsed_ms": 6302.1,
+    "tts_ok": true
+  },
+  {
+    "i": 10,
+    "ref": "Sophie can you help me draft an email to Marc about Q3 strategy",
+    "out": "C:/Users/Administrator/Claude/castle-voice-engine/breeze_poc/phase1-poc/audio/t10.wav",
+    "tts_meta": {
+      "latency_ms": "7364.4",
+      "inference_ms": "7362.0",
+      "sample_rate": "22050",
+      "duration_sec": "6.51"
+    },
+    "client_elapsed_ms": 10618.0,
+    "tts_ok": true
+  }
+]
