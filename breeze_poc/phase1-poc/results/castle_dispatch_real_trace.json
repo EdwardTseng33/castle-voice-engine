@@ -1,0 +1,80 @@
+{
+  "_meta": {
+    "owner": "calcifer",
+    "ship_date": "2026-05-22",
+    "stage": "Day 4",
+    "purpose": "Castle dispatch end-to-end trace (real artifacts, simulated Claude FC + turnip response)",
+    "what_is_real": [
+      "USER_VOICE_INPUT_ZH is the kind of utterance Day 3 ASR demonstrably handles",
+      "TURNIP_MD spec is the actual castle agent spec (loaded from disk, byte-counted)",
+      "Edge TTS audio is real (synthesized, saved to disk)",
+      "Trace JSON is real artifact for Edward review"
+    ],
+    "what_is_simulated": [
+      "Claude function call output (deterministic stub - real call needs ANTHROPIC_API_KEY)",
+      "turnip response content (hand-crafted in turnip voice - real subagent needs claude code CLI + session)",
+      "BeyondPath D1 retention numbers (made up to demonstrate the flow, not pulled from actual BP metrics)"
+    ]
+  },
+  "case_id": "day4-real-trace-001",
+  "ts_start": 1779397336.6855137,
+  "stage_1_asr": {
+    "skipped": true,
+    "reason": "Day 3 round-trip already showed Breeze-ASR-25 handles this kind of utterance (real Edward voice spotcheck: 'Hello, 我是 Edward.' transcribed cleanly in 241ms)",
+    "simulated_input": "派蕪菁頭看 BeyondPath 昨天的留存率有沒有跌、回我一個結論"
+  },
+  "stage_2_claude_fc": {
+    "simulated": true,
+    "reason": "no ANTHROPIC_API_KEY in project .env",
+    "what_real_claude_would_emit": {
+      "name": "dispatch_subagent",
+      "input": {
+        "agent": "turnip",
+        "task": "查 BeyondPath 昨天 (2026-05-21) 的 retention metric (DAU/MAU/D1/D7/D30 任一)、跟前 7 天平均比對、判斷是否顯著下跌 (> 5%)。給 1-2 句結論。",
+        "expect_format": "short_answer",
+        "timeout_sec": 60
+      }
+    },
+    "elapsed_ms": 0.0
+  },
+  "stage_3_dispatch": {
+    "agent": "turnip",
+    "agent_spec_load": {
+      "loaded": true,
+      "path": "C:\\Users\\Administrator\\.claude\\agents\\turnip.md",
+      "bytes": 6798,
+      "lines": 266,
+      "first_60_chars": "--- name: turnip description: 用戶意圖分析、用戶行為分析、UX 研究、用戶訪談、可用性測試"
+    },
+    "task_dispatched": "查 BeyondPath 昨天 (2026-05-21) 的 retention metric (DAU/MAU/D1/D7/D30 任一)、跟前 7 天平均比對、判斷是否顯著下跌 (> 5%)。給 1-2 句結論。",
+    "elapsed_load_ms": 0.4,
+    "agent_response": {
+      "agent": "turnip",
+      "response_text_zh": "BeyondPath 2026-05-21 D1 retention 41.2 趴、前 7 天平均 43.8 趴、跌 5.9 趴、剛壓警戒線。主因待查、不排除週末效應或新功能 regression。下一步：拉 cohort breakdown 看是新用戶掉還是 returning user 掉。",
+      "response_format": "short_answer (numbers first, action item last)",
+      "metric_observed": {
+        "date": "2026-05-21",
+        "metric": "D1_retention",
+        "value_pct": 41.2,
+        "baseline_7d_avg_pct": 43.8,
+        "delta_pct": -5.9,
+        "verdict": "marginal_decline"
+      },
+      "next_action": "pull cohort breakdown (new vs returning)",
+      "_simulated": true,
+      "_simulation_reason": "no ANTHROPIC_API_KEY in project .env - hand-crafted in turnip voice based on spec"
+    },
+    "elapsed_response_ms": 0.0
+  },
+  "stage_4_tts": {
+    "real": true,
+    "provider": "Microsoft Edge TTS",
+    "voice": "zh-TW-HsiaoChenNeural",
+    "text_synthesized": "BeyondPath 2026-05-21 D1 retention 41.2 趴、前 7 天平均 43.8 趴、跌 5.9 趴、剛壓警戒線。主因待查、不排除週末效應或新功能 regression。下一步：拉 cohort breakdown 看是新用戶掉還是 returning user 掉。",
+    "audio_path": "C:\\Users\\Administrator\\Claude\\castle-voice-engine\\breeze_poc\\phase1-poc\\audio\\castle_dispatch_response.wav",
+    "audio_bytes": 126288,
+    "client_latency_ms": 1431.1
+  },
+  "ts_end": 1779397338.1176066,
+  "total_elapsed_ms": 1432.1
+}
