@@ -32,8 +32,9 @@ breeze_asr_image = (
 breeze_tts_image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("ffmpeg", "git", "wget", "sox", "libsox-dev", "build-essential")
-    .pip_install("setuptools>=70", "wheel", "pip>=24")
+    .pip_install("setuptools<70", "wheel", "pip>=24")
     # Aligned with BreezyVoice upstream requirements.txt
+    .pip_install("openai-whisper")  # latest wheel, has whisper package
     .pip_install(
         "torch==2.3.1",
         "torchaudio==2.3.1",
@@ -45,6 +46,7 @@ breeze_tts_image = (
         "numpy>=1.24,<2.0",
         "scipy",
         "HyperPyYAML==1.2.2",
+        "ruamel.yaml<0.18",
         "modelscope",
         "pyyaml",
         "tqdm",
@@ -61,8 +63,8 @@ breeze_tts_image = (
     )
     # Legacy build-isolation deps
     .run_commands(
-        "pip install --no-build-isolation conformer==0.3.2 inflect==7.3.1 opencc-python-reimplemented",
-        "pip install --no-build-isolation g2pw==0.1.2.4 || echo g2pw_skip",
+        "echo cache_bust_day3_v3_whisper_fix && pip install --no-build-isolation conformer==0.3.2 inflect==7.3.1 opencc-python-reimplemented",
+        "pip install --no-build-isolation g2pw==0.1.1 || echo g2pw_skip",
         "pip install --no-build-isolation openai-whisper==20231117 || pip install --no-build-isolation openai-whisper==20240930 || echo whisper_skip",
         # BreezyVoice repo includes Matcha-TTS as third_party submodule
         "cd /root && git clone --recurse-submodules https://github.com/mtkresearch/BreezyVoice.git || (cd /root && git clone https://github.com/mtkresearch/BreezyVoice.git && cd BreezyVoice && git submodule update --init --recursive)",
