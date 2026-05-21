@@ -38,6 +38,8 @@ breeze_image = (
         "transformers>=4.40",
         "soundfile>=0.12",
         "librosa>=0.10",
+        "jiwer>=3.0",          # Day 2-3 CER 計算
+        "accelerate>=0.30",    # Whisper 加速、Day 3 ASR 用
         # Day 5 Eagle (Picovoice 商用 SDK · PoC 用個人版 KEY)
         # "pveagle>=1.0",   # 留 Day 5 開啟、Day 1 先不裝、image 輕一點
     )
@@ -80,8 +82,8 @@ def breeze_fastapi():
 
     fastapi_app = FastAPI(
         title="castle-voice-engine-breeze-poc",
-        version="0.1.0-day1",
-        description="Voice Path v2.0 Breeze stack PoC (並存試做、非 production)",
+        version="0.2.0-day2",
+        description="Voice Path v2.0 Breeze stack PoC (Day 2: deploy verified + ASR stub)",
     )
 
     AUTH_TOKEN = os.environ.get("BREEZE_AUTH_TOKEN", "")
@@ -96,10 +98,10 @@ def breeze_fastapi():
     def health():
         return {
             "status": "ok",
-            "version": "0.1.0-day1",
-            "day": 1,
+            "version": "0.2.0-day2",
+            "day": 2,
             "stack": "breeze",
-            "note": "ffmpeg / pydub / torch 已安裝、ASR/TTS 待 Day 2 接上",
+            "note": "ffmpeg + torch + transformers + jiwer + accelerate 已預載 / ASR stub 接好 / Day 3 接 Breeze-ASR-25 真 model",
             "isolation_check": {
                 "modal_volume_attached": False,  # Gate 5 條件 1
                 "audio_persisted": False,
@@ -168,6 +170,50 @@ def breeze_fastapi():
                 "X-Breeze-Privacy": "ephemeral-no-volume-persist",
             },
         )
+
+    @fastapi_app.post("/breeze/asr/transcribe")
+    async def transcribe_audio(
+        file: UploadFile = File(...),
+        x_breeze_token = Header(default=None),  # Optional[str]
+    ):
+        """
+        Day 3 ship · Breeze-ASR-25 中文 ASR
+        輸入 WAV / m4a (內部走 preprocess pipeline)
+        輸出 JSON {"text": ..., "latency_ms": ..., "model": "breeze-asr-25"}
+
+        Note Day 3 任務:
+          - 在 GPU function 跑、不是當前 CPU function
+          - 加 @app.cls() 用 @modal.enter() lifecycle 預載 model (避免每次 cold start re-download)
+          - 用 transformers AutoProcessor + WhisperForConditionalGeneration
+          - HuggingFace model ID: MediaTek-Research/Breeze-ASR-25 (待 Day 3 confirm)
+
+        當前 Day 2 stub: 不真跑 model、只 echo audio metadata 驗 endpoint wiring
+        """
+        import time
+        _check_auth(x_breeze_token)
+        raw = await file.read()
+        if len(raw) == 0:
+            raise HTTPException(400, "空檔")
+        if len(raw) > 50 * 1024 * 1024:
+            raise HTTPException(413, f"檔太大 {len(raw)} bytes")
+
+        t0 = time.time()
+        # TODO Day 3: 真跑 Breeze-ASR-25
+        # processor = AutoProcessor.from_pretrained("MediaTek-Research/Breeze-ASR-25")
+        # model = WhisperForConditionalGeneration.from_pretrained(...).to("cuda")
+        # inputs = processor(audio_array, sampling_rate=16000, return_tensors="pt")
+        # outputs = model.generate(**inputs.to("cuda"), language="zh", task="transcribe")
+        # text = processor.batch_decode(outputs, skip_special_tokens=True)[0]
+        text = "[STUB Day 2 · model 待 Day 3 接上、當前只驗 endpoint wiring]"
+        latency_ms = (time.time() - t0) * 1000
+
+        print(f"[breeze.transcribe] input={len(raw)}B latency={latency_ms:.1f}ms (audio purged after return)")
+        return {
+            "text": text,
+            "latency_ms": round(latency_ms, 1),
+            "model": "stub-day2-no-model-loaded",
+            "input_bytes": len(raw),
+        }
 
     return fastapi_app
 

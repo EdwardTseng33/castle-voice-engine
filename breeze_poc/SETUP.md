@@ -23,6 +23,18 @@ $env:PYTHONIOENCODING="utf-8"
 py -m modal deploy breeze_poc/app_breeze.py
 ```
 
+### Fix 4 · python-multipart 漏裝（FastAPI UploadFile = File(...) 需要）
+加進 `.pip_install` line。
+
+### Fix 5 · `from __future__ import annotations` 撞 FastAPI 0.115 ForwardRef
+拿掉 `from __future__ import annotations` line 21、不在 endpoint signature 用 `str | None` 語法。
+
+### Fix 6 · Modal edge 對 GET endpoint cache 舊版
+`/breeze/health` GET 部分 propagate 慢、加 `?_cb=$(date +%s%N)` cache buster bypass:
+```bash
+curl https://...modal.run/breeze/health?_cb=$(date +%s%N)
+```
+
 ### Fix 3 · Deploy 已成功（Modal 端 image build OK）
 - Modal App：`castle-voice-engine-breeze-poc` ✅ deployed（5/22）
 - Endpoint：`https://edwardt0303--castle-voice-engine-breeze-poc-breeze-fastapi.modal.run`
