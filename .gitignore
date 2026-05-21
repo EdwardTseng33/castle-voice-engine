@@ -36,3 +36,19 @@ weights/
 *.pth
 *.pt
 test_outputs/
+
+# voice samples (PRIVACY CRITICAL - Edward 個人聲紋樣本不上 git)
+# (Phase 1 PoC 2026-05-22 卡西法新增、跨 PoC 永遠不解禁)
+voice_samples/
+*.m4a
+*.wav
+*.mp3
+*.opus
+*.flac
+*.aac
+*.ogg
+
+# Eagle 聲紋指紋檔 (含 Edward 聲紋特徵、PRIVACY CRITICAL)
+*_speaker_profile.bin
+edward_speaker_profile.bin
+*.eagle
