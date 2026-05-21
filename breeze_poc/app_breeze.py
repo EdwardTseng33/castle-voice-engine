@@ -1,109 +1,303 @@
 # breeze_poc/app_breeze.py
-# Voice Path v2.0 Phase 1 PoC · Breeze stack 並存試做 (Day 1 skeleton)
-# (c) 2026 Edward / BeyondPath. Apache-2.0 (Breeze-ASR-25 / BreezyVoice 基底)
-#
-# 隔離原則 (Gate 5 條件 1+5):
-#   - 跟現役 app.py 並存、不衝突 (modal app name 不同 / route prefix /breeze/*)
-#   - 聲音檔 never 進 Modal Volume (用 tempfile + bytes in memory)
-#   - PoC 期間僅 Edward 個人 token 限定
-#
-# Day 1 endpoint:
-#   POST /breeze/audio/preprocess   - m4a/wav input -> WAV 16kHz mono bytes
-#                                     (Eagle / Breeze-ASR 標準輸入格式)
-#
-# Day 2+ 加入:
-#   POST /breeze/asr/transcribe     - Breeze-ASR-25 中文轉文字
-#   POST /breeze/tts/synthesize     - BreezyVoice 中文女聲合成
-#   POST /breeze/eagle/enroll       - Picovoice Eagle 聲紋註冊
-#   POST /breeze/eagle/verify       - 聲紋認證
-#   POST /breeze/chat/converse      - Llama-Breeze2 + Sophie persona + function calling
-
-# Note: 不能加 from __future__ import annotations、會把 type hints 變 ForwardRef
-# 撞 FastAPI 0.115 對 UploadFile = File(...) 的 dependency resolver
+# Voice Path v2.0 Phase 1 PoC - Breeze stack
+# Day 3 (5/22 calcifer auto): real Breeze-ASR-25 GPU + BreezyVoice TTS GPU
+# (c) 2026 Edward / BeyondPath. Apache-2.0
 import modal
 
-# A10G image with ffmpeg + torch + transformers
-# (ffmpeg 走 apt-get、不污染 Edward 本機 PATH)
-breeze_image = (
+breeze_cpu_image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("ffmpeg")
     .pip_install(
-        # Day 1 base
         "fastapi>=0.110,<0.116",
         "uvicorn[standard]>=0.29,<0.31",
         "pydantic>=2.0",
-        "python-multipart>=0.0.9",  # Day 2 fix: UploadFile = File(...) 需要、Day 1 漏裝
-        # Day 2 ASR/TTS (預載、Day 1 暫不用、但 image 一次 build 完省 cold start)
+        "python-multipart>=0.0.9",
+    )
+)
+
+breeze_asr_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .apt_install("ffmpeg", "git")
+    .pip_install(
         "torch>=2.1,<2.5",
-        "transformers>=4.40",
+        "transformers>=4.40,<5.0",
         "soundfile>=0.12",
         "librosa>=0.10",
-        "jiwer>=3.0",          # Day 2-3 CER 計算
-        "accelerate>=0.30",    # Whisper 加速、Day 3 ASR 用
-        # Day 5 Eagle (Picovoice 商用 SDK · PoC 用個人版 KEY)
-        # "pveagle>=1.0",   # 留 Day 5 開啟、Day 1 先不裝、image 輕一點
+        "jiwer>=3.0",
+        "accelerate>=0.30",
+        "huggingface_hub>=0.20",
     )
-    # Day 7-8 接 Claude function calling 派城堡 subagent 時、改成正確路徑加回:
-    #   .add_local_dir("../Moving Castle", remote_path="/root/castle")
-    # Day 2-6 (ASR/TTS/Eagle) 不需 castle/ 共享、暫時拿掉讓 deploy 跑得起來
 )
 
-# 第二個 Modal App、跟現役 castle-voice-engine 並存、不衝突
+breeze_tts_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .apt_install("ffmpeg", "git", "wget", "sox", "libsox-dev", "build-essential")
+    .pip_install(
+        "torch>=2.1,<2.5",
+        "torchaudio>=2.1,<2.5",
+        "transformers>=4.40,<5.0",
+        "soundfile>=0.12",
+        "librosa>=0.10",
+        "huggingface_hub>=0.20",
+        "onnxruntime-gpu>=1.17",
+        "numpy>=1.24,<2.0",
+        "scipy",
+        "hyperpyyaml",
+        "modelscope",
+        "pyyaml",
+        "tqdm",
+        "diffusers>=0.27",
+        "openai-whisper==20231117",
+        "conformer==0.3.2",
+        "WeTextProcessing",
+        "g2pw",
+        "inflect",
+        "opencc-python-reimplemented",
+        "lightning>=2.0",
+        "hydra-core==1.3.2",
+        "omegaconf",
+        "gradio>=4.0",
+        "gdown",
+        "wget",
+        "pyarrow",
+        "tensorboard",
+        "matplotlib",
+    )
+    .run_commands(
+        "cd /root && git clone https://github.com/mtkresearch/BreezyVoice.git",
+    )
+)
+
 app = modal.App("castle-voice-engine-breeze-poc")
+BREEZE_AUTH_TOKEN_SECRET = modal.Secret.from_name("breeze-poc-auth")
+HF_SECRET = modal.Secret.from_name("huggingface")
 
-# Edward 個人 token 環境變數 (Gate 5 條件 5)
-BREEZE_AUTH_TOKEN_SECRET = modal.Secret.from_name(
-    "breeze-poc-auth",
-    # 若 secret 不存在、deploy 會報、Edward 手動 create:
-    #   modal secret create breeze-poc-auth BREEZE_AUTH_TOKEN=$(openssl rand -hex 32)
+
+@app.cls(
+    image=breeze_asr_image,
+    gpu="A10G",
+    memory=16384,
+    timeout=600,
+    scaledown_window=60,
+    secrets=[BREEZE_AUTH_TOKEN_SECRET, HF_SECRET],
+    min_containers=0,
 )
+class BreezeASR:
+    @modal.enter()
+    def load_model(self):
+        import torch
+        from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
+        print("[BreezeASR] Loading MediaTek-Research/Breeze-ASR-25...")
+        model_id = "MediaTek-Research/Breeze-ASR-25"
+        try:
+            self.processor = AutoProcessor.from_pretrained(model_id)
+            self.model = AutoModelForSpeechSeq2Seq.from_pretrained(
+                model_id, torch_dtype=torch.float16, low_cpu_mem_usage=True,
+            )
+            self.model_id = model_id
+        except Exception as e:
+            print("[BreezeASR] ASR-25 failed:", e, "fallback to ASR-26")
+            model_id = "MediaTek-Research/Breeze-ASR-26"
+            self.processor = AutoProcessor.from_pretrained(model_id)
+            self.model = AutoModelForSpeechSeq2Seq.from_pretrained(
+                model_id, torch_dtype=torch.float16, low_cpu_mem_usage=True,
+            )
+            self.model_id = model_id
+        self.model = self.model.to("cuda")
+        self.model.eval()
+        print("[BreezeASR] Loaded", self.model_id, "-> CUDA fp16")
+
+    @modal.method()
+    def transcribe(self, wav_bytes, language="zh"):
+        import io, time
+        import torch
+        import soundfile as sf
+        t0 = time.time()
+        audio_arr, sr = sf.read(io.BytesIO(wav_bytes), dtype="float32")
+        if sr != 16000:
+            raise ValueError("Expected 16kHz got " + str(sr))
+        if audio_arr.ndim > 1:
+            audio_arr = audio_arr.mean(axis=1)
+        t_load = time.time()
+        if len(audio_arr) / sr > 30:
+            print("[BreezeASR] truncating to 30s")
+            audio_arr = audio_arr[: 30 * sr]
+        inputs = self.processor(audio_arr, sampling_rate=16000, return_tensors="pt")
+        input_features = inputs.input_features.to("cuda").to(torch.float16)
+        forced_decoder_ids = self.processor.get_decoder_prompt_ids(
+            language=language, task="transcribe"
+        )
+        t_prep = time.time()
+        with torch.no_grad():
+            generated = self.model.generate(
+                input_features,
+                forced_decoder_ids=forced_decoder_ids,
+                max_new_tokens=440,
+            )
+        t_inference = time.time()
+        text = self.processor.batch_decode(generated, skip_special_tokens=True)[0].strip()
+        t_decode = time.time()
+        latency_ms = (t_decode - t0) * 1000
+        print("[BreezeASR] e2e_ms=", round(latency_ms, 1), "text=", text[:50])
+        return {
+            "text": text,
+            "latency_ms": round(latency_ms, 1),
+            "breakdown_ms": {
+                "audio_load": round((t_load - t0) * 1000, 1),
+                "preprocessing": round((t_prep - t_load) * 1000, 1),
+                "inference": round((t_inference - t_prep) * 1000, 1),
+                "decode": round((t_decode - t_inference) * 1000, 1),
+            },
+            "model": self.model_id,
+            "language": language,
+            "audio_duration_sec": round(len(audio_arr) / sr, 2),
+        }
+
+
+@app.cls(
+    image=breeze_tts_image,
+    gpu="A10G",
+    memory=24576,
+    timeout=900,
+    scaledown_window=120,
+    secrets=[BREEZE_AUTH_TOKEN_SECRET, HF_SECRET],
+    min_containers=0,
+)
+class BreezyVoiceTTS:
+    @modal.enter()
+    def load_model(self):
+        import os, sys, time
+        from huggingface_hub import snapshot_download
+        t0 = time.time()
+        print("[BreezyVoiceTTS] Cold start begin...")
+        sys.path.insert(0, "/root/BreezyVoice")
+        third_party = "/root/BreezyVoice/third_party/Matcha-TTS"
+        if os.path.exists(third_party):
+            sys.path.insert(0, third_party)
+        print("[BreezyVoiceTTS] Downloading model from HF...")
+        self.model_dir = snapshot_download(
+            repo_id="MediaTek-Research/BreezyVoice",
+            cache_dir="/root/models",
+        )
+        print("[BreezyVoiceTTS] Model dir:", self.model_dir, "took", round(time.time() - t0, 1), "s")
+        runtime_err = []
+        try:
+            from cosyvoice.cli.cosyvoice import CosyVoice
+            self.cosyvoice = CosyVoice(self.model_dir)
+            self.runtime = "cosyvoice_cli"
+        except Exception as e:
+            runtime_err.append("cosyvoice_cli: " + str(e))
+            try:
+                from single_inference import CustomCosyVoice
+                self.cosyvoice = CustomCosyVoice(self.model_dir)
+                self.runtime = "breezyvoice_custom"
+            except Exception as e2:
+                runtime_err.append("breezyvoice_custom: " + str(e2))
+                raise RuntimeError("BreezyVoice runtime init failed: " + str(runtime_err))
+        print("[BreezyVoiceTTS] Ready", self.runtime, "cold start:", round(time.time() - t0, 1), "s")
+
+    @modal.method()
+    def synthesize(self, text, prompt_wav_bytes, prompt_text="hi"):
+        import io, time
+        import soundfile as sf
+        import torch
+        t0 = time.time()
+        audio_arr, sr = sf.read(io.BytesIO(prompt_wav_bytes), dtype="float32")
+        if audio_arr.ndim > 1:
+            audio_arr = audio_arr.mean(axis=1)
+        prompt_tensor = torch.from_numpy(audio_arr).unsqueeze(0).float()
+        t_load = time.time()
+        if self.runtime == "cosyvoice_cli":
+            results = []
+            for chunk in self.cosyvoice.inference_zero_shot(text, prompt_text or "hi", prompt_tensor):
+                results.append(chunk["tts_speech"])
+            output_tensor = torch.cat(results, dim=1)
+            output_sr = getattr(self.cosyvoice, "sample_rate", 22050)
+        else:
+            output_tensor, output_sr = self.cosyvoice.inference(text, prompt_tensor, sr)
+        t_inference = time.time()
+        output_np = output_tensor.squeeze().cpu().numpy()
+        if output_np.ndim > 1:
+            output_np = output_np.squeeze()
+        buf = io.BytesIO()
+        sf.write(buf, output_np, output_sr, subtype="PCM_16", format="WAV")
+        wav_bytes = buf.getvalue()
+        latency_ms = (time.time() - t0) * 1000
+        print("[BreezyVoiceTTS] text_len=", len(text), "total_ms=", round(latency_ms, 1))
+        return {
+            "wav_bytes": wav_bytes,
+            "sample_rate": output_sr,
+            "latency_ms": round(latency_ms, 1),
+            "breakdown_ms": {
+                "prompt_load": round((t_load - t0) * 1000, 1),
+                "inference": round((t_inference - t_load) * 1000, 1),
+            },
+            "text": text,
+            "output_duration_sec": round(len(output_np) / output_sr, 2),
+        }
 
 
 @app.function(
-    image=breeze_image,
-    cpu=2,                  # Day 1 audio preprocess CPU 夠
+    image=breeze_cpu_image,
+    cpu=2,
     memory=2048,
-    timeout=120,
-    scaledown_window=60,    # idle 1 分 scale-to-zero (省錢)
+    timeout=300,
+    scaledown_window=60,
     secrets=[BREEZE_AUTH_TOKEN_SECRET],
 )
 @modal.asgi_app()
 def breeze_fastapi():
-    """
-    Modal ASGI entry point.
-    所有 /breeze/* 路由都掛在這個 function 底下。
-    跟現役 fastapi_app (OpenAI Realtime) 完全隔離。
-    """
-    import os
-    import tempfile
-    import subprocess
-    from fastapi import FastAPI, UploadFile, File, HTTPException, Header
-    from fastapi.responses import Response
-
+    import os, tempfile, subprocess, time
+    from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Form
+    from fastapi.responses import Response, JSONResponse
     fastapi_app = FastAPI(
         title="castle-voice-engine-breeze-poc",
-        version="0.2.0-day2",
-        description="Voice Path v2.0 Breeze stack PoC (Day 2: deploy verified + ASR stub)",
+        version="0.3.0-day3",
     )
-
     AUTH_TOKEN = os.environ.get("BREEZE_AUTH_TOKEN", "")
 
-    def _check_auth(x_breeze_token):  # Optional[str]
+    def _check_auth(x_breeze_token):
         if not AUTH_TOKEN:
-            raise HTTPException(503, "BREEZE_AUTH_TOKEN secret 未設定")
+            raise HTTPException(503, "BREEZE_AUTH_TOKEN secret not set")
         if x_breeze_token != AUTH_TOKEN:
-            raise HTTPException(401, "Edward 個人 token 不符 / 拒絕")
+            raise HTTPException(401, "Edward personal token rejected")
+
+    def _preprocess_to_16k_wav(raw_bytes):
+        with tempfile.NamedTemporaryFile(suffix=".input", delete=False) as in_tmp:
+            in_tmp.write(raw_bytes)
+            in_tmp.flush()
+            in_path = in_tmp.name
+        out_path = in_path + ".wav"
+        try:
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-i", in_path,
+                 "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", out_path],
+                capture_output=True, timeout=30,
+            )
+            if result.returncode != 0:
+                raise HTTPException(500, "ffmpeg failed: " + result.stderr.decode()[:500])
+            with open(out_path, "rb") as f:
+                return f.read()
+        finally:
+            for p in (in_path, out_path):
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
 
     @fastapi_app.get("/breeze/health")
     def health():
         return {
             "status": "ok",
-            "version": "0.2.0-day2",
-            "day": 2,
+            "version": "0.3.0-day3",
+            "day": 3,
             "stack": "breeze",
-            "note": "ffmpeg + torch + transformers + jiwer + accelerate 已預載 / ASR stub 接好 / Day 3 接 Breeze-ASR-25 真 model",
+            "models": {
+                "asr": "MediaTek-Research/Breeze-ASR-25 (auto-fallback ASR-26)",
+                "tts": "MediaTek-Research/BreezyVoice (voice cloning)",
+            },
             "isolation_check": {
-                "modal_volume_attached": False,  # Gate 5 條件 1
+                "modal_volume_attached": False,
                 "audio_persisted": False,
             },
         }
@@ -111,62 +305,22 @@ def breeze_fastapi():
     @fastapi_app.post("/breeze/audio/preprocess")
     async def preprocess_audio(
         file: UploadFile = File(...),
-        x_breeze_token = Header(default=None),  # Optional[str]
+        x_breeze_token = Header(default=None),
     ):
-        """
-        輸入 m4a / wav / 任何 ffmpeg 認的格式
-        輸出 WAV 16kHz mono PCM 16-bit (Eagle / Breeze-ASR 標準)
-
-        隱私鐵律 (Gate 5 條件 1):
-          - 用 tempfile.NamedTemporaryFile (delete=True、function 結束 auto unlink)
-          - 不寫 Volume
-          - return bytes、function teardown 後 memory GC
-        """
         _check_auth(x_breeze_token)
-
         raw = await file.read()
         if len(raw) == 0:
-            raise HTTPException(400, "空檔")
-        if len(raw) > 50 * 1024 * 1024:  # 50 MB 上限 (個人聲紋樣本不該超過)
-            raise HTTPException(413, f"檔太大 {len(raw)} bytes、上限 50 MB")
-
-        # tempfile auto-cleanup
-        with tempfile.NamedTemporaryFile(suffix=".input", delete=True) as in_tmp:
-            in_tmp.write(raw)
-            in_tmp.flush()
-
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as out_tmp:
-                # ffmpeg 轉 WAV 16kHz mono 16-bit PCM (Eagle 標準)
-                result = subprocess.run(
-                    [
-                        "ffmpeg", "-y",
-                        "-i", in_tmp.name,
-                        "-ar", "16000",      # 16 kHz
-                        "-ac", "1",          # mono
-                        "-c:a", "pcm_s16le", # 16-bit PCM little endian
-                        out_tmp.name,
-                    ],
-                    capture_output=True,
-                    timeout=30,
-                )
-                if result.returncode != 0:
-                    raise HTTPException(
-                        500,
-                        f"ffmpeg 轉檔失敗: {result.stderr.decode()[:500]}",
-                    )
-
-                wav_bytes = out_tmp.read()
-
-        # 顯式提醒 audio purged (debug 用、production 不留 log)
-        print(f"[breeze.preprocess] input={len(raw)}B output={len(wav_bytes)}B (audio purged after return)")
-
+            raise HTTPException(400, "empty file")
+        if len(raw) > 50 * 1024 * 1024:
+            raise HTTPException(413, "too large " + str(len(raw)))
+        wav_bytes = _preprocess_to_16k_wav(raw)
+        print("[breeze.preprocess] input=", len(raw), "output=", len(wav_bytes))
         return Response(
             content=wav_bytes,
             media_type="audio/wav",
             headers={
                 "X-Breeze-Sample-Rate": "16000",
                 "X-Breeze-Channels": "1",
-                "X-Breeze-Bits": "16",
                 "X-Breeze-Privacy": "ephemeral-no-volume-persist",
             },
         )
@@ -174,58 +328,60 @@ def breeze_fastapi():
     @fastapi_app.post("/breeze/asr/transcribe")
     async def transcribe_audio(
         file: UploadFile = File(...),
-        x_breeze_token = Header(default=None),  # Optional[str]
+        language: str = Form(default="zh"),
+        x_breeze_token = Header(default=None),
     ):
-        """
-        Day 3 ship · Breeze-ASR-25 中文 ASR
-        輸入 WAV / m4a (內部走 preprocess pipeline)
-        輸出 JSON {"text": ..., "latency_ms": ..., "model": "breeze-asr-25"}
-
-        Note Day 3 任務:
-          - 在 GPU function 跑、不是當前 CPU function
-          - 加 @app.cls() 用 @modal.enter() lifecycle 預載 model (避免每次 cold start re-download)
-          - 用 transformers AutoProcessor + WhisperForConditionalGeneration
-          - HuggingFace model ID: MediaTek-Research/Breeze-ASR-25 (待 Day 3 confirm)
-
-        當前 Day 2 stub: 不真跑 model、只 echo audio metadata 驗 endpoint wiring
-        """
-        import time
         _check_auth(x_breeze_token)
         raw = await file.read()
         if len(raw) == 0:
-            raise HTTPException(400, "空檔")
+            raise HTTPException(400, "empty file")
         if len(raw) > 50 * 1024 * 1024:
-            raise HTTPException(413, f"檔太大 {len(raw)} bytes")
+            raise HTTPException(413, "too large " + str(len(raw)))
+        t_pp_start = time.time()
+        wav_bytes = _preprocess_to_16k_wav(raw)
+        t_pp_end = time.time()
+        asr = BreezeASR()
+        result = asr.transcribe.remote(wav_bytes, language=language)
+        result["preprocess_ms"] = round((t_pp_end - t_pp_start) * 1000, 1)
+        result["total_e2e_ms"] = round(result["preprocess_ms"] + result["latency_ms"], 1)
+        return JSONResponse(content=result)
 
-        t0 = time.time()
-        # TODO Day 3: 真跑 Breeze-ASR-25
-        # processor = AutoProcessor.from_pretrained("MediaTek-Research/Breeze-ASR-25")
-        # model = WhisperForConditionalGeneration.from_pretrained(...).to("cuda")
-        # inputs = processor(audio_array, sampling_rate=16000, return_tensors="pt")
-        # outputs = model.generate(**inputs.to("cuda"), language="zh", task="transcribe")
-        # text = processor.batch_decode(outputs, skip_special_tokens=True)[0]
-        text = "[STUB Day 2 · model 待 Day 3 接上、當前只驗 endpoint wiring]"
-        latency_ms = (time.time() - t0) * 1000
-
-        print(f"[breeze.transcribe] input={len(raw)}B latency={latency_ms:.1f}ms (audio purged after return)")
-        return {
-            "text": text,
-            "latency_ms": round(latency_ms, 1),
-            "model": "stub-day2-no-model-loaded",
-            "input_bytes": len(raw),
-        }
+    @fastapi_app.post("/breeze/tts/synthesize")
+    async def synthesize_speech(
+        text: str = Form(...),
+        prompt_file: UploadFile = File(...),
+        prompt_text: str = Form(default="hi"),
+        x_breeze_token = Header(default=None),
+    ):
+        _check_auth(x_breeze_token)
+        if not text.strip():
+            raise HTTPException(400, "text empty")
+        prompt_raw = await prompt_file.read()
+        if len(prompt_raw) == 0:
+            raise HTTPException(400, "prompt_file empty")
+        prompt_wav = _preprocess_to_16k_wav(prompt_raw)
+        tts = BreezyVoiceTTS()
+        result = tts.synthesize.remote(text=text, prompt_wav_bytes=prompt_wav, prompt_text=prompt_text)
+        wav_bytes = result.pop("wav_bytes")
+        return Response(
+            content=wav_bytes,
+            media_type="audio/wav",
+            headers={
+                "X-Breeze-TTS-Latency-Ms": str(result["latency_ms"]),
+                "X-Breeze-TTS-Inference-Ms": str(result["breakdown_ms"]["inference"]),
+                "X-Breeze-TTS-Sample-Rate": str(result["sample_rate"]),
+                "X-Breeze-TTS-Duration-Sec": str(result["output_duration_sec"]),
+                "X-Breeze-Privacy": "ephemeral-no-volume-persist",
+            },
+        )
 
     return fastapi_app
 
 
-# Local entrypoint: deploy 後 smoke test
 @app.local_entrypoint()
 def smoke():
-    """deploy 後跑 `modal run breeze_poc/app_breeze.py` 確認 /health 通"""
-    import urllib.request
-    import json
+    import urllib.request, json
     url = breeze_fastapi.get_web_url() + "breeze/health"
-    print(f"[smoke] GET {url}")
+    print("[smoke] GET", url)
     with urllib.request.urlopen(url) as resp:
-        data = json.loads(resp.read())
-        print("[smoke] health:", json.dumps(data, indent=2, ensure_ascii=False))
+        print("[smoke]", json.dumps(json.loads(resp.read()), indent=2, ensure_ascii=False))
