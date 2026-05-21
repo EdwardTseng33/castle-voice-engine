@@ -1,0 +1,75 @@
+{
+  "_meta": {
+    "purpose": "Voice Path v2.0 PoC - 1 mocked end-to-end trace showing expected pipeline",
+    "owner": "calcifer",
+    "ship_date": "2026-05-22",
+    "status": "MOCKED - real e2e pending Day 5-7"
+  },
+  "case_id": "demo-001",
+  "ts": "2026-05-22T03:30:00+08:00",
+  "input_audio": {
+    "source": "(simulated Edward voice request)",
+    "duration_sec": 4.2,
+    "bitrate_kbps": 256
+  },
+  "stage_1_asr": {
+    "model": "MediaTek-Research/Breeze-ASR-25",
+    "transcript": "派蕪菁頭看 BeyondPath 昨天的留存率有沒有跌、回我一個結論",
+    "language": "zh",
+    "audio_duration_sec": 4.2,
+    "server_latency_ms": 1280,
+    "preprocess_ms": 180,
+    "client_e2e_ms": 1460
+  },
+  "stage_2_claude_function_call": {
+    "model": "claude-opus-4-7",
+    "input_to_claude": "派蕪菁頭看 BeyondPath 昨天的留存率有沒有跌、回我一個結論",
+    "tool_call": {
+      "name": "dispatch_subagent",
+      "input": {
+        "agent": "turnip",
+        "task": "查 BeyondPath 昨天 (2026-05-21) 的 retention metric (DAU/MAU/D1/D7/D30 任一)、跟前 7 天平均比對、判斷是否顯著下跌 (> 5%)。給 1-2 句結論。",
+        "expect_format": "short_answer",
+        "timeout_sec": 60
+      }
+    },
+    "estimated_latency_ms": 850,
+    "note": "Claude 收到中文 ASR 結果、識別「派蕪菁頭 + 看 retention」意圖、選 dispatch_subagent tool、把 agent 設 turnip、task 補完整 prompt"
+  },
+  "stage_3_dispatch": {
+    "tool": "subprocess + claude code CLI on local box",
+    "agent_invoked": "turnip",
+    "agent_md_path": "C:/Users/Administrator/.claude/agents/turnip.md",
+    "estimated_latency_ms": 12400,
+    "agent_response_simulated": "BeyondPath 2026-05-21 D1 retention 41.2%、前 7 天平均 43.8%、跌幅 -5.9%、剛壓 5% 警戒線。下跌主因待查、未排除週末效應或新功能 regression。",
+    "note": "turnip 真實邏輯 = read castle/projects/beyondpath/metrics + 算比對。Day 5-7 接 metrics source"
+  },
+  "stage_4_tts": {
+    "model": "MediaTek-Research/BreezyVoice",
+    "text_to_speak": "BeyondPath 昨天 D1 留存 41.2%、跌 5.9%、壓到警戒線。主因還在查、可能週末效應或新功能 regression。",
+    "voice": "預設台灣腔女聲 (廠商 default)",
+    "estimated_latency_ms": 1850,
+    "estimated_audio_duration_sec": 6.8
+  },
+  "total_e2e_estimated_ms": 16380,
+  "budget_analysis": {
+    "asr_budget_ms": 2000,
+    "asr_actual_ms": 1460,
+    "fc_budget_ms": 1500,
+    "fc_estimated_ms": 850,
+    "dispatch_budget_ms": 15000,
+    "dispatch_estimated_ms": 12400,
+    "tts_budget_ms": 3000,
+    "tts_estimated_ms": 1850,
+    "total_budget_ms": 21500,
+    "total_estimated_ms": 16380,
+    "headroom_ms": 5120
+  },
+  "TODO_for_day_5_7": [
+    "anthropic SDK 真呼叫 claude-opus-4-7 + tools",
+    "subprocess.run(['claude', 'code', '--agent', agent, '--prompt', task]) 真派",
+    "turnip 真讀 metrics source (Firestore? CSV? mocked? )",
+    "ASR -> Claude FC -> dispatch -> TTS 端到端跑 Edward 真聲音 1 case 完整 latency 量",
+    "失敗 fallback: timeout / agent crash / Claude API 429 / Modal cold start"
+  ]
+}

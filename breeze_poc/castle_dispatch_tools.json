@@ -1,0 +1,76 @@
+{
+  "_meta": {
+    "purpose": "Claude function calling tool schema for Voice Path v2.0 castle dispatch",
+    "owner": "calcifer",
+    "ship_date": "2026-05-22",
+    "status": "schema-ready, runtime impl pending Day 5-7"
+  },
+  "tools": [
+    {
+      "name": "dispatch_subagent",
+      "description": "派城堡 subagent 跑一個任務。subagent 用途: howl=策略/競品/品牌; calcifer=技術/實作/Bug; witch=視覺/設計; turnip=用戶意圖/行為分析; markl=PM/QA/版控; sophie=COO/CFO/財務; suliman=安全/合規/DevOps. 派工後 subagent 會回 short_answer 或 structured_report.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "type": "string",
+            "enum": ["howl", "calcifer", "witch", "turnip", "markl", "sophie", "suliman"],
+            "description": "目標 subagent 代號"
+          },
+          "task": {
+            "type": "string",
+            "description": "給 subagent 的完整 prompt (中文 OK), 必須包含: 目標 + 需要的回應格式 + 不能漏的 context"
+          },
+          "expect_format": {
+            "type": "string",
+            "enum": ["short_answer", "structured_report", "decision_recommendation"],
+            "default": "short_answer",
+            "description": "短回 (1-3 句) / 報告 (5+ 段) / 決策建議 (含推薦選項 + 理由)"
+          },
+          "timeout_sec": {
+            "type": "integer",
+            "default": 60,
+            "description": "subagent 跑超過此秒數視為 timeout, 蘇菲會口頭跟 Edward 回報 timeout"
+          }
+        },
+        "required": ["agent", "task"]
+      }
+    },
+    {
+      "name": "speak_to_edward",
+      "description": "把一段中文/英文文字唸給 Edward 聽 (用 BreezyVoice TTS, 廠商台灣腔女聲)",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "要唸的文字, 100 字內較自然"
+          },
+          "tone": {
+            "type": "string",
+            "enum": ["normal", "soft", "urgent"],
+            "default": "normal"
+          }
+        },
+        "required": ["text"]
+      }
+    },
+    {
+      "name": "log_to_castle_memory",
+      "description": "把 Edward 講的重要事項 / decision 落檔到 castle MEMORY.md 或對應 lesson_*.md",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": ["decision", "lesson", "feedback", "ad_hoc"]
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": ["category", "summary"]
+      }
+    }
+  ]
+}

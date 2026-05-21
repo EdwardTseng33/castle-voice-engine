@@ -54,8 +54,6 @@ breeze_tts_image = (
         "gdown",
         "pyarrow",
         "matplotlib",
-        "WeTextProcessing>=1.0.3",
-        "matcha-tts==0.0.5.1",
     )
     # Legacy deps that have broken setup.py / need --no-build-isolation
     .run_commands(
