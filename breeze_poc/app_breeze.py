@@ -49,7 +49,6 @@ breeze_tts_image = (
         "pyyaml",
         "tqdm",
         "diffusers==0.32.0",
-        "openai-whisper==20231117",
         "omegaconf==2.3.0",
         "gdown==5.1.0",
         "pyarrow",
@@ -64,6 +63,7 @@ breeze_tts_image = (
     .run_commands(
         "pip install --no-build-isolation conformer==0.3.2 inflect==7.3.1 opencc-python-reimplemented",
         "pip install --no-build-isolation g2pw==0.1.2.4 || echo g2pw_skip",
+        "pip install --no-build-isolation openai-whisper==20231117 || pip install --no-build-isolation openai-whisper==20240930 || echo whisper_skip",
         # BreezyVoice repo includes Matcha-TTS as third_party submodule
         "cd /root && git clone --recurse-submodules https://github.com/mtkresearch/BreezyVoice.git || (cd /root && git clone https://github.com/mtkresearch/BreezyVoice.git && cd BreezyVoice && git submodule update --init --recursive)",
         # Fallback: clone Matcha-TTS standalone if submodule path empty
