@@ -1,0 +1,40 @@
+{
+  "_meta": {
+    "owner": "calcifer",
+    "ship_date": "2026-05-22",
+    "stage": "Day 4",
+    "voice_provider": "Microsoft Edge TTS (free, local, no API key)",
+    "voice": "zh-TW-HsiaoChenNeural",
+    "asr_provider": "MediaTek-Research/Breeze-ASR-25 (Modal A10G)"
+  },
+  "stage_1_tts": {
+    "ok": 10,
+    "total": 10,
+    "p50_ms": 488.6,
+    "p95_ms": 711.3,
+    "mean_ms": 519.9
+  },
+  "stage_2_cer": {
+    "count": 10,
+    "cer_mean_pct": 24.33,
+    "cer_median_pct": 25.84,
+    "cer_min_pct": 0.0,
+    "cer_max_pct": 60.0
+  },
+  "baseline_breezyvoice_day3": {
+    "cer_mean_pct": 85.86,
+    "cer_median_pct": 95.0,
+    "tts_p50_ms": 7349.0,
+    "tts_p95_ms": 9860.0
+  },
+  "monthly_cost": {
+    "edge_tts": "$0/month (Microsoft free)",
+    "breezyvoice_modal": "~$30-50/month dev (A10G GPU on-demand)",
+    "breeze_asr_modal": "~$10-20/month dev (T4 GPU on-demand)"
+  },
+  "go_no_go": {
+    "edge_tts_cer_vs_5pct": "FAIL",
+    "edge_tts_p95_vs_3000ms": "PASS",
+    "verdict_vs_breezyvoice": "Edge TTS WINS on both axes (lower CER, lower P95)"
+  }
+}

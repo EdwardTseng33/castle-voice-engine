@@ -1,0 +1,3 @@
+category,count,p50_ms,p95_ms,min_ms,max_ms,mean_ms
+edge_tts_client_latency,10,488.6,711.3,411.4,761.2,519.9
+breeze_asr_server_e2e,10,628.9,950.4,596.0,1076.5,691.5
