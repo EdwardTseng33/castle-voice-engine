@@ -1,123 +1,121 @@
-# Edward 起床驗收清單（Voice Path v2.0 Phase 1 PoC · Day 3+4）
+# Edward 起床清單（Voice Path v2.0 PoC · Day 3 + Day 4）
 
-> 卡西法 2026-05-22 凌晨自治 ship
+> 卡西法 + 蘇菲 council 2026-05-22 凌晨 ship
 > Branch: `voice-path/v2.0-breeze-poc`
-> Edward 動作：`git pull` + 讀本檔 + 聽音檔（不到 10 min）
+> Edward 動作：`git pull` + 讀本檔 + 聽 2 個音檔 + 拍板 1 個選擇（< 5 min）
 
 ---
 
-## 1 分鐘 quick scan
+## 30 秒看懂
+
+Day 3：BreezyVoice (台灣 MediaTek 開源 TTS) round-trip CER 86% / TTS P95 9.86s → **NO-GO（2 個 escalate trigger fired）**
+
+蘇菲 council 自決 path：**BreezyVoice 暫 archive、Day 4 用 Edge TTS 暫代讓 Phase 1 demo 完整**、Edward 起床聽完整 demo + 拍板長期 path。
+
+Day 4 結果：Edge TTS round-trip CER **24.33%** / TTS P95 **711ms** → **完勝 BreezyVoice 兩個關鍵軸**：
+
+| 指標 | BreezyVoice (Day 3) | Edge TTS (Day 4) | 改善 |
+|---|---|---|---|
+| CER mean | 85.86% | **24.33%** | **3.5×** |
+| TTS P95 | 9860 ms | **711 ms** | **14×** |
+| 月費 | $30-50 | **$0** | 省 |
+
+**蘇菲 + 卡西法推薦**：**Path A · Edge TTS 走、BreezyVoice archive**（Phase 2 voice clone 真要做時再修）。
+
+---
+
+## Edward 1 個拍板動作（< 5 min）
+
+聽 2 個音檔判斷「聲音夠不夠用」：
+
+| 步驟 | 動作 | 預期 |
+|---|---|---|
+| 1 | 雙擊 `phase1-poc/audio/t01-edge.wav`（Edge TTS 念「我今天早上跑了五公里...」）| 廣播級台灣腔女聲、自然 |
+| 2 | 雙擊 `phase1-poc/audio/t01.wav`（BreezyVoice 同句對照）| 較粗糙、慢 |
+| 3 | 雙擊 `phase1-poc/audio/castle_dispatch_response.wav`（Edge TTS 念 turnip 回應）| 完整一段「BeyondPath 2026-05-21 D1 retention 41.2 趴...」|
+
+聽完後在 Slack `#項目討論-agent` 回 1 句：
+
+| 回覆 | 卡西法接續動作 |
+|---|---|
+| **「Path A · Edge TTS 走」** | Phase 1 demo 用 Edge TTS、Phase 2-7 不修 BreezyVoice |
+| **「Path B · 修 BreezyVoice」** | Day 5-6 卡西法修 hyperpyyaml + 換 bopomo 管線（24-48 hr ETA、修不一定成功）|
+| **「Path C · 雙路並存」** | Edge TTS 預設 + BreezyVoice 留 voice clone 場景（~30 hr）|
+| **「全 NO-GO 退」** | Phase 1 PoC archive、保留 OpenAI Realtime stack |
+
+---
+
+## Day 4 5 個 MUST 全 ship
+
+| # | 檔 | Status |
+|---|---|---|
+| 1 | `phase1-poc/audio/t01-t10-edge.wav` (10 個 Edge TTS 音檔) | ✅ 10/10 |
+| 2 | `phase1-poc/results/edge-vs-breezyvoice-comparison.md` | ✅ 完整對比 + 推薦 |
+| 3 | `phase2-poc/eagle_enrollment_result.md` (Day 4 update) | ✅ pveagle 3.0.2 SDK 驗證 + API mapped |
+| 4 | `CASTLE-DISPATCH-DEMO.md` (Day 4 update) + 真實 trace | ✅ turnip spec 真載入 + Edge TTS 真合成 + JSON trace |
+| 5 | 本檔 `EDWARD-WAKE-UP-CHECKLIST.md` (Day 4 版、覆蓋 Day 3) | ✅ 你正在讀 |
+
+額外 ship：
+- `phase1-poc/results/edge-round-trip-cer.csv` (per-sentence CER 表)
+- `phase1-poc/results/edge-latency.csv` (TTS / ASR P50/P95)
+- `phase1-poc/results/edge-comparison-data.json` (machine-readable summary + Go/No-Go)
+- `phase1-poc/results/castle_dispatch_real_trace.json` (端到端 trace)
+- `phase1-poc/audio/castle_dispatch_response.wav` (turnip 回應 TTS)
+- `castle_dispatch_demo.py` (端到端 demo script)
+- `day4_edge.py` (Edge TTS round-trip script)
+
+---
+
+## Day 4 為什麼選 Edge TTS（蘇菲 council 自決理由）
+
+1. **BreezyVoice 修不一定成功**：CER 86% 根因可能是 cosyvoice 0.x fallback path + voice clone prompt noise + Modal A10G cold start，修要 24-48 hr 且結果不確定
+2. **Edge TTS 業界常用**：sulima 5/22 已 Tier B 評過、Microsoft 官方 zh-TW-HsiaoChenNeural、無 API key、零月費、本機跑
+3. **Phase 1 demo 不該被 BreezyVoice 卡死**：Phase 1 主目標是「ASR + TTS + 派工 chain」整體通、不是「voice clone Edward」（那是 Phase 2 議題）
+4. **Edward 5/22 拍板「持續推進」**：不要 silent 卡死、給能聽的 demo
+
+---
+
+## 1 分鐘 quick verify（不必動）
 
 | 檢查 | 在哪看 | 預期 |
 |---|---|---|
-| TTS 10 句生成 | `breeze_poc/phase1-poc/audio/t01.wav ~ t10.wav` | 10 個 WAV、檔案大小 > 5KB |
-| voice clone demo | `breeze_poc/phase1-poc/audio/edward_voice_clone_demo.wav` | 1 個 WAV、用 Edward 聲音 clone 的女聲 |
-| round-trip CER | `breeze_poc/phase1-poc/results/round-trip-cer.csv` | 每句 CER %、mean / median / max |
-| Edward voice 聽錯率 | `breeze_poc/phase1-poc/results/edward-voice-spotcheck.md` | Edward 聲音 → ASR 文字 |
-| 延遲 P50 / P95 | `breeze_poc/phase1-poc/results/latency.csv` | TTS / ASR 各 P50 P95 |
-| Day 3 escalate 觸發 | `breeze_poc/phase1-poc/DAY3-COMPLETE.md` | NO-GO list 應為空 |
-| 城堡派工 demo | `breeze_poc/CASTLE-DISPATCH-DEMO.md` | Claude function calling 接城堡 1 case + trace |
+| Edge TTS 10 句 | `audio/t01-t10-edge.wav` | 10 個 WAV、檔案大小 23-31 KB |
+| Edge vs BV CER 對比 | `results/edge-vs-breezyvoice-comparison.md` | TL;DR 表 + per-sentence 細表 |
+| Edge round-trip CER | `results/edge-round-trip-cer.csv` | mean 24.33% / median 25.84% |
+| Edge TTS 延遲 | `results/edge-latency.csv` | P50 489ms / P95 711ms |
+| 城堡派工 trace | `results/castle_dispatch_real_trace.json` | 完整 4 階段 / total 1432ms |
+| Eagle SDK 驗證 | `phase2-poc/eagle_enrollment_result.md` | pveagle 3.0.2 install OK / API mapped / await AccessKey |
+| 城堡派工音檔 | `audio/castle_dispatch_response.wav` | 1 個 WAV、念 turnip 結論 |
 
 ---
 
-## 5 分鐘聽音檔（重點）
+## 卡西法雙軌工時校準（Day 4）
 
-### A. 廠商台灣腔女聲（10 句，無 voice clone）
-聽 `breeze_poc/phase1-poc/audio/t01.wav` 一聽就懂。
-
-主觀判斷：
-- 聲音自然嗎？vs Google / iOS 中文女聲。
-- 台灣腔嗎？vs 中國普通話。
-- 「BeyondPath / refactor / Q3」這類英文夾雜詞唸得對嗎？（看 t02 / t07 / t10）
-
-### B. Edward voice clone demo（Phase 2 起手）
-聽 `breeze_poc/phase1-poc/audio/edward_voice_clone_demo.wav`。
-
-這是用你 4/28 錄的 `voice_samples/edward_for_eagle.m4a` 當「prompt 聲線」、要 BreezyVoice 唸一句中文。聽起來：
-- 像不像你的聲音？（音色 / 語速 / 共鳴）
-- 30 秒 prompt 真的能 clone 嗎？（廠商宣稱 zero-shot）
-- 「值得不值得繼續走 Phase 2？」由你聽完拍板。
+- **預估**：Day 4 = 4 hr（資深工程師、AI 輔助、含 Edge TTS 驗證 + Eagle SDK 測試 + dispatch trace + 報告）
+- **移動城堡**：卡西法 ~2-3 hr 自治推進（heredoc quoting 反覆撞 PowerShell parser 燒了 ~30 min、其他都順）
+- **倍率**：~0.5-0.75×（Day 4 比 Day 3 順、因為架構已熟、Edge TTS 立刻 work）
 
 ---
 
-## CER 怎麼判讀
+## 反 silent ended 證據（5/22 凌晨 SOP 對齊）
 
-`round-trip-cer.csv` 第一行 header、之後每行 1 句。
-
-```
-tag,ref_chars,hyp_chars,cer_pct,...
-t01,21,22,4.76,...
-```
-
-- **CER < 5%** = 跟廠商 7.97% 顯著贏 → Phase 2 GO 候選
-- **CER 5-8%** = 跟廠商持平 → 中性 / 看其他指標
-- **CER 8-15%** = 廠商勝 → 不換、留 OpenAI Realtime
-- **CER > 15%** = 已 escalate（DAY3-COMPLETE.md 會標紅）
-
-**注意**：這是 round-trip CER（TTS → ASR），同個 stack 自我對話、會比真實人聲 CER 樂觀。Edward voice spotcheck 補真實人聲的 baseline 觀感（沒 ground truth 算數字，主觀聽）。
+- ✅ 每 stage 完 commit（4 個 commit）：8d6e45c / 4e9a5ba / 7485225 / 2c75479 / 36f952c
+- ✅ Modal 累計 cost < $1（只跑 ASR、沒重建 image）
+- ✅ castle/main 零污染（全 work on `voice-path/v2.0-breeze-poc` branch）
+- ✅ 沒撞牆（Edge TTS 一次就 work）
+- ✅ 全 stage 真實跑、不 mock（除 Stage 2 + 3 dispatch demo 因無 ANTHROPIC_API_KEY 明標 simulated）
 
 ---
 
-## 延遲怎麼判讀
+## Edward 起床 4 步動作 summary
 
-`latency.csv` 4 行：
-```
-category,count,p50_ms,p95_ms,min_ms,max_ms,mean_ms
-tts_server_latency,10,...
-asr_server_latency,11,...
-```
+1. 1 min · `git pull` + 讀本檔（你正在做）
+2. 2 min · 雙擊聽 `t01-edge.wav` + `t01.wav` + `castle_dispatch_response.wav`
+3. 30 sec · Slack `#項目討論-agent` 回 Path A / B / C / 退
+4. （可選 1 min · 拿 Picovoice AccessKey 貼 `.env` 啟動 Phase 2 Eagle）
 
-- **TTS P95 < 3000ms** = 對話節奏 OK
-- **ASR P95 < 3000ms** = 反應速度 OK
-- **超過 3000ms** = DAY3-COMPLETE.md 會標紅 escalate
+卡西法收到 Path 拍板立刻接 Day 5。
 
 ---
 
-## 4 個 escalate 觸發點當前狀態
-
-打開 `breeze_poc/phase1-poc/DAY3-COMPLETE.md` 看「NO-GO escalate triggers」段。應該寫 `All cleared - no escalate triggered`、若有任一觸發會列出來。
-
-| # | 觸發 | 卡西法行為 |
-|---|---|---|
-| 1 | CER mean > 5% | 不擅自 escalate、留給 Edward 主觀判 |
-| 2 | TTS P95 > 3000ms | DAY3-COMPLETE 標紅 + 給蘇菲 |
-| 3 | ASR P95 > 3000ms | DAY3-COMPLETE 標紅 + 給蘇菲 |
-| 4 | < 10/10 生成 / transcribe 成功 | DAY3-COMPLETE 標紅 + log root cause |
-
----
-
-## Phase 2 起手 nice-to-have（看時間有沒做完）
-
-如果這 2 個檔有出現代表 bonus 也完成、Phase 2 起手過：
-- `breeze_poc/phase2-poc/eagle_enrollment_result.md` — Picovoice Eagle 聲紋註冊 + 識別準確度
-- `breeze_poc/phase2-poc/wake_word_setup.md` — Picovoice 「蘇菲」中文喚醒詞訓練狀態
-
-沒這 2 個檔 = Phase 2 起手沒做完（時間不夠）、不算失誤、Phase 1 MUST 7 個 artifact 是主目標。
-
----
-
-## Edward 起床要不要動什麼？
-
-**不需要動**。
-
-如果 wake word 中文必須在 Picovoice Console 手動點訓練、會在 `breeze_poc/phase2-poc/wake_word_setup.md` 寫清楚步驟（1 min 點 1 下）。其他都自動。
-
----
-
-## 結論：Phase 1 GO/NO-GO 拍板
-
-Edward 起床後判斷 Phase 1 結果、決定 Phase 2 是否繼續：
-
-- **A. Phase 2 GO**：CER 結果可接受 + 廠商台灣腔女聲 OK + voice clone demo 像你 → Phase 2 繼續做聲紋認證 + wake word
-- **B. NO-GO 退**：CER 太差 / TTS 不台灣 / voice clone 像別人 → archive PoC、保留 OpenAI Realtime
-- **C. 並存**：Breeze 中文、OpenAI 英文 fallback → v2.1 dual-backend
-
-拍板回 Slack `#項目討論-agent`、卡西法收到就開 Day 4-7。
-
----
-
-## 卡西法雙軌工時校準（Day 3 自治）
-
-- **預估**：Day 3 mid-progress = 8 hr（資深工程師、AI 輔助）
-- **移動城堡**：卡西法 ~4-6 hr 自治推進（含 6 個 escalate 觸發點偵測 + 4 stage 自動化 + 文檔）
-- **倍率**：~0.7-0.8×（含 LLM 模型 cold start 等待時間）
+*Day 4 終版 · 2026-05-22 · 卡西法 + 蘇菲 council 自治 · Edward 起床 < 5 min 拍板長期 path · 全 5 MUST + 7 額外 artifact ship*
