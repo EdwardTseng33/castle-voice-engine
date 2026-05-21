@@ -40,7 +40,9 @@ breeze_image = (
         # Day 5 Eagle (Picovoice 商用 SDK · PoC 用個人版 KEY)
         # "pveagle>=1.0",   # 留 Day 5 開啟、Day 1 先不裝、image 輕一點
     )
-    .add_local_dir("../castle", remote_path="/root/castle")
+    # Day 7-8 接 Claude function calling 派城堡 subagent 時、改成正確路徑加回:
+    #   .add_local_dir("../Moving Castle", remote_path="/root/castle")
+    # Day 2-6 (ASR/TTS/Eagle) 不需 castle/ 共享、暫時拿掉讓 deploy 跑得起來
 )
 
 # 第二個 Modal App、跟現役 castle-voice-engine 並存、不衝突

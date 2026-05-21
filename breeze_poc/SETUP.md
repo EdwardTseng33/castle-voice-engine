@@ -1,3 +1,42 @@
+# Voice Path v2.0 Breeze PoC · SETUP
+
+> Day 2 開跑前置已由卡西法自治處理（5/22）、見「Day 2 fix」段
+> Day 1 完整內容保留在「Day 1 ship」段不變
+
+---
+
+## Day 2 fix（卡西法 5/22 自治處理）
+
+### Fix 1 · 路徑修正（已 commit）
+`app_breeze.py` line 43 `add_local_dir("../castle", ...)` → 拿掉。
+原因：`castle-voice-engine/../castle` 不存在（castle root 在 `C:\Users\Administrator\Claude\Moving Castle\`、不是 sibling）。
+Day 7-8 接 Claude function calling 派 subagent 時、改成正確路徑加回：
+```python
+.add_local_dir("../Moving Castle", remote_path="/root/castle")
+```
+
+### Fix 2 · Windows cp950 編碼 workaround
+Modal CLI 1.4.2 + Win10 cp950 console codepage 撞 rich progress bar UTF-8 box-drawing 字符。
+解：deploy 前 set `PYTHONIOENCODING=utf-8`：
+```powershell
+$env:PYTHONIOENCODING="utf-8"
+py -m modal deploy breeze_poc/app_breeze.py
+```
+
+### Fix 3 · Deploy 已成功（Modal 端 image build OK）
+- Modal App：`castle-voice-engine-breeze-poc` ✅ deployed（5/22）
+- Endpoint：`https://edwardt0303--castle-voice-engine-breeze-poc-breeze-fastapi.modal.run`
+- Image build：113s（ffmpeg + torch 2.4.1 + transformers 5.9.0 + librosa 0.11 + soundfile）
+- 跟現役 `castle-voice-engine`（OpenAI Realtime）並存零污染、不同 app name
+
+### Status（5/22 等待 Edward Step 1）
+- ⏳ `breeze-poc-auth` secret 待 Edward 跑 PowerShell 3 行（見 Day 1 Step 1）
+- 等 secret ready → 卡西法 retry deploy → /health smoke → 開 Day 2 ASR
+
+---
+
+## Day 1 ship（原始內容保留）
+
 # Voice Path v2.0 PoC · Day 1 收尾 + Edward 動作清單
 
 > Day 1 卡西法 ship: PLAN.md + app_breeze.py skeleton + cleanup_modal_volume.py + register_eagle_speaker.py stub
