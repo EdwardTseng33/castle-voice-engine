@@ -1,0 +1,21 @@
+{
+  "name": "Voice Path v2.0 Phase 1 PoC - Test set v1",
+  "owner": "calcifer",
+  "created": "2026-05-22",
+  "purpose": "round-trip CER baseline vs vendor 7.97%",
+  "language": "zh-TW",
+  "method": "BreezyVoice TTS generate -> Breeze-ASR-25 transcribe -> jiwer CER vs ground_truth",
+  "spotcheck_separate": "edward_for_eagle.m4a -> ASR (Edward real voice baseline)",
+  "sentences": [
+    {"id": "t01", "type": "daily", "text": "我今天早上跑了五公里、覺得體力比上個月好很多"},
+    {"id": "t02", "type": "castle-jargon", "text": "蘇菲幫我看一下 BeyondPath 昨天的留存率有沒有跌"},
+    {"id": "t03", "type": "castle-jargon", "text": "卡西法去確認 Vercel preview URL 跑得起來"},
+    {"id": "t04", "type": "daily", "text": "派蕪菁頭看用戶 cohort 的退訂原因 top 3"},
+    {"id": "t05", "type": "number-quantifier", "text": "我預算大概一個月五千塊、能不能撐三個月"},
+    {"id": "t06", "type": "number-quantifier", "text": "三點半開會、會議室在 12 樓 A 區"},
+    {"id": "t07", "type": "tech-jargon", "text": "這個 component refactor 一下、別讓 props drilling 變五層"},
+    {"id": "t08", "type": "code-switch", "text": "CFO 拉預算的時候、記得 highlight 那個 ROI 是 3.2 倍"},
+    {"id": "t09", "type": "emotion", "text": "我有點不耐煩了、能不能直接給我結論不要鋪陳"},
+    {"id": "t10", "type": "code-switch-en", "text": "Sophie can you help me draft an email to Marc about Q3 strategy"}
+  ]
+}

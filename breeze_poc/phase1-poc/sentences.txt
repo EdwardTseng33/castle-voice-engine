@@ -1,0 +1,13 @@
+# Day 3 ASR/TTS round-trip test sentences (BreezyVoice generates, Breeze-ASR-25 transcribes)
+# 10 lines, used as both TTS target text and ground-truth for CER calculation.
+# Mix of: daily / castle terms / numbers / code-switch / emotion (per day2/01-breeze-asr-25-research.md)
+我今天早上跑了五公里、覺得體力比上個月好很多
+蘇菲幫我看一下昨天的留存率有沒有跌
+卡西法去確認預覽網址跑得起來
+派蕪菁頭看用戶退訂原因的前三名
+我預算大概一個月五千塊、能不能撐三個月
+三點半開會、會議室在十二樓A區
+這個元件重構一下、別讓巢狀屬性傳遞變五層
+記得強調那個投資報酬率是三點二倍
+我有點不耐煩了、能不能直接給我結論
+Sophie can you help me draft an email about Q3 strategy
