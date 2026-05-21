@@ -18,8 +18,8 @@
 #   POST /breeze/eagle/verify       - 聲紋認證
 #   POST /breeze/chat/converse      - Llama-Breeze2 + Sophie persona + function calling
 
-from __future__ import annotations
-
+# Note: 不能加 from __future__ import annotations、會把 type hints 變 ForwardRef
+# 撞 FastAPI 0.115 對 UploadFile = File(...) 的 dependency resolver
 import modal
 
 # A10G image with ffmpeg + torch + transformers
@@ -32,6 +32,7 @@ breeze_image = (
         "fastapi>=0.110,<0.116",
         "uvicorn[standard]>=0.29,<0.31",
         "pydantic>=2.0",
+        "python-multipart>=0.0.9",  # Day 2 fix: UploadFile = File(...) 需要、Day 1 漏裝
         # Day 2 ASR/TTS (預載、Day 1 暫不用、但 image 一次 build 完省 cold start)
         "torch>=2.1,<2.5",
         "transformers>=4.40",
@@ -85,7 +86,7 @@ def breeze_fastapi():
 
     AUTH_TOKEN = os.environ.get("BREEZE_AUTH_TOKEN", "")
 
-    def _check_auth(x_breeze_token: str | None):
+    def _check_auth(x_breeze_token):  # Optional[str]
         if not AUTH_TOKEN:
             raise HTTPException(503, "BREEZE_AUTH_TOKEN secret 未設定")
         if x_breeze_token != AUTH_TOKEN:
@@ -108,7 +109,7 @@ def breeze_fastapi():
     @fastapi_app.post("/breeze/audio/preprocess")
     async def preprocess_audio(
         file: UploadFile = File(...),
-        x_breeze_token: str | None = Header(default=None),
+        x_breeze_token = Header(default=None),  # Optional[str]
     ):
         """
         輸入 m4a / wav / 任何 ffmpeg 認的格式

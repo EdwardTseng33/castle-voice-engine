@@ -1,6 +1,7 @@
 # secrets / credentials
 .env
 .env.*
+!.env.example
 .modal.toml
 *.pem
 *.key
