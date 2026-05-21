@@ -55,16 +55,19 @@ breeze_tts_image = (
         "gdown==5.1.0",
         "pyarrow",
         "matplotlib==3.7.5",
+        "wget==3.2",
         "WeTextProcessing==1.0.3",
         "lightning==2.2.4",
+        "ruamel.yaml<0.18",
         "hydra-core==1.3.2",
         "networkx==3.1",
         "pydantic==2.7.0",
+        "rich",
     )
     # Legacy build-isolation deps
     .run_commands(
-        "echo cache_bust_day3_v3_whisper_fix && pip install --no-build-isolation conformer==0.3.2 inflect==7.3.1 opencc-python-reimplemented",
-        "pip install --no-build-isolation g2pw==0.1.1 || echo g2pw_skip",
+        "echo day3_v4 && pip install --no-build-isolation conformer==0.3.2 inflect==7.3.1 opencc-python-reimplemented",
+        "pip install g2pw==0.1.1",
         "pip install --no-build-isolation openai-whisper==20231117 || pip install --no-build-isolation openai-whisper==20240930 || echo whisper_skip",
         # BreezyVoice repo includes Matcha-TTS as third_party submodule
         "cd /root && git clone --recurse-submodules https://github.com/mtkresearch/BreezyVoice.git || (cd /root && git clone https://github.com/mtkresearch/BreezyVoice.git && cd BreezyVoice && git submodule update --init --recursive)",
