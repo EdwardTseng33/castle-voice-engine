@@ -1,0 +1,16 @@
+[transcribe] POST https://edwardt0303--castle-voice-engine-breeze-poc-breeze-fastapi.modal.run/breeze/asr/transcribe 399404 bytes lang= zh
+{
+  "text": "還舒飛有冇看一下昨天的流程綠有冇跌",
+  "latency_ms": 434.6,
+  "breakdown_ms": {
+    "audio_load": 0.6,
+    "preprocessing": 9.1,
+    "inference": 424.8,
+    "decode": 0.2
+  },
+  "model": "MediaTek-Research/Breeze-ASR-25",
+  "language": "zh",
+  "audio_duration_sec": 9.06,
+  "preprocess_ms": 153.9,
+  "total_e2e_ms": 588.5
+}

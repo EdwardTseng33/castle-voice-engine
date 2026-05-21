@@ -1,0 +1,16 @@
+[transcribe] POST https://edwardt0303--castle-voice-engine-breeze-poc-breeze-fastapi.modal.run/breeze/asr/transcribe 264748 bytes lang= zh
+{
+  "text": "我接到他跑了 5 公里",
+  "latency_ms": 261.7,
+  "breakdown_ms": {
+    "audio_load": 0.5,
+    "preprocessing": 8.8,
+    "inference": 252.2,
+    "decode": 0.2
+  },
+  "model": "MediaTek-Research/Breeze-ASR-25",
+  "language": "zh",
+  "audio_duration_sec": 6.0,
+  "preprocess_ms": 153.2,
+  "total_e2e_ms": 414.9
+}

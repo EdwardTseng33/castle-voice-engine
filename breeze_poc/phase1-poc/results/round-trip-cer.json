@@ -1,0 +1,105 @@
+{
+  "summary": {
+    "n_success": 10,
+    "cer_mean_pct": 85.86,
+    "cer_median_pct": 95.0,
+    "cer_max_pct": 107.14,
+    "cer_min_pct": 56.36,
+    "vendor_baseline_pct": 7.97,
+    "asr_n": 11,
+    "asr_mean_ms": 322.5,
+    "asr_max_ms": 955.6
+  },
+  "per_sentence": [
+    {
+      "tag": "t01",
+      "ref": "我今天早上跑了五公里、覺得體力比上個月好很多",
+      "hyp": "我接到他跑了 5 公里",
+      "cer_pct": 86.36,
+      "latency_ms": 261.7,
+      "inference_ms": 252.2,
+      "audio_duration_sec": 6.0
+    },
+    {
+      "tag": "t02",
+      "ref": "蘇菲幫我看一下昨天的留存率有沒有跌",
+      "hyp": "還舒飛有冇看一下昨天的流程綠有冇跌",
+      "cer_pct": 58.82,
+      "latency_ms": 434.6,
+      "inference_ms": 424.8,
+      "audio_duration_sec": 9.06
+    },
+    {
+      "tag": "t03",
+      "ref": "卡西法去確認預覽網址跑得起來",
+      "hyp": "I kashifa 去確認玉蘭王子跑了起來",
+      "cer_pct": 107.14,
+      "latency_ms": 400.8,
+      "inference_ms": 390.4,
+      "audio_duration_sec": 12.6
+    },
+    {
+      "tag": "t04",
+      "ref": "派蕪菁頭看用戶退訂原因的前三名",
+      "hyp": "為 債 救 死",
+      "cer_pct": 100.0,
+      "latency_ms": 229.0,
+      "inference_ms": 219.2,
+      "audio_duration_sec": 11.99
+    },
+    {
+      "tag": "t05",
+      "ref": "我預算大概一個月五千塊、能不能撐三個月",
+      "hyp": "非我預算得計一個月會請快",
+      "cer_pct": 73.68,
+      "latency_ms": 281.4,
+      "inference_ms": 271.2,
+      "audio_duration_sec": 5.64
+    },
+    {
+      "tag": "t06",
+      "ref": "三點半開會、會議室在十二樓A區",
+      "hyp": "Wow.",
+      "cer_pct": 100.0,
+      "latency_ms": 118.9,
+      "inference_ms": 109.3,
+      "audio_duration_sec": 3.6
+    },
+    {
+      "tag": "t07",
+      "ref": "這個元件重構一下、別讓巢狀屬性傳遞變五層",
+      "hyp": "賽這個",
+      "cer_pct": 95.0,
+      "latency_ms": 116.9,
+      "inference_ms": 107.6,
+      "audio_duration_sec": 4.79
+    },
+    {
+      "tag": "t08",
+      "ref": "記得強調那個投資報酬率是三點二倍",
+      "hyp": "後肢報酬率是 3.2 倍",
+      "cer_pct": 81.25,
+      "latency_ms": 312.1,
+      "inference_ms": 302.3,
+      "audio_duration_sec": 10.33
+    },
+    {
+      "tag": "t09",
+      "ref": "我有點不耐煩了、能不能直接給我結論",
+      "hyp": "Hi 我有點無奈翻",
+      "cer_pct": 100.0,
+      "latency_ms": 207.3,
+      "inference_ms": 197.9,
+      "audio_duration_sec": 5.4
+    },
+    {
+      "tag": "t10",
+      "ref": "Sophie can you help me draft an email about Q3 strategy",
+      "hyp": "Help me draft an email at",
+      "cer_pct": 56.36,
+      "latency_ms": 228.9,
+      "inference_ms": 218.8,
+      "audio_duration_sec": 9.0
+    }
+  ]
+}

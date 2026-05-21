@@ -1,0 +1,16 @@
+[transcribe] POST https://edwardt0303--castle-voice-engine-breeze-poc-breeze-fastapi.modal.run/breeze/asr/transcribe 396844 bytes lang= zh
+{
+  "text": "Help me draft an email at",
+  "latency_ms": 228.9,
+  "breakdown_ms": {
+    "audio_load": 0.6,
+    "preprocessing": 9.3,
+    "inference": 218.8,
+    "decode": 0.2
+  },
+  "model": "MediaTek-Research/Breeze-ASR-25",
+  "language": "zh",
+  "audio_duration_sec": 9.0,
+  "preprocess_ms": 156.7,
+  "total_e2e_ms": 385.6
+}

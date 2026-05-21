@@ -1,0 +1,16 @@
+[transcribe] POST https://edwardt0303--castle-voice-engine-breeze-poc-breeze-fastapi.modal.run/breeze/asr/transcribe 555564 bytes lang= zh
+{
+  "text": "I kashifa 去確認玉蘭王子跑了起來",
+  "latency_ms": 400.8,
+  "breakdown_ms": {
+    "audio_load": 0.8,
+    "preprocessing": 9.4,
+    "inference": 390.4,
+    "decode": 0.2
+  },
+  "model": "MediaTek-Research/Breeze-ASR-25",
+  "language": "zh",
+  "audio_duration_sec": 12.6,
+  "preprocess_ms": 161.1,
+  "total_e2e_ms": 561.9
+}

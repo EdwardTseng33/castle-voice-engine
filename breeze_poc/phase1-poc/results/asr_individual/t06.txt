@@ -1,0 +1,16 @@
+[transcribe] POST https://edwardt0303--castle-voice-engine-breeze-poc-breeze-fastapi.modal.run/breeze/asr/transcribe 158764 bytes lang= zh
+{
+  "text": "Wow.",
+  "latency_ms": 118.9,
+  "breakdown_ms": {
+    "audio_load": 0.4,
+    "preprocessing": 9.1,
+    "inference": 109.3,
+    "decode": 0.2
+  },
+  "model": "MediaTek-Research/Breeze-ASR-25",
+  "language": "zh",
+  "audio_duration_sec": 3.6,
+  "preprocess_ms": 156.7,
+  "total_e2e_ms": 275.6
+}

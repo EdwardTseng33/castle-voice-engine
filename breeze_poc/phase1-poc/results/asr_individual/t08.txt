@@ -1,0 +1,16 @@
+[transcribe] POST https://edwardt0303--castle-voice-engine-breeze-poc-breeze-fastapi.modal.run/breeze/asr/transcribe 455724 bytes lang= zh
+{
+  "text": "後肢報酬率是 3.2 倍",
+  "latency_ms": 312.1,
+  "breakdown_ms": {
+    "audio_load": 0.7,
+    "preprocessing": 9.0,
+    "inference": 302.3,
+    "decode": 0.2
+  },
+  "model": "MediaTek-Research/Breeze-ASR-25",
+  "language": "zh",
+  "audio_duration_sec": 10.33,
+  "preprocess_ms": 150.5,
+  "total_e2e_ms": 462.6
+}

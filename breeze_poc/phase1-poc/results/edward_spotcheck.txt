@@ -1,0 +1,16 @@
+[transcribe] POST https://edwardt0303--castle-voice-engine-breeze-poc-breeze-fastapi.modal.run/breeze/asr/transcribe 1559908 bytes lang= zh
+{
+  "text": "Hello 我是 Edward你好Sophie 我覺得呢不管怎麼樣我覺得呢是不是我們可以把這個操作能夠做得更好或者是你的設計能夠更完善然後就是我覺得在 bvb6 裡面",
+  "latency_ms": 955.6,
+  "breakdown_ms": {
+    "audio_load": 3.1,
+    "preprocessing": 8.7,
+    "inference": 943.5,
+    "decode": 0.3
+  },
+  "model": "MediaTek-Research/Breeze-ASR-25",
+  "language": "zh",
+  "audio_duration_sec": 30.0,
+  "preprocess_ms": 226.7,
+  "total_e2e_ms": 1182.3
+}

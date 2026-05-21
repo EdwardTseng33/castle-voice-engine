@@ -1,0 +1,16 @@
+[transcribe] POST https://edwardt0303--castle-voice-engine-breeze-poc-breeze-fastapi.modal.run/breeze/asr/transcribe 528940 bytes lang= zh
+{
+  "text": "為 債 救 死",
+  "latency_ms": 229.0,
+  "breakdown_ms": {
+    "audio_load": 0.8,
+    "preprocessing": 8.9,
+    "inference": 219.2,
+    "decode": 0.2
+  },
+  "model": "MediaTek-Research/Breeze-ASR-25",
+  "language": "zh",
+  "audio_duration_sec": 11.99,
+  "preprocess_ms": 160.5,
+  "total_e2e_ms": 389.5
+}
