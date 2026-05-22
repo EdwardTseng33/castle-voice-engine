@@ -54,7 +54,8 @@ python breeze_poc/register_eagle_speaker.py verify voice_samples/edward_for_eagl
 - ✅ 中文 / 英文 / 任何語言都能用、只要錄音 quality 夠
 - ⚠ 建議 enroll audio ≥ 20s 純人聲（無背景音）
 - ⚠ 不要 cross-mic（手機錄 enroll、然後用筆電 mic verify 會掉分）
-- ✅ `voice_samples/edward_for_eagle.m4a` 是 Edward 4/28 自錄的 m4a、應該夠
+- ✅ `voice_samples/edward_for_eagle.m4a` 是 Edward 5/21 給的 m4a (file mod 5/22 01:36 · 64s · 1.49MB)、5/22 SpeechBrain enrollment 已驗證夠用 (similarity 1.0 滿分)
+  - [AUDIT 2026-05-22 蘇菲修正] 原 handoff 寫「Edward 4/28 自錄」是錯的、Edward 5/22 親口 catch · 實際是 5/21 給
 - ⚠ Eagle 對 m4a 不直接支援、需先 ffmpeg 轉 16kHz mono PCM WAV、`register_eagle_speaker.py` 已有 preprocessing
 
 ### 3. Phase 2 目標誤拒率（FRR）/ 誤認率（FAR）

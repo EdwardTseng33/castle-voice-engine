@@ -147,7 +147,7 @@ def attach_dispatch_routes(app):
                     "hint": (
                         "✅"
                         if (sb["enrolled_embedding_exists"] and sb["speechbrain_installed"])
-                        else "蘇菲跑 pip install + 用 Edward 4/28 m4a 註冊、Edward 不必動"
+                        else "蘇菲跑 pip install + 用 Edward 5/21 給的 m4a 註冊、Edward 不必動"
                     ),
                 },
                 "pii_redaction_spacy": {

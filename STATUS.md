@@ -66,7 +66,7 @@
 `castle/integrations/speechbrain_voiceid.py` — Mila / Montreal 開源 PyTorch toolkit：
 - ECAPA-TDNN 預訓練 model（VoxCeleb 訓練 · 業界 SOTA · Apache-2.0）
 - CPU mode · 本機跑 · 不上雲
-- 用 Edward 4/28 `voice_samples/edward_for_eagle.m4a` 當 enrollment material
+- 用 Edward 5/21 給的 `voice_samples/edward_for_eagle.m4a` 當 enrollment material（檔案實際修改時間 5/22 01:36 · handoff 寫「4/28 自錄」是錯的、Edward 5/22 親口 catch）
 - enrolled embedding 存 `voice_samples/edward_embedding.npy`（1x192 float vector）
 - cosine similarity threshold 0.25（業界推薦）
 
@@ -178,7 +178,7 @@ OpenAI Realtime 內建 server VAD 已 cover「你不講她不講」場景、Pico
 按優先序：
 
 1. **Edward 試 Phase 3 demo**（選 A 本機 / B Modal UI / C 派 v0.3.1）
-2. **SpeechBrain 真實 enrollment**：蘇菲 pip install 跑中（background）、裝完用 4/28 m4a 註冊 + smoke test、結果報 Edward
+2. **SpeechBrain 真實 enrollment**：✅ 已跑通（用 Edward 5/21 給的 m4a 64 秒、SpeechBrain ECAPA-TDNN self-verify similarity 1.0000 滿分）
 3. **Edward 回「跑」啟用 spaCy 個資遮罩**（最後 1 件 Phase 2 後半段）
 4. **桌面情境感知拍板**（Phase 3 vs 3.5）
 

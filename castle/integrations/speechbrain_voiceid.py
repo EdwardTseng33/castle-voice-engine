@@ -21,7 +21,7 @@
 #       enroll_speaker, verify_speaker, is_speechbrain_ready
 #   )
 #
-#   # 1. enrollment (一次性、用 Edward 4/28 錄音)
+#   # 1. enrollment (一次性、用 Edward 5/21 給的錄音)
 #   enroll_speaker("voice_samples/edward_for_eagle.m4a")
 #
 #   # 2. verification (即時、來自麥克風 chunk)
@@ -96,7 +96,7 @@ def _lazy_import_speechbrain():
 @dataclass
 class SpeechBrainConfig:
     enrolled_embedding_path: str = "voice_samples/edward_embedding.npy"
-    voice_sample_path: str = "voice_samples/edward_for_eagle.m4a"  # Edward 4/28 自錄
+    voice_sample_path: str = "voice_samples/edward_for_eagle.m4a"  # Edward 5/21 給 (file mod 5/22 01:36)
     similarity_threshold: float = 0.25  # ECAPA-TDNN cosine threshold (業界推薦 0.2-0.3)
 
     @classmethod
