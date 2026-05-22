@@ -167,7 +167,7 @@ class BreezeASR:
     gpu="A10G",
     memory=24576,
     timeout=900,
-    scaledown_window=121,  # bump to force new class container
+    scaledown_window=130,  # bump to force new class container (day4 tts ab fix)
     secrets=[BREEZE_AUTH_TOKEN_SECRET, HF_SECRET],
     min_containers=0,
 )
@@ -205,7 +205,7 @@ class BreezyVoiceTTS:
         print("[BreezyVoiceTTS] Ready", self.runtime, "cold start:", round(time.time() - t0, 1), "s")
 
     @modal.method()
-    def synthesize(self, text, prompt_wav_bytes, prompt_text="hi"):
+    def synthesize(self, text, prompt_wav_bytes, prompt_text="hi", use_no_normalize=True):
         import io, time
         import soundfile as sf
         import torch
@@ -215,8 +215,38 @@ class BreezyVoiceTTS:
             audio_arr = audio_arr.mean(axis=1)
         prompt_tensor = torch.from_numpy(audio_arr).unsqueeze(0).float()
         t_load = time.time()
-        # Both runtimes provide inference_zero_shot. CustomCosyVoice returns dict, CosyVoice cli returns iterator/dict varies by version.
-        result = self.cosyvoice.inference_zero_shot(text, prompt_text or "hi", prompt_tensor)
+        # Day 4 calcifer TTS A/B fix: BreezyVoice 官方對繁中推薦走 inference_zero_shot_no_normalize + g2pw 注音 prefix
+        # 原入口 inference_zero_shot 會用 WeTextProcessing normalize 把中文丟掉聲調 + 句讀 -> 自然度差
+        # 修對入口 (lesson_2026-05-22)
+        bopomofo_text = text
+        if use_no_normalize:
+            try:
+                from g2pw import G2PWConverter
+                if not hasattr(self, "_g2pw"):
+                    self._g2pw = G2PWConverter(style="bopomofo")
+                bopo = self._g2pw(text)[0]
+                parts = []
+                for ch, py in zip(text, bopo):
+                    if py is None or (ch.isascii() and not ch.isalpha()):
+                        parts.append(ch)
+                    else:
+                        parts.append(ch + "[:" + py + "]")
+                bopomofo_text = "".join(parts)
+                print("[BreezyVoiceTTS] g2pw text:", bopomofo_text[:80])
+            except Exception as e:
+                print("[BreezyVoiceTTS] g2pw fail, fallback raw text:", str(e)[:200])
+                bopomofo_text = text
+        inference_fn = None
+        method_used = None
+        if use_no_normalize and hasattr(self.cosyvoice, "inference_zero_shot_no_normalize"):
+            inference_fn = self.cosyvoice.inference_zero_shot_no_normalize
+            method_used = "inference_zero_shot_no_normalize"
+        else:
+            inference_fn = self.cosyvoice.inference_zero_shot
+            method_used = "inference_zero_shot"
+        print("[BreezyVoiceTTS] using", method_used)
+        prompt_for_call = prompt_text if prompt_text else "hi"
+        result = inference_fn(bopomofo_text, prompt_for_call, prompt_tensor)
         if isinstance(result, dict):
             output_tensor = result["tts_speech"]
         else:
@@ -260,7 +290,7 @@ def breeze_fastapi():
     from fastapi.responses import Response, JSONResponse
     fastapi_app = FastAPI(
         title="castle-voice-engine-breeze-poc",
-        version="0.3.1-day3-async-fix",
+        version="0.4.0-day4-tts-ab-no-normalize-g2pw",
     )
     AUTH_TOKEN = os.environ.get("BREEZE_AUTH_TOKEN", "")
 

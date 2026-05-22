@@ -1,0 +1,83 @@
+{
+  "model": "Microsoft Edge TTS (Azure Neural)",
+  "model_version": "edge-tts 7.2.8 / azure neural / zh-TW-HsiaoChenNeural",
+  "voice_profile": "zh-TW-HsiaoChenNeural",
+  "voice_clone": "no (pre-built neural voice)",
+  "deployment": "local edge-tts python lib -> Azure cloud",
+  "license": "Edge TTS terms / Azure ToS",
+  "samples": [
+    {
+      "id": "t01",
+      "text": "今天天氣不錯、想出去走走嗎？",
+      "latency_ms": 583.5,
+      "file": "t01.mp3",
+      "format": "mp3"
+    },
+    {
+      "id": "t02",
+      "text": "等等吃飯有想吃什麼？",
+      "latency_ms": 436.7,
+      "file": "t02.mp3",
+      "format": "mp3"
+    },
+    {
+      "id": "t03",
+      "text": "最近忙翻了、好想休息一下。",
+      "latency_ms": 462.4,
+      "file": "t03.mp3",
+      "format": "mp3"
+    },
+    {
+      "id": "t04",
+      "text": "派蕪菁頭看 BeyondPath 今天的數據、跌幅超過 30% 就提醒我。",
+      "latency_ms": 606.6,
+      "file": "t04.mp3",
+      "format": "mp3"
+    },
+    {
+      "id": "t05",
+      "text": "明天會議我們要討論 v2.0 的計畫、特別是第三階段的鏡頭功能。",
+      "latency_ms": 616.3,
+      "file": "t05.mp3",
+      "format": "mp3"
+    },
+    {
+      "id": "t06",
+      "text": "客戶那邊的提案、麻煩你幫我整理一份完整版給我。",
+      "latency_ms": 533.3,
+      "file": "t06.mp3",
+      "format": "mp3"
+    },
+    {
+      "id": "t07",
+      "text": "我要把 PR 上傳到 main 之前先跑 lint。",
+      "latency_ms": 446.5,
+      "file": "t07.mp3",
+      "format": "mp3"
+    },
+    {
+      "id": "t08",
+      "text": "BeyondPath 那個 dashboard 的 retention 數據看起來不太對。",
+      "latency_ms": 1296.3,
+      "file": "t08.mp3",
+      "format": "mp3"
+    },
+    {
+      "id": "t09",
+      "text": "太好了！這次客戶真的簽約了！",
+      "latency_ms": 422.7,
+      "file": "t09.mp3",
+      "format": "mp3"
+    },
+    {
+      "id": "t10",
+      "text": "今天先到這、明天再說、我先休息一下。",
+      "latency_ms": 555.8,
+      "file": "t10.mp3",
+      "format": "mp3"
+    }
+  ],
+  "latency_p50_ms": 555.8,
+  "latency_p95_ms": 1296.3,
+  "latency_mean_ms": 596.0
+}
