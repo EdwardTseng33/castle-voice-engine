@@ -265,9 +265,15 @@ def run_demo():
     # Step 2: prepare inputs
     print()
     print("=== Step 2: prepare inputs ===")
-    # cond_image: use girl.png from cloned repo (we'll need to either ship it or
-    # use a path · simpler: read from local clone)
-    cond_path = repo_root / "external" / "soulx-flashhead-code" / "examples" / "girl.png"
+    # cond_image: prefer assets/sophie_reference.png (Edward 2026-05-22 親選的真蘇菲樣)
+    # · fallback: girl.png from cloned repo (initial smoke test only)
+    sophie_ref = repo_root / "assets" / "sophie_reference.png"
+    if sophie_ref.exists():
+        cond_path = sophie_ref
+        print(f"  using Edward-chosen Sophie reference: {sophie_ref.name}")
+    else:
+        cond_path = repo_root / "external" / "soulx-flashhead-code" / "examples" / "girl.png"
+        print(f"  WARNING: assets/sophie_reference.png not found · falling back to {cond_path.name}")
     audio_path = here / "edward_5_21_16k_mono.wav"
     print(f"  cond_image: {cond_path} ({cond_path.stat().st_size} bytes)")
     print(f"  audio: {audio_path} ({audio_path.stat().st_size} bytes)")

@@ -55,6 +55,13 @@ poc/*.wav
 poc/*.mp4
 poc/*.png
 
+# Phase 3.2 蘇菲參考照片 binary (Edward 私密素材 · 不上 git)
+assets/*.png
+assets/*.jpg
+assets/*.jpeg
+# 但 README.md 上 (給下個對話蘇菲知道為什麼有這目錄 + 怎麼用)
+!assets/README.md
+
 # voice samples (PRIVACY CRITICAL - Edward 個人聲紋樣本不上 git)
 # (Phase 1 PoC 2026-05-22 卡西法新增、跨 PoC 永遠不解禁)
 voice_samples/
