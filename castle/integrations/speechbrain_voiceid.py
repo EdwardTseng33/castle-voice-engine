@@ -65,16 +65,31 @@ def _lazy_import_speechbrain():
     base_dir = Path(__file__).resolve().parent.parent.parent
     cache_dir = base_dir / "pretrained_models" / "spkrec-ecapa-voxceleb"
 
+    # Windows symlink 權限問題避開 (HF Hub default symlink 需要 admin / Dev Mode)
+    # SpeechBrain 1.0+ LocalStrategy enum 改 COPY (不是字串、是 enum)
+    os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+
+    # 嘗試 import LocalStrategy enum (SpeechBrain 1.0+)
+    local_strategy = None
     try:
-        _sb_recognizer = SpeakerRecognition.from_hparams(
-            source="speechbrain/spkrec-ecapa-voxceleb",
-            savedir=str(cache_dir),
-            # CPU mode · Edward 機器 RTX 3070 也行、但 PoC 不必 GPU
-            run_opts={"device": "cpu"},
-        )
+        from speechbrain.utils.fetching import LocalStrategy  # type: ignore
+        local_strategy = LocalStrategy.COPY
+    except (ImportError, AttributeError):
+        # SpeechBrain < 1.0 沒這 enum · fall back
+        pass
+
+    try:
+        kwargs = {
+            "source": "speechbrain/spkrec-ecapa-voxceleb",
+            "savedir": str(cache_dir),
+            "run_opts": {"device": "cpu"},
+        }
+        if local_strategy is not None:
+            kwargs["local_strategy"] = local_strategy
+        _sb_recognizer = SpeakerRecognition.from_hparams(**kwargs)
         return _sb_recognizer
     except Exception as e:  # noqa: BLE001
-        logger.warning("SpeechBrain load 失敗 (%s)、voice ID OFF", str(e)[:100])
+        logger.warning("SpeechBrain load 失敗 (%s)、voice ID OFF", str(e)[:200])
         return None
 
 
@@ -132,17 +147,65 @@ def is_speechbrain_ready(cfg: Optional[SpeechBrainConfig] = None) -> dict[str, b
 
 
 def _load_audio_to_tensor(audio_path: Path):
-    """讀音檔轉成 16kHz mono tensor (SpeechBrain ECAPA expects 16kHz)."""
-    if _torchaudio is None:
-        raise RuntimeError("torchaudio not loaded · _lazy_import_speechbrain() 失敗")
-    signal, sample_rate = _torchaudio.load(str(audio_path))
-    # mono
-    if signal.shape[0] > 1:
-        signal = signal.mean(dim=0, keepdim=True)
-    # resample 16kHz
-    if sample_rate != 16000:
-        resampler = _torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
-        signal = resampler(signal)
+    """
+    讀音檔轉成 16kHz mono torch tensor (SpeechBrain ECAPA expects 16kHz).
+
+    繞過 torchaudio.load (新版 強制要 torchcodec + system ffmpeg)、
+    改用 imageio-ffmpeg 轉 wav + soundfile 讀 numpy + 手動 → torch tensor.
+
+    支援格式: 任何 ffmpeg 認得的 (m4a / mp3 / wav / flac / ogg / opus ...)
+    """
+    if _torch is None:
+        raise RuntimeError("torch not loaded · _lazy_import_speechbrain() 失敗")
+
+    try:
+        import soundfile as sf  # type: ignore
+        import numpy as np
+    except ImportError as e:
+        raise RuntimeError(
+            f"soundfile / numpy 未安裝 · 跑 `pip install soundfile numpy` ({e})"
+        )
+
+    try:
+        from imageio_ffmpeg import get_ffmpeg_exe  # type: ignore
+    except ImportError as e:
+        raise RuntimeError(
+            f"音檔解碼需 ffmpeg · 跑 `pip install imageio-ffmpeg` ({e})"
+        )
+
+    import subprocess
+    import tempfile
+
+    # 一律走 ffmpeg → 16kHz mono wav 暫存 (避開 torchaudio.load + torchcodec)
+    ffmpeg = get_ffmpeg_exe()
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        tmp_path = tmp.name
+    try:
+        subprocess.run(
+            [
+                ffmpeg, "-y", "-loglevel", "error",
+                "-i", str(audio_path),
+                "-ac", "1",         # mono
+                "-ar", "16000",     # 16 kHz
+                "-acodec", "pcm_s16le",
+                "-f", "wav",
+                tmp_path,
+            ],
+            check=True,
+            capture_output=True,
+        )
+        data, sample_rate = sf.read(tmp_path, dtype="float32", always_2d=False)
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+    # numpy → torch tensor · shape (1, samples) 給 SpeechBrain encode_batch
+    if data.ndim > 1:
+        # safety net (ffmpeg 已 force ac=1、應該不會走到)
+        data = data.mean(axis=1)
+    signal = _torch.from_numpy(data).unsqueeze(0)
     return signal
 
 
