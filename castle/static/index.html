@@ -388,6 +388,36 @@
 
     audio { display: none; }
 
+    /* === Tavus CVI · v0.3.2 真臉蘇菲 iframe === */
+    .tavus-frame-wrap {
+      position: absolute;
+      inset: 0;
+      display: none;
+      border-radius: 50%;
+      overflow: hidden;
+      background: var(--ink);
+      z-index: 2;
+    }
+    .tavus-frame-wrap.active { display: block; }
+    .tavus-frame-wrap iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+    .tavus-status-pill {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--amber-deep);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      z-index: 3;
+    }
+
     /* === Responsive: tablet === */
     @media (max-width: 1023px) {
       .stage { grid-template-columns: 1fr 220px; padding: 20px; gap: 18px; }
@@ -468,6 +498,11 @@
     <!-- Active stage · State B/C (對話中 hidden until start) -->
     <div class="sophie-zone" id="sophieZone" style="display: none;">
       <div class="sophie-avatar-wrap">
+        <!-- Tavus CVI 真臉 iframe · v0.3.2 · 預設 hidden · toggle on by user -->
+        <div class="tavus-frame-wrap" id="tavusFrameWrap">
+          <iframe id="tavusFrame" allow="camera; microphone; autoplay; clipboard-write" allowfullscreen></iframe>
+          <div class="tavus-status-pill" id="tavusStatusPill">真臉蘇菲（Tavus）</div>
+        </div>
         <div class="sophie-avatar idle" id="sophieAvatar">
           <svg class="sophie-face" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
             <path class="hair" d="M 20 38 Q 20 12, 50 12 Q 80 12, 80 38 L 80 62 Q 75 70, 65 70 L 35 70 Q 25 70, 20 62 Z" />
@@ -522,6 +557,10 @@
         <button class="tool-btn" id="visionBtn" disabled>
           <span class="tool-icon">👀</span>
           <span class="btn-label">開始蘇菲看</span>
+        </button>
+        <button class="tool-btn" id="tavusBtn">
+          <span class="tool-icon">🎭</span>
+          <span class="btn-label">真臉蘇菲</span>
         </button>
         <button class="tool-btn danger" id="killBtn" disabled>
           <span class="tool-icon">🚨</span>
@@ -1069,8 +1108,80 @@
     if (cameraOn) navigator.sendBeacon("/camera/kill", "");
   });
 
+  // === Tavus CVI · v0.3.2 真臉蘇菲 ===
+  const tavusBtn = document.getElementById("tavusBtn");
+  const tavusFrameWrap = document.getElementById("tavusFrameWrap");
+  const tavusFrame = document.getElementById("tavusFrame");
+  const tavusStatusPill = document.getElementById("tavusStatusPill");
+  let tavusConversationId = null;
+
+  async function tavusEnable() {
+    tavusBtn.disabled = true;
+    tavusStatusPill.textContent = "啟動中...";
+    try {
+      const resp = await fetch("/tavus/conversation/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ audio_only: false }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.ok) {
+        log("tavus start fail: " + JSON.stringify(data).slice(0, 200));
+        tavusStatusPill.textContent = "啟動失敗（看開發者 log）";
+        tavusBtn.disabled = false;
+        return;
+      }
+      tavusConversationId = data.conversation_id;
+      tavusFrame.src = data.conversation_url;
+      tavusFrameWrap.classList.add("active");
+      tavusBtn.classList.add("active");
+      tavusBtn.querySelector(".btn-label").textContent = "關真臉";
+      tavusStatusPill.textContent = "真臉蘇菲（Tavus · 雲端）";
+      tavusBtn.disabled = false;
+      log("tavus conversation started: " + tavusConversationId);
+    } catch (e) {
+      log("tavus enable err: " + e.message);
+      tavusBtn.disabled = false;
+      tavusStatusPill.textContent = "啟動錯";
+    }
+  }
+
+  async function tavusDisable() {
+    tavusBtn.disabled = true;
+    if (tavusConversationId) {
+      try {
+        await fetch(`/tavus/conversation/${tavusConversationId}/end`, { method: "POST" });
+        log("tavus conversation ended: " + tavusConversationId);
+      } catch (e) {
+        log("tavus end err: " + e.message);
+      }
+      tavusConversationId = null;
+    }
+    tavusFrame.src = "";
+    tavusFrameWrap.classList.remove("active");
+    tavusBtn.classList.remove("active");
+    tavusBtn.querySelector(".btn-label").textContent = "真臉蘇菲";
+    tavusStatusPill.textContent = "真臉蘇菲（Tavus）";
+    tavusBtn.disabled = false;
+  }
+
+  tavusBtn.addEventListener("click", () => {
+    if (tavusFrameWrap.classList.contains("active")) {
+      tavusDisable();
+    } else {
+      tavusEnable();
+    }
+  });
+
+  // 確保關 tab 時也 end 對話（不繼續燒 Tavus 分鐘）
+  window.addEventListener("beforeunload", () => {
+    if (tavusConversationId) {
+      navigator.sendBeacon(`/tavus/conversation/${tavusConversationId}/end`, "");
+    }
+  });
+
   // Init
-  log("Voice Path v0.3.1 直播感版面 ready · ADR-008 暖琥珀 DNA · ADR-018 隱私守則");
+  log("Voice Path v0.3.2 直播感版面 ready · ADR-008 暖琥珀 DNA · ADR-018 隱私守則 · Tavus CVI loaded");
 })();
 </script>
 </body>

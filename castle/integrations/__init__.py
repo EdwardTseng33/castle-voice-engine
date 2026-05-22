@@ -31,6 +31,17 @@ from castle.integrations.speechbrain_voiceid import (
 )
 
 __all__ = [
+    # Tavus CVI exports
+    "TavusAPIError",
+    "tavus_create_persona",
+    "tavus_get_persona",
+    "tavus_create_replica_from_image",
+    "tavus_get_replica",
+    "tavus_create_conversation",
+    "tavus_get_conversation",
+    "tavus_end_conversation",
+    "TAVUS_DEFAULT_STOCK_REPLICA",
+    "TAVUS_STOCK_REPLICA_ANNA",
     # SpeechBrain (主路 · Picovoice Eagle 開源替代 · 2026-05-22 ship)
     "SpeechBrainConfig",
     "is_speechbrain_ready",
@@ -46,3 +57,17 @@ __all__ = [
     "init_porcupine",
     "init_eagle_recognizer",
 ]
+
+# Tavus CVI (Phase 3.2 · 2026-05-23 卡西法 ship · ADR-020 Track A 走 SaaS · Anam audit pending)
+from castle.integrations.tavus_client import (
+    TavusAPIError,
+    create_persona as tavus_create_persona,
+    get_persona as tavus_get_persona,
+    create_replica_from_image as tavus_create_replica_from_image,
+    get_replica as tavus_get_replica,
+    create_conversation as tavus_create_conversation,
+    get_conversation as tavus_get_conversation,
+    end_conversation as tavus_end_conversation,
+    DEFAULT_STOCK_REPLICA as TAVUS_DEFAULT_STOCK_REPLICA,
+    STOCK_REPLICA_ANNA as TAVUS_STOCK_REPLICA_ANNA,
+)

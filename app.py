@@ -68,10 +68,12 @@ def fastapi_app():
     from castle.server.realtime_endpoints import attach_realtime_routes
     from castle.server.camera_endpoints import attach_camera_routes
     from castle.server.dispatch_endpoints import attach_dispatch_routes
+    from castle.server.tavus_endpoints import attach_tavus_routes
 
     attach_realtime_routes(fastapi_instance)
     attach_camera_routes(fastapi_instance)
     attach_dispatch_routes(fastapi_instance)  # v0.3.0 Phase 2 後半段: castle dispatch + phase2/status
+    attach_tavus_routes(fastapi_instance)  # v0.3.2 Phase 3.2: Tavus CVI 即時對話 video
 
     # Mount /static for demo HTML + add root redirect.
     static_dir = Path("/root/castle/static")
