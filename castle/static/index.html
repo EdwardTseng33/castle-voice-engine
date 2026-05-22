@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>蘇菲 · castle-voice-engine v0.3.1 直播感</title>
+  <title>蘇菲 · castle-voice-engine v0.3.3 直播感 · Duix-style</title>
   <style>
     :root {
       /* Phase 1+3 既有 token (ADR-008 暖琥珀 DNA) */
@@ -388,34 +388,116 @@
 
     audio { display: none; }
 
-    /* === Tavus CVI · v0.3.2 真臉蘇菲 iframe === */
-    .tavus-frame-wrap {
+    /* === Tavus CVI · v0.3.3 真臉蘇菲 Duix-style Fullscreen === */
+    .tavus-fullscreen {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      z-index: 1000;
+      display: none;
+    }
+    .tavus-fullscreen.active { display: block; }
+    .tavus-fullscreen iframe {
       position: absolute;
       inset: 0;
-      display: none;
-      border-radius: 50%;
-      overflow: hidden;
-      background: var(--ink);
-      z-index: 2;
-    }
-    .tavus-frame-wrap.active { display: block; }
-    .tavus-frame-wrap iframe {
       width: 100%;
       height: 100%;
       border: 0;
+      background: #000;
     }
-    .tavus-status-pill {
+    /* fullscreen overlay chrome */
+    .tavus-fs-topbar {
       position: absolute;
-      bottom: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: var(--amber-deep);
-      color: white;
-      padding: 4px 10px;
-      border-radius: 12px;
+      top: 0; left: 0; right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 18px 24px;
+      z-index: 1010;
+      pointer-events: none;
+    }
+    .tavus-fs-name {
+      color: rgba(255,255,255,0.95);
+      font-size: 17px;
+      font-style: italic;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      pointer-events: auto;
+      text-shadow: 0 1px 6px rgba(0,0,0,0.7);
+      letter-spacing: 0.3px;
+    }
+    .tavus-fs-info {
+      cursor: help;
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.55);
+      color: rgba(255,255,255,0.75);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-style: normal;
+      font-family: Georgia, serif;
+    }
+    .tavus-fs-watermark {
+      color: rgba(255,255,255,0.42);
       font-size: 11px;
       letter-spacing: 0.5px;
-      z-index: 3;
+      pointer-events: auto;
+      text-shadow: 0 1px 6px rgba(0,0,0,0.7);
+    }
+    .tavus-fs-bottombar {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 24px 28px;
+      z-index: 1010;
+      pointer-events: none;
+    }
+    .tavus-fs-timer {
+      color: rgba(255,255,255,0.88);
+      font-size: 15px;
+      font-variant-numeric: tabular-nums;
+      font-family: ui-monospace, "Cascadia Code", monospace;
+      pointer-events: auto;
+      text-shadow: 0 1px 6px rgba(0,0,0,0.7);
+      min-width: 60px;
+    }
+    .tavus-fs-actions {
+      display: flex;
+      gap: 14px;
+      pointer-events: auto;
+    }
+    .tavus-fs-end-btn {
+      width: 60px; height: 60px;
+      border-radius: 50%;
+      border: 0;
+      background: #e3392b;
+      color: white;
+      font-size: 22px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, transform 0.15s;
+      box-shadow: 0 4px 18px rgba(227, 57, 43, 0.45);
+      font-weight: 600;
+    }
+    .tavus-fs-end-btn:hover {
+      background: #c12d22;
+      transform: scale(1.05);
+    }
+    .tavus-fs-end-btn:active { transform: scale(0.96); }
+    .tavus-fs-spacer { min-width: 60px; }
+    @media (max-width: 767px) {
+      .tavus-fs-end-btn { width: 54px; height: 54px; font-size: 20px; }
+      .tavus-fs-bottombar { padding: 18px 18px; }
+      .tavus-fs-topbar { padding: 14px 18px; }
+      .tavus-fs-name { font-size: 15px; }
+      .tavus-fs-spacer { min-width: 54px; }
     }
 
     /* === Responsive: tablet === */
@@ -498,11 +580,6 @@
     <!-- Active stage · State B/C (對話中 hidden until start) -->
     <div class="sophie-zone" id="sophieZone" style="display: none;">
       <div class="sophie-avatar-wrap">
-        <!-- Tavus CVI 真臉 iframe · v0.3.2 · 預設 hidden · toggle on by user -->
-        <div class="tavus-frame-wrap" id="tavusFrameWrap">
-          <iframe id="tavusFrame" allow="camera; microphone; autoplay; clipboard-write" allowfullscreen></iframe>
-          <div class="tavus-status-pill" id="tavusStatusPill">真臉蘇菲（Tavus）</div>
-        </div>
         <div class="sophie-avatar idle" id="sophieAvatar">
           <svg class="sophie-face" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
             <path class="hair" d="M 20 38 Q 20 12, 50 12 Q 80 12, 80 38 L 80 62 Q 75 70, 65 70 L 35 70 Q 25 70, 20 62 Z" />
@@ -575,6 +652,25 @@
   <div class="log" id="log"></div>
 
   <audio id="remoteAudio" autoplay></audio>
+
+  <!-- v0.3.3 真臉蘇菲 · Duix-style fullscreen modal · 純黑乾淨俐落 -->
+  <div class="tavus-fullscreen" id="tavusFullscreen">
+    <iframe id="tavusFrame" allow="camera; microphone; autoplay; clipboard-write" allowfullscreen></iframe>
+    <div class="tavus-fs-topbar">
+      <div class="tavus-fs-name">
+        <span>蘇菲</span>
+        <span class="tavus-fs-info" title="Tavus CVI · 雲端真臉 · 不錄影不存盤">i</span>
+      </div>
+      <div class="tavus-fs-watermark">Powered by Castle · Tavus CVI</div>
+    </div>
+    <div class="tavus-fs-bottombar">
+      <div class="tavus-fs-timer" id="tavusFsTimer">00:00</div>
+      <div class="tavus-fs-actions">
+        <button class="tavus-fs-end-btn" id="tavusFsEndBtn" title="結束真臉模式">✕</button>
+      </div>
+      <div class="tavus-fs-spacer"></div>
+    </div>
+  </div>
 
 <script>
 (function () {
@@ -1108,16 +1204,26 @@
     if (cameraOn) navigator.sendBeacon("/camera/kill", "");
   });
 
-  // === Tavus CVI · v0.3.2 真臉蘇菲 ===
+  // === Tavus CVI · v0.3.3 真臉蘇菲 · Duix-style fullscreen ===
   const tavusBtn = document.getElementById("tavusBtn");
-  const tavusFrameWrap = document.getElementById("tavusFrameWrap");
+  const tavusFullscreen = document.getElementById("tavusFullscreen");
   const tavusFrame = document.getElementById("tavusFrame");
-  const tavusStatusPill = document.getElementById("tavusStatusPill");
+  const tavusFsEndBtn = document.getElementById("tavusFsEndBtn");
+  const tavusFsTimer = document.getElementById("tavusFsTimer");
   let tavusConversationId = null;
+  let tavusStartedAt = 0;
+  let tavusTimerInterval = null;
+
+  function updateTavusTimer() {
+    if (!tavusStartedAt) return;
+    const elapsed = Math.floor((Date.now() - tavusStartedAt) / 1000);
+    const m = String(Math.floor(elapsed / 60)).padStart(2, "0");
+    const s = String(elapsed % 60).padStart(2, "0");
+    tavusFsTimer.textContent = m + ":" + s;
+  }
 
   async function tavusEnable() {
     tavusBtn.disabled = true;
-    tavusStatusPill.textContent = "啟動中...";
     try {
       const resp = await fetch("/tavus/conversation/start", {
         method: "POST",
@@ -1127,27 +1233,32 @@
       const data = await resp.json();
       if (!resp.ok || !data.ok) {
         log("tavus start fail: " + JSON.stringify(data).slice(0, 200));
-        tavusStatusPill.textContent = "啟動失敗（看開發者 log）";
         tavusBtn.disabled = false;
         return;
       }
       tavusConversationId = data.conversation_id;
       tavusFrame.src = data.conversation_url;
-      tavusFrameWrap.classList.add("active");
+      tavusFullscreen.classList.add("active");
       tavusBtn.classList.add("active");
       tavusBtn.querySelector(".btn-label").textContent = "關真臉";
-      tavusStatusPill.textContent = "真臉蘇菲（Tavus · 雲端）";
+      tavusStartedAt = Date.now();
+      tavusFsTimer.textContent = "00:00";
+      tavusTimerInterval = setInterval(updateTavusTimer, 1000);
       tavusBtn.disabled = false;
       log("tavus conversation started: " + tavusConversationId);
     } catch (e) {
       log("tavus enable err: " + e.message);
       tavusBtn.disabled = false;
-      tavusStatusPill.textContent = "啟動錯";
     }
   }
 
   async function tavusDisable() {
     tavusBtn.disabled = true;
+    if (tavusTimerInterval) {
+      clearInterval(tavusTimerInterval);
+      tavusTimerInterval = null;
+    }
+    tavusStartedAt = 0;
     if (tavusConversationId) {
       try {
         await fetch(`/tavus/conversation/${tavusConversationId}/end`, { method: "POST" });
@@ -1158,18 +1269,24 @@
       tavusConversationId = null;
     }
     tavusFrame.src = "";
-    tavusFrameWrap.classList.remove("active");
+    tavusFullscreen.classList.remove("active");
     tavusBtn.classList.remove("active");
     tavusBtn.querySelector(".btn-label").textContent = "真臉蘇菲";
-    tavusStatusPill.textContent = "真臉蘇菲（Tavus）";
     tavusBtn.disabled = false;
   }
 
   tavusBtn.addEventListener("click", () => {
-    if (tavusFrameWrap.classList.contains("active")) {
+    if (tavusFullscreen.classList.contains("active")) {
       tavusDisable();
     } else {
       tavusEnable();
+    }
+  });
+  tavusFsEndBtn.addEventListener("click", tavusDisable);
+  // ESC 結束真臉
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && tavusFullscreen.classList.contains("active")) {
+      tavusDisable();
     }
   });
 
@@ -1181,7 +1298,7 @@
   });
 
   // Init
-  log("Voice Path v0.3.2 直播感版面 ready · ADR-008 暖琥珀 DNA · ADR-018 隱私守則 · Tavus CVI loaded");
+  log("Voice Path v0.3.3 直播感版面 ready · ADR-008 暖琥珀 DNA · ADR-018 隱私守則 · Tavus CVI fullscreen Duix-style");
 })();
 </script>
 </body>

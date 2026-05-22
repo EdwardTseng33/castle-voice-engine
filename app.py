@@ -55,6 +55,7 @@ app = modal.App("castle-voice-engine")
     secrets=[
         modal.Secret.from_name("openai"),
         modal.Secret.from_name("anthropic-key"),
+        modal.Secret.from_name("tavus"),  # v0.3.2 Phase 3.2 Tavus CVI 即時對話
     ],
 )
 @modal.asgi_app()
