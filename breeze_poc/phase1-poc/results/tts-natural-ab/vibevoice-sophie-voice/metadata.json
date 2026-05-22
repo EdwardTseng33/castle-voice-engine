@@ -1,0 +1,127 @@
+{
+  "model": "Microsoft VibeVoice-1.5B",
+  "model_version": "microsoft/VibeVoice-1.5B",
+  "deployment": "Modal A10G GPU, vibevoice-sophie app",
+  "voice_ref_source": "Azure Edge TTS zh-TW-HsiaoYuNeural (曉雨)",
+  "voice_ref_text": "你好 Edward、我是蘇菲。今天先看一下你的工作清單、BeyondPath 那邊客戶的資料我整理好了、待會我跟你過一遍。等等休息一下、別累著、晚一點再說。",
+  "voice_ref_duration_sec": 30,
+  "voice_ref_rate": "-5%",
+  "voice_ref_file": "../sophie-voice-prompts/edge-xiaoyu-sophie-prompt.mp3",
+  "normalize_target": "-1 dBFS peak (0.9 of int16 max, built into Modal)",
+  "endpoint": "Modal class direct call (no HTTP endpoint, lower cost)",
+  "license": "MIT (VibeVoice model) + Apache-2.0 (wrapper) + Azure TTS terms for voice ref",
+  "ship_timestamp": "2026-05-22T14:12:12+08:00",
+  "ship_session": "calcifer 5/22 VibeVoice Sophie-voice rerun (race-condition resolved)",
+  "samples": [
+    {
+      "id": "t01",
+      "text": "今天天氣不錯、想出去走走嗎？",
+      "file": "t01.wav",
+      "latency_ms": 19184.6,
+      "inference_ms": 4467.6,
+      "client_total_ms": 63973.3,
+      "duration_sec": 3.87,
+      "sample_rate": 24000,
+      "voice_ref": "edge-tts-zh-TW-HsiaoYuNeural-30s"
+    },
+    {
+      "id": "t02",
+      "text": "等等吃飯有想吃什麼？",
+      "file": "t02.wav",
+      "latency_ms": 3316.0,
+      "inference_ms": 3301.9,
+      "client_total_ms": 5700.8,
+      "duration_sec": 3.6,
+      "sample_rate": 24000,
+      "voice_ref": "edge-tts-zh-TW-HsiaoYuNeural-30s"
+    },
+    {
+      "id": "t03",
+      "text": "最近忙翻了、好想休息一下。",
+      "file": "t03.wav",
+      "latency_ms": 3047.2,
+      "inference_ms": 3034.4,
+      "client_total_ms": 5353.7,
+      "duration_sec": 3.2,
+      "sample_rate": 24000,
+      "voice_ref": "edge-tts-zh-TW-HsiaoYuNeural-30s"
+    },
+    {
+      "id": "t04",
+      "text": "派蕪菁頭看 BeyondPath 今天的數據、跌幅超過 30% 就提醒我。",
+      "file": "t04.wav",
+      "latency_ms": 8889.2,
+      "inference_ms": 8875.1,
+      "client_total_ms": 11673.6,
+      "duration_sec": 9.6,
+      "sample_rate": 24000,
+      "voice_ref": "edge-tts-zh-TW-HsiaoYuNeural-30s"
+    },
+    {
+      "id": "t05",
+      "text": "明天會議我們要討論 v2.0 的計畫、特別是第三階段的鏡頭功能。",
+      "file": "t05.wav",
+      "latency_ms": 6980.6,
+      "inference_ms": 6967.1,
+      "client_total_ms": 9488.8,
+      "duration_sec": 7.6,
+      "sample_rate": 24000,
+      "voice_ref": "edge-tts-zh-TW-HsiaoYuNeural-30s"
+    },
+    {
+      "id": "t06",
+      "text": "客戶那邊的提案、麻煩你幫我整理一份完整版給我。",
+      "file": "t06.wav",
+      "latency_ms": 4421.8,
+      "inference_ms": 4409.1,
+      "client_total_ms": 6934.0,
+      "duration_sec": 4.8,
+      "sample_rate": 24000,
+      "voice_ref": "edge-tts-zh-TW-HsiaoYuNeural-30s"
+    },
+    {
+      "id": "t07",
+      "text": "我要把 PR 上傳到 main 之前先跑 lint。",
+      "file": "t07.wav",
+      "latency_ms": 4213.9,
+      "inference_ms": 4200.9,
+      "client_total_ms": 6706.3,
+      "duration_sec": 4.53,
+      "sample_rate": 24000,
+      "voice_ref": "edge-tts-zh-TW-HsiaoYuNeural-30s"
+    },
+    {
+      "id": "t08",
+      "text": "BeyondPath 那個 dashboard 的 retention 數據看起來不太對。",
+      "file": "t08.wav",
+      "latency_ms": 4998.7,
+      "inference_ms": 4985.9,
+      "client_total_ms": 7590.1,
+      "duration_sec": 5.47,
+      "sample_rate": 24000,
+      "voice_ref": "edge-tts-zh-TW-HsiaoYuNeural-30s"
+    },
+    {
+      "id": "t09",
+      "text": "太好了！這次客戶真的簽約了！",
+      "file": "t09.wav",
+      "latency_ms": 4508.8,
+      "inference_ms": 4494.9,
+      "client_total_ms": 7005.1,
+      "duration_sec": 4.8,
+      "sample_rate": 24000,
+      "voice_ref": "edge-tts-zh-TW-HsiaoYuNeural-30s"
+    },
+    {
+      "id": "t10",
+      "text": "今天先到這、明天再說、我先休息一下。",
+      "file": "t10.wav",
+      "latency_ms": 4249.7,
+      "inference_ms": 4236.9,
+      "client_total_ms": 6790.0,
+      "duration_sec": 4.53,
+      "sample_rate": 24000,
+      "voice_ref": "edge-tts-zh-TW-HsiaoYuNeural-30s"
+    }
+  ]
+}
