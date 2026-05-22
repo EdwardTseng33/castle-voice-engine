@@ -92,7 +92,14 @@ async def _post(path: str, body: dict[str, Any], timeout: float = HTTP_TIMEOUT_Q
     if resp.status_code >= 400:
         logger.warning("Tavus POST %s status=%d body=%s", path, resp.status_code, resp.text[:200])
         raise TavusAPIError(status=resp.status_code, body=resp.text, hint=f"POST {path} failed")
-    return resp.json()
+    # Tavus end endpoint return 200 + empty body (no JSON) · resp.json() throws · 5/23 fix
+    body_text = resp.text or ""
+    if not body_text.strip():
+        return {"ok": True, "status": resp.status_code, "body": ""}
+    try:
+        return resp.json()
+    except Exception:
+        return {"ok": True, "status": resp.status_code, "body": body_text[:200]}
 
 
 async def _get(path: str, timeout: float = HTTP_TIMEOUT_QUICK) -> dict[str, Any]:

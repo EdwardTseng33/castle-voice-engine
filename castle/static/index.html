@@ -3,12 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>蘇菲 · v0.4.1</title>
+  <title>蘇菲 · v0.4.2</title>
   <style>
     :root {
       --amber: #D4712A;
       --amber-deep: #A4571F;
       --amber-bright: #FFB570;
+      --green: #1fa66e;
+      --green-deep: #15875a;
       --err: #e3392b;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -20,16 +22,16 @@
       color: white;
     }
 
-    .duix-shell {
+    .shell {
       position: fixed;
       inset: 0;
-      background: #000;
+      background: radial-gradient(ellipse at center, #1a120c 0%, #050302 70%);
       display: flex;
       flex-direction: column;
     }
 
     /* === Top overlay === */
-    .duix-top {
+    .top {
       position: absolute;
       top: 0; left: 0; right: 0;
       padding: 22px 28px;
@@ -39,18 +41,18 @@
       z-index: 20;
       pointer-events: none;
     }
-    .duix-top-left {
+    .name-block {
       display: flex; align-items: center; gap: 10px;
       pointer-events: auto;
       text-shadow: 0 1px 6px rgba(0,0,0,0.7);
     }
-    .duix-name {
+    .name {
       font-style: italic;
       font-size: 18px;
       color: rgba(255,255,255,0.95);
       letter-spacing: 0.3px;
     }
-    .duix-name-info {
+    .info-dot {
       width: 18px; height: 18px;
       border-radius: 50%;
       border: 1px solid rgba(255,255,255,0.45);
@@ -63,10 +65,8 @@
       justify-content: center;
       cursor: help;
     }
-    .duix-top-right {
-      display: flex; gap: 10px; pointer-events: auto;
-    }
-    .duix-settings-btn {
+    .top-right { display: flex; gap: 10px; pointer-events: auto; }
+    .settings-btn {
       width: 38px; height: 38px;
       border-radius: 50%;
       border: 1px solid rgba(255,255,255,0.18);
@@ -74,162 +74,163 @@
       color: rgba(255,255,255,0.85);
       font-size: 18px;
       cursor: pointer;
-      backdrop-filter: blur(8px);
       transition: background 0.15s;
     }
-    .duix-settings-btn:hover { background: rgba(255,255,255,0.16); }
+    .settings-btn:hover { background: rgba(255,255,255,0.16); }
 
-    /* === Center · Tavus iframe === */
-    .duix-center {
-      position: relative;
-      width: 100%;
+    /* === Center === */
+    .center {
       flex: 1;
-      overflow: hidden;
-    }
-    .duix-tavus-frame {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      border: 0;
-      background: #000;
-      opacity: 0;
-      transition: opacity 0.5s;
-    }
-    .duix-tavus-frame.loaded { opacity: 1; }
-
-    /* === Loading state === */
-    .duix-loading {
-      position: absolute;
-      inset: 0;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 20px;
-      background: radial-gradient(ellipse at center, #1a120c 0%, #050302 100%);
-      transition: opacity 0.4s;
-      z-index: 5;
+      gap: 28px;
+      padding: 80px 24px;
+      text-align: center;
     }
-    .duix-loading.hidden {
-      opacity: 0;
-      pointer-events: none;
+    @keyframes orb-pulse {
+      0%, 100% { transform: scale(1); opacity: 0.92; box-shadow: 0 0 60px rgba(212,113,42,0.35); }
+      50%      { transform: scale(1.06); opacity: 1;    box-shadow: 0 0 90px rgba(212,113,42,0.55); }
     }
-    @keyframes loading-pulse {
-      0%, 100% { transform: scale(1); opacity: 0.85; }
-      50%      { transform: scale(1.08); opacity: 1; }
-    }
-    .duix-loading-orb {
-      width: 90px; height: 90px;
+    .orb {
+      width: 180px; height: 180px;
       border-radius: 50%;
-      background: radial-gradient(circle at 35% 35%, var(--amber-bright), var(--amber) 55%, var(--amber-deep) 100%);
-      box-shadow: 0 0 60px rgba(212,113,42,0.4);
-      animation: loading-pulse 1.8s ease-in-out infinite;
+      background: radial-gradient(circle at 32% 32%, var(--amber-bright), var(--amber) 55%, var(--amber-deep) 100%);
+      animation: orb-pulse 2.8s ease-in-out infinite;
     }
-    .duix-loading-text {
+    .greeting {
       font-style: italic;
+      font-size: 26px;
+      color: rgba(255,255,255,0.94);
+      text-shadow: 0 2px 12px rgba(0,0,0,0.5);
+      max-width: 600px;
+      line-height: 1.45;
+    }
+    .lead {
+      font-size: 14px;
+      color: rgba(255,255,255,0.6);
+      line-height: 1.6;
+      max-width: 520px;
+    }
+    .start-btn {
+      padding: 16px 38px;
+      border-radius: 999px;
+      border: 0;
+      background: var(--green);
+      color: white;
+      font-family: inherit;
       font-size: 17px;
-      color: rgba(255,255,255,0.78);
-      letter-spacing: 0.5px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 8px 28px rgba(31, 166, 110, 0.45);
+      transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
     }
-    .duix-loading-sub {
-      font-size: 12px;
-      color: rgba(255,255,255,0.42);
-      margin-top: -6px;
+    .start-btn:hover {
+      background: var(--green-deep);
+      transform: translateY(-1px);
+      box-shadow: 0 10px 32px rgba(31, 166, 110, 0.55);
     }
+    .start-btn:active { transform: scale(0.97); }
+    .start-btn:disabled {
+      background: rgba(255,255,255,0.12);
+      color: rgba(255,255,255,0.45);
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+    .shell.active .start-btn { display: none; }
 
-    /* === Error state === */
-    .duix-error {
-      position: absolute;
-      inset: 0;
+    /* === Active state · 對話進行中 === */
+    .active-block {
       display: none;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      gap: 16px;
-      background: #0a0604;
-      padding: 24px;
-      text-align: center;
-      z-index: 8;
+      gap: 18px;
     }
-    .duix-error.show { display: flex; }
-    .duix-error-title {
-      font-style: italic;
-      font-size: 19px;
-      color: rgba(255,255,255,0.92);
+    .shell.active .active-block { display: flex; }
+    .shell.active .greeting { font-size: 22px; }
+    .shell.active .orb { width: 140px; height: 140px; }
+    .active-status {
+      font-size: 14px;
+      color: var(--amber-bright);
+      letter-spacing: 0.5px;
     }
-    .duix-error-detail {
-      font-size: 13px;
-      color: rgba(255,180,112,0.78);
+    .active-hint {
+      font-size: 12px;
+      color: rgba(255,255,255,0.55);
+      line-height: 1.6;
       max-width: 480px;
-      line-height: 1.55;
-      padding: 12px 16px;
-      background: rgba(212,113,42,0.1);
-      border: 1px solid rgba(212,113,42,0.32);
-      border-radius: 8px;
     }
-    .duix-retry-btn {
-      padding: 12px 28px;
+    .end-btn {
+      padding: 14px 32px;
       border-radius: 999px;
       border: 0;
-      background: var(--amber);
+      background: var(--err);
       color: white;
       font-family: inherit;
       font-size: 15px;
       cursor: pointer;
-      box-shadow: 0 4px 18px rgba(212, 113, 42, 0.45);
+      box-shadow: 0 6px 22px rgba(227, 57, 43, 0.4);
       transition: background 0.15s, transform 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
     }
-    .duix-retry-btn:hover { background: var(--amber-deep); transform: translateY(-1px); }
+    .end-btn:hover { background: #c12d22; transform: translateY(-1px); }
+    .end-btn:active { transform: scale(0.97); }
+    .end-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* === Error === */
+    .error {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      padding: 18px 24px;
+      max-width: 540px;
+      background: rgba(212,113,42,0.1);
+      border: 1px solid rgba(212,113,42,0.35);
+      border-radius: 10px;
+    }
+    .error.show { display: flex; }
+    .error-title {
+      font-style: italic;
+      font-size: 16px;
+      color: rgba(255,255,255,0.92);
+    }
+    .error-detail {
+      font-size: 12px;
+      color: rgba(255,180,112,0.85);
+      line-height: 1.55;
+    }
 
     /* === Bottom overlay === */
-    .duix-bottom {
+    .bottom {
       position: absolute;
       bottom: 0; left: 0; right: 0;
-      padding: 24px 28px;
+      padding: 22px 28px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       z-index: 20;
       pointer-events: none;
     }
-    .duix-timer {
-      color: rgba(255,255,255,0.88);
-      font-size: 15px;
+    .timer {
+      color: rgba(255,255,255,0.85);
+      font-size: 14px;
       font-variant-numeric: tabular-nums;
       font-family: ui-monospace, "Cascadia Code", monospace;
       pointer-events: auto;
       min-width: 60px;
       text-shadow: 0 1px 6px rgba(0,0,0,0.7);
+      opacity: 0;
+      transition: opacity 0.3s;
     }
-    .duix-actions {
-      pointer-events: auto;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
-    .duix-end-btn {
-      width: 60px; height: 60px;
-      border-radius: 50%;
-      border: 0;
-      background: var(--err);
-      color: white;
-      font-size: 22px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      transition: background 0.15s, transform 0.15s;
-      box-shadow: 0 4px 18px rgba(227, 57, 43, 0.45);
-      font-weight: 600;
-    }
-    .duix-end-btn:hover {
-      background: #c12d22;
-      transform: scale(1.05);
-    }
-    .duix-end-btn:active { transform: scale(0.96); }
-    .duix-end-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .duix-watermark {
+    .shell.active .timer { opacity: 1; }
+    .watermark {
       color: rgba(255,255,255,0.32);
       font-size: 11px;
       letter-spacing: 0.5px;
@@ -238,9 +239,10 @@
       text-align: right;
       text-shadow: 0 1px 6px rgba(0,0,0,0.7);
     }
+    .bottom-spacer { min-width: 60px; }
 
-    /* === Settings panel (slide-in from right) === */
-    .duix-settings-panel {
+    /* === Settings panel === */
+    .panel {
       position: absolute;
       top: 0; right: 0;
       width: 320px;
@@ -252,10 +254,9 @@
       transition: transform 0.25s;
       z-index: 50;
       overflow-y: auto;
-      backdrop-filter: blur(20px);
     }
-    .duix-settings-panel.open { transform: translateX(0); }
-    .duix-settings-panel h3 {
+    .panel.open { transform: translateX(0); }
+    .panel h3 {
       font-style: italic;
       font-size: 18px;
       color: var(--amber-bright);
@@ -266,38 +267,12 @@
       font-size: 12px;
       color: rgba(255,180,112,0.85);
       line-height: 1.7;
-      padding: 14px 14px;
+      padding: 14px;
       background: rgba(212,113,42,0.12);
       border: 1px solid rgba(212,113,42,0.32);
       border-radius: 8px;
     }
-    .duix-log-toggle {
-      background: transparent;
-      border: 1px solid rgba(255,255,255,0.15);
-      color: rgba(255,255,255,0.62);
-      padding: 6px 12px;
-      border-radius: 6px;
-      font-family: inherit;
-      font-size: 11px;
-      cursor: pointer;
-      margin-top: 18px;
-    }
-    .duix-log-toggle:hover { color: rgba(255,255,255,0.9); border-color: rgba(255,255,255,0.3); }
-    .duix-log {
-      margin-top: 12px;
-      padding: 10px 12px;
-      background: rgba(0,0,0,0.6);
-      color: #d4c4a8;
-      font-family: ui-monospace, "Cascadia Code", monospace;
-      font-size: 10px;
-      border-radius: 6px;
-      max-height: 220px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      display: none;
-    }
-    .duix-log.open { display: block; }
-    .duix-settings-close {
+    .panel-close {
       position: absolute;
       top: 16px; right: 16px;
       width: 30px; height: 30px;
@@ -308,70 +283,103 @@
       cursor: pointer;
       font-size: 18px;
     }
-    .duix-settings-close:hover { background: rgba(255,255,255,0.18); }
+    .panel-close:hover { background: rgba(255,255,255,0.18); }
+    .log-toggle {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.62);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+      margin-top: 18px;
+    }
+    .log {
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: rgba(0,0,0,0.6);
+      color: #d4c4a8;
+      font-family: ui-monospace, monospace;
+      font-size: 10px;
+      border-radius: 6px;
+      max-height: 220px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      display: none;
+    }
+    .log.open { display: block; }
 
-    /* === Responsive · mobile === */
     @media (max-width: 767px) {
-      .duix-top, .duix-bottom { padding: 16px 18px; }
-      .duix-end-btn { width: 54px; height: 54px; font-size: 20px; }
-      .duix-settings-panel { width: 100%; }
-      .duix-watermark, .duix-timer { font-size: 11px; min-width: 50px; }
-      .duix-name { font-size: 15px; }
-      .duix-loading-orb { width: 70px; height: 70px; }
-      .duix-loading-text { font-size: 15px; }
+      .orb { width: 140px; height: 140px; }
+      .shell.active .orb { width: 110px; height: 110px; }
+      .greeting { font-size: 22px; }
+      .top, .bottom { padding: 16px 18px; }
+      .panel { width: 100%; }
+      .start-btn { font-size: 15px; padding: 14px 28px; }
     }
   </style>
 </head>
 <body>
 
-  <div class="duix-shell" id="shell">
+  <div class="shell" id="shell">
 
-    <!-- Top overlay -->
-    <div class="duix-top">
-      <div class="duix-top-left">
-        <span class="duix-name" id="topName">蘇菲</span>
-        <span class="duix-name-info" title="Voice Path v0.4.1 · 蘇菲 (Tavus 雲端真人) · 不錄影 · 不存盤">i</span>
+    <div class="top">
+      <div class="name-block">
+        <span class="name">蘇菲</span>
+        <span class="info-dot" title="Voice Path v0.4.2 · 雲端真人對話 · 不錄影 · 不存盤">i</span>
       </div>
-      <div class="duix-top-right">
-        <button class="duix-settings-btn" id="settingsBtn" title="設定">⚙</button>
+      <div class="top-right">
+        <button class="settings-btn" id="settingsBtn" title="設定">⚙</button>
       </div>
     </div>
 
-    <!-- Center · Tavus iframe -->
-    <div class="duix-center">
-      <iframe class="duix-tavus-frame" id="tavusFrame" allow="camera; microphone; autoplay; clipboard-write" allowfullscreen></iframe>
-      <div class="duix-loading" id="loading">
-        <div class="duix-loading-orb"></div>
-        <div class="duix-loading-text">準備真人蘇菲中...</div>
-        <div class="duix-loading-sub">通常 3-5 秒</div>
+    <div class="center">
+      <div class="orb"></div>
+
+      <!-- Idle state -->
+      <div class="idle-block" id="idleBlock">
+        <div class="greeting">今天想跟蘇菲聊什麼？</div>
+        <p class="lead">按下方按鈕、蘇菲會在新視窗開啟<br>輸入名字 → 點 Continue → 講話就可以</p>
+        <br>
+        <button class="start-btn" id="startBtn">
+          <span>📞</span>
+          <span>開始跟蘇菲對話</span>
+        </button>
+        <div class="error" id="errorBox">
+          <div class="error-title" id="errorTitle">啟動失敗</div>
+          <div class="error-detail" id="errorDetail"></div>
+        </div>
       </div>
-      <div class="duix-error" id="error">
-        <div class="duix-error-title">無法啟動真人蘇菲</div>
-        <div class="duix-error-detail" id="errorDetail"></div>
-        <button class="duix-retry-btn" id="retryBtn">重試</button>
+
+      <!-- Active state -->
+      <div class="active-block">
+        <div class="active-status">● 對話進行中（新視窗）</div>
+        <p class="active-hint">蘇菲在另一個視窗跟你聊<br>講完後關掉那個視窗、回來這裡按結束</p>
+        <br>
+        <button class="end-btn" id="endBtn">
+          <span>✕</span>
+          <span>結束對話 + 停止計費</span>
+        </button>
       </div>
     </div>
 
-    <!-- Bottom overlay -->
-    <div class="duix-bottom">
-      <div class="duix-timer" id="timer">00:00</div>
-      <div class="duix-actions">
-        <button class="duix-end-btn" id="endBtn" title="結束對話" disabled>✕</button>
-      </div>
-      <div class="duix-watermark">城堡 · BeyondPath</div>
+    <div class="bottom">
+      <div class="timer" id="timer">00:00</div>
+      <div class="bottom-spacer"></div>
+      <div class="watermark">城堡 · BeyondPath</div>
     </div>
 
-    <!-- Settings panel -->
-    <div class="duix-settings-panel" id="settingsPanel">
-      <button class="duix-settings-close" id="settingsClose">✕</button>
+    <div class="panel" id="panel">
+      <button class="panel-close" id="panelClose">✕</button>
       <h3>蘇菲 · 設定</h3>
       <div class="privacy-note">
-        🔒 鏡頭 / 麥克風只在這頁活著、不存盤、不錄影、不外傳。<br><br>
-        雲端對話結束後、Tavus 不留檔。<br><br>
-        Sally 6 歲不會被叫出來——城堡守則寫在 backend。
+        🔒 鏡頭 / 麥克風只在對話視窗、不存盤、不錄影、不外傳。<br><br>
+        對話結束後、雲端不留檔。<br><br>
+        Sally 6 歲不會被叫出來——城堡守則寫在後台。
       </div>
-      <button class="duix-log-toggle" id="logToggle">▾ 開發者 log</button>
-      <div class="duix-log" id="log"></div>
+      <button class="log-toggle" id="logToggle">▾ 開發者 log</button>
+      <div class="log" id="log"></div>
     </div>
 
   </div>
@@ -379,23 +387,22 @@
 <script>
 (function () {
   const shell = document.getElementById("shell");
-  const tavusFrame = document.getElementById("tavusFrame");
-  const loading = document.getElementById("loading");
-  const errorBox = document.getElementById("error");
-  const errorDetail = document.getElementById("errorDetail");
-  const retryBtn = document.getElementById("retryBtn");
+  const startBtn = document.getElementById("startBtn");
   const endBtn = document.getElementById("endBtn");
+  const errorBox = document.getElementById("errorBox");
+  const errorTitle = document.getElementById("errorTitle");
+  const errorDetail = document.getElementById("errorDetail");
   const timerEl = document.getElementById("timer");
   const settingsBtn = document.getElementById("settingsBtn");
-  const settingsPanel = document.getElementById("settingsPanel");
-  const settingsClose = document.getElementById("settingsClose");
+  const panel = document.getElementById("panel");
+  const panelClose = document.getElementById("panelClose");
   const logEl = document.getElementById("log");
   const logToggle = document.getElementById("logToggle");
 
   let conversationId = null;
+  let conversationWin = null;
   let startedAt = 0;
   let timerInterval = null;
-  let starting = false;
 
   function log(msg) {
     const ts = new Date().toLocaleTimeString();
@@ -404,40 +411,29 @@
   }
   logToggle.addEventListener("click", () => {
     logEl.classList.toggle("open");
-    logToggle.textContent = logEl.classList.contains("open")
-      ? "▴ 折疊開發者 log"
-      : "▾ 開發者 log";
+    logToggle.textContent = logEl.classList.contains("open") ? "▴ 折疊 log" : "▾ 開發者 log";
   });
-  settingsBtn.addEventListener("click", () => settingsPanel.classList.add("open"));
-  settingsClose.addEventListener("click", () => settingsPanel.classList.remove("open"));
+  settingsBtn.addEventListener("click", () => panel.classList.add("open"));
+  panelClose.addEventListener("click", () => panel.classList.remove("open"));
 
   function updateTimer() {
     if (!startedAt) return;
-    const elapsed = Math.floor((Date.now() - startedAt) / 1000);
-    const m = String(Math.floor(elapsed / 60)).padStart(2, "0");
-    const s = String(elapsed % 60).padStart(2, "0");
-    timerEl.textContent = m + ":" + s;
+    const e = Math.floor((Date.now() - startedAt) / 1000);
+    timerEl.textContent = String(Math.floor(e/60)).padStart(2,"0") + ":" + String(e%60).padStart(2,"0");
   }
-
   function showError(title, detail) {
-    loading.classList.add("hidden");
+    errorTitle.textContent = title;
+    errorDetail.textContent = detail || "";
     errorBox.classList.add("show");
-    errorDetail.textContent = detail || title || "未知錯誤";
-    log("ERROR: " + (detail || title));
   }
-  function hideError() {
-    errorBox.classList.remove("show");
-  }
+  function clearError() { errorBox.classList.remove("show"); }
 
-  async function startTavus() {
-    if (starting || conversationId) return;
-    starting = true;
-    hideError();
-    loading.classList.remove("hidden");
-    tavusFrame.classList.remove("loaded");
-    tavusFrame.src = "";
+  async function startConversation() {
+    if (conversationId) return;
+    startBtn.disabled = true;
+    clearError();
+    log("建立對話...");
 
-    log("正在請求 /tavus/conversation/start ...");
     let resp, data;
     try {
       resp = await fetch("/tavus/conversation/start", {
@@ -447,59 +443,59 @@
       });
       data = await resp.json();
     } catch (e) {
-      starting = false;
+      startBtn.disabled = false;
       showError("連不到伺服器", e.message);
       return;
     }
     if (!resp.ok || !data.ok) {
-      starting = false;
-      const detail = (data && (data.hint || data.detail)) || ("HTTP " + resp.status);
-      showError("Tavus 啟動失敗", detail);
+      startBtn.disabled = false;
+      showError("啟動失敗", (data && (data.hint || data.detail)) || ("HTTP " + resp.status));
       return;
     }
     conversationId = data.conversation_id;
-    log("conversation " + conversationId + " · loading iframe...");
+    log("conversation " + conversationId);
 
-    tavusFrame.onload = () => {
-      tavusFrame.classList.add("loaded");
-      setTimeout(() => loading.classList.add("hidden"), 600);
-      startedAt = Date.now();
-      timerInterval = setInterval(updateTimer, 1000);
-      endBtn.disabled = false;
-      starting = false;
-      log("真人蘇菲 ready");
-    };
-    tavusFrame.src = data.conversation_url;
+    // 新分頁開 daily URL (避開 iframe X-Frame block)
+    conversationWin = window.open(data.conversation_url, "_blank");
+    if (!conversationWin) {
+      // 彈窗被擋
+      startBtn.disabled = false;
+      showError("彈窗被擋", "瀏覽器擋了新視窗、請允許後再試一次。或手動開: " + data.conversation_url);
+      // 自動結束、不繼續燒
+      try { await fetch(`/tavus/conversation/${conversationId}/end`, { method: "POST" }); } catch (_) {}
+      conversationId = null;
+      return;
+    }
+
+    shell.classList.add("active");
+    startedAt = Date.now();
+    timerInterval = setInterval(updateTimer, 1000);
+    startBtn.disabled = false;
   }
 
-  async function endTavus() {
+  async function endConversation() {
     endBtn.disabled = true;
     if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
     if (conversationId) {
-      log("結束 conversation " + conversationId);
+      log("結束 " + conversationId);
       try {
         await fetch(`/tavus/conversation/${conversationId}/end`, { method: "POST" });
       } catch (e) { log("end err: " + e.message); }
       conversationId = null;
     }
-    // 重新整理 = 乾淨重啟（避免 stale conversation 殘留）
+    if (conversationWin && !conversationWin.closed) {
+      try { conversationWin.close(); } catch (_) {}
+    }
     location.reload();
   }
 
-  retryBtn.addEventListener("click", () => {
-    starting = false;
-    conversationId = null;
-    startTavus();
-  });
-  endBtn.addEventListener("click", endTavus);
+  startBtn.addEventListener("click", startConversation);
+  endBtn.addEventListener("click", endConversation);
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
-      if (settingsPanel.classList.contains("open")) {
-        settingsPanel.classList.remove("open");
-      } else if (conversationId) {
-        endTavus();
-      }
+      if (panel.classList.contains("open")) panel.classList.remove("open");
+      else if (conversationId) endConversation();
     }
   });
 
@@ -509,13 +505,7 @@
     }
   });
 
-  // === Auto-start on load ===
-  // 為了避免 bot 掃 demo URL 就燒 Tavus 分鐘、給個極短延遲 + 看頁面有沒有 focus
-  window.addEventListener("DOMContentLoaded", () => {
-    log("Voice Path v0.4.1 · auto-start Tavus");
-    // 直接啟動 (Edward 拍板「一開始就是真人」)
-    startTavus();
-  });
+  log("Voice Path v0.4.2 ready · 新視窗模式 · 避開 iframe X-Frame block");
 })();
 </script>
 </body>
