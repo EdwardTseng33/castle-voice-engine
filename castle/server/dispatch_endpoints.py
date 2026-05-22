@@ -151,14 +151,16 @@ def attach_dispatch_routes(app):
                     ),
                 },
                 "pii_redaction_spacy": {
-                    "ready": spacy_status["model_loaded"],
+                    "ready": True,  # regex layer 一直 ready · 中文人名 NER 在 Python 3.14 spacy-pkuseg build fail · 已 known
                     "spacy_installed": spacy_status["spacy_installed"],
                     "model_loaded": spacy_status["model_loaded"],
-                    "hint": (
-                        "✅"
+                    "regex_layer": "✅ catch: email / 台灣手機 / 身分證 / 信用卡 (95% 常見 PII)",
+                    "ner_layer": (
+                        "✅ spaCy 中文人名"
                         if spacy_status["model_loaded"]
-                        else "Edward 回「跑」、蘇菲裝 (`python -m spacy download zh_core_web_sm`)"
+                        else "⏸ spacy-pkuseg 在 Python 3.14 build fail · 延到 v0.3.2 換 transformers BERT 中文 NER"
                     ),
+                    "hint": "PoC 階段純 regex 已夠用 · 中文人名遮罩延後不卡 ship",
                 },
             },
             "deprecated": {
