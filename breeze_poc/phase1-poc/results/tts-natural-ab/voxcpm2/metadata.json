@@ -1,0 +1,105 @@
+{
+  "model": "OpenBMB VoxCPM2",
+  "model_version": "openbmb/VoxCPM2",
+  "voice_profile": "default voice (no prompt_wav)",
+  "voice_clone": "yes (zero-shot if prompt_wav given; default used here)",
+  "deployment": "Modal A10G GPU, voxcpm2-poc app",
+  "license": "Apache-2.0 (model) + Apache-2.0 (wrapper)",
+  "endpoint": "https://edwardt0303--voxcpm2-poc-voxcpm2-api.modal.run",
+  "samples": [
+    {
+      "id": "t01",
+      "text": "今天天氣不錯、想出去走走嗎？",
+      "file": "t01.wav",
+      "latency_ms": 473447.0,
+      "client_total_ms": 473447.0,
+      "sample_rate": 16000,
+      "duration_sec": 0.0
+    },
+    {
+      "id": "t02",
+      "text": "等等吃飯有想吃什麼？",
+      "file": "t02.wav",
+      "latency_ms": 4389.2,
+      "client_total_ms": 4389.2,
+      "sample_rate": 16000,
+      "duration_sec": 0.0
+    },
+    {
+      "id": "t03",
+      "text": "最近忙翻了、好想休息一下。",
+      "file": "t03.wav",
+      "latency_ms": 4381.4,
+      "client_total_ms": 4381.4,
+      "sample_rate": 16000,
+      "duration_sec": 0.0
+    },
+    {
+      "id": "t04",
+      "text": "派蕪菁頭看 BeyondPath 今天的數據、跌幅超過 30% 就提醒我。",
+      "file": "t04.wav",
+      "latency_ms": 7879.9,
+      "client_total_ms": 7879.9,
+      "sample_rate": 16000,
+      "duration_sec": 0.0
+    },
+    {
+      "id": "t05",
+      "text": "明天會議我們要討論 v2.0 的計畫、特別是第三階段的鏡頭功能。",
+      "file": "t05.wav",
+      "latency_ms": 6204.3,
+      "client_total_ms": 6204.3,
+      "sample_rate": 16000,
+      "duration_sec": 0.0
+    },
+    {
+      "id": "t06",
+      "text": "客戶那邊的提案、麻煩你幫我整理一份完整版給我。",
+      "file": "t06.wav",
+      "latency_ms": 6885.2,
+      "client_total_ms": 6885.2,
+      "sample_rate": 16000,
+      "duration_sec": 0.0
+    },
+    {
+      "id": "t07",
+      "text": "我要把 PR 上傳到 main 之前先跑 lint。",
+      "file": "t07.wav",
+      "latency_ms": 5281.0,
+      "client_total_ms": 5281.0,
+      "sample_rate": 16000,
+      "duration_sec": 0.0
+    },
+    {
+      "id": "t08",
+      "text": "BeyondPath 那個 dashboard 的 retention 數據看起來不太對。",
+      "file": "t08.wav",
+      "latency_ms": 5415.8,
+      "client_total_ms": 5415.8,
+      "sample_rate": 16000,
+      "duration_sec": 0.0
+    },
+    {
+      "id": "t09",
+      "text": "太好了！這次客戶真的簽約了！",
+      "file": "t09.wav",
+      "latency_ms": 6245.8,
+      "client_total_ms": 6245.8,
+      "sample_rate": 16000,
+      "duration_sec": 0.0
+    },
+    {
+      "id": "t10",
+      "text": "今天先到這、明天再說、我先休息一下。",
+      "file": "t10.wav",
+      "latency_ms": 6710.7,
+      "client_total_ms": 6710.7,
+      "sample_rate": 16000,
+      "duration_sec": 0.0
+    }
+  ],
+  "latency_p50_ms": 6245.8,
+  "latency_p95_ms": 473447.0,
+  "latency_mean_ms": 52684.0,
+  "success_count": 10
+}

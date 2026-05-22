@@ -1,0 +1,119 @@
+{
+  "model": "MediaTek BreezyVoice entry fixed: no_normalize + g2pw bopomofo prefix",
+  "model_version": "MediaTek-Research/BreezyVoice via CustomCosyVoice runtime",
+  "voice_profile": "voice clone from edward_8s_prompt.wav (Edward voice prompt)",
+  "voice_clone": "yes (zero-shot prompt voice clone)",
+  "deployment": "Modal A10G GPU, castle-voice-engine-breeze-poc app",
+  "license": "Apache-2.0 (model) + Apache-2.0 (wrapper)",
+  "fix_notes": [
+    "Day 3 used wrong entry inference_zero_shot which normalizes and strips tones",
+    "Day 4 fixed using inference_zero_shot_no_normalize + g2pw bopomofo prefix"
+  ],
+  "endpoint": "https://edwardt0303--castle-voice-engine-breeze-poc-breeze-fastapi.modal.run/",
+  "samples": [
+    {
+      "id": "t01",
+      "text": "今天天氣不錯、想出去走走嗎？",
+      "file": "t01.wav",
+      "latency_ms": 105086.8,
+      "client_total_ms": 105086.8,
+      "sample_rate": 22050,
+      "duration_sec": 0.0,
+      "inference_ms": 0.0
+    },
+    {
+      "id": "t02",
+      "text": "等等吃飯有想吃什麼？",
+      "file": "t02.wav",
+      "latency_ms": 12862.9,
+      "client_total_ms": 12862.9,
+      "sample_rate": 22050,
+      "duration_sec": 0.0,
+      "inference_ms": 0.0
+    },
+    {
+      "id": "t03",
+      "text": "最近忙翻了、好想休息一下。",
+      "file": "t03.wav",
+      "latency_ms": 12419.1,
+      "client_total_ms": 12419.1,
+      "sample_rate": 22050,
+      "duration_sec": 0.0,
+      "inference_ms": 0.0
+    },
+    {
+      "id": "t04",
+      "text": "派蕪菁頭看 BeyondPath 今天的數據、跌幅超過 30% 就提醒我。",
+      "file": "t04.wav",
+      "latency_ms": 17023.6,
+      "client_total_ms": 17023.6,
+      "sample_rate": 22050,
+      "duration_sec": 0.0,
+      "inference_ms": 0.0
+    },
+    {
+      "id": "t05",
+      "text": "明天會議我們要討論 v2.0 的計畫、特別是第三階段的鏡頭功能。",
+      "file": "t05.wav",
+      "latency_ms": 26441.4,
+      "client_total_ms": 26441.4,
+      "sample_rate": 22050,
+      "duration_sec": 0.0,
+      "inference_ms": 0.0
+    },
+    {
+      "id": "t06",
+      "text": "客戶那邊的提案、麻煩你幫我整理一份完整版給我。",
+      "file": "t06.wav",
+      "latency_ms": 20351.9,
+      "client_total_ms": 20351.9,
+      "sample_rate": 22050,
+      "duration_sec": 0.0,
+      "inference_ms": 0.0
+    },
+    {
+      "id": "t07",
+      "text": "我要把 PR 上傳到 main 之前先跑 lint。",
+      "file": "t07.wav",
+      "latency_ms": 12137.5,
+      "client_total_ms": 12137.5,
+      "sample_rate": 22050,
+      "duration_sec": 0.0,
+      "inference_ms": 0.0
+    },
+    {
+      "id": "t08",
+      "text": "BeyondPath 那個 dashboard 的 retention 數據看起來不太對。",
+      "file": "t08.wav",
+      "latency_ms": 18575.3,
+      "client_total_ms": 18575.3,
+      "sample_rate": 22050,
+      "duration_sec": 0.0,
+      "inference_ms": 0.0
+    },
+    {
+      "id": "t09",
+      "text": "太好了！這次客戶真的簽約了！",
+      "file": "t09.wav",
+      "latency_ms": 17293.4,
+      "client_total_ms": 17293.4,
+      "sample_rate": 22050,
+      "duration_sec": 0.0,
+      "inference_ms": 0.0
+    },
+    {
+      "id": "t10",
+      "text": "今天先到這、明天再說、我先休息一下。",
+      "file": "t10.wav",
+      "latency_ms": 20093.6,
+      "client_total_ms": 20093.6,
+      "sample_rate": 22050,
+      "duration_sec": 0.0,
+      "inference_ms": 0.0
+    }
+  ],
+  "latency_p50_ms": 18575.3,
+  "latency_p95_ms": 105086.8,
+  "latency_mean_ms": 26228.5,
+  "success_count": 10
+}

@@ -10,8 +10,8 @@ vibevoice_image = (
     .pip_install(
         "torch>=2.2,<2.5",
         "torchaudio>=2.2,<2.5",
-        "transformers>=4.45,<5.0",
-        "accelerate>=0.30",
+        "transformers==4.51.3",
+        "accelerate==1.6.0",
         "soundfile>=0.12",
         "librosa>=0.10",
         "huggingface_hub>=0.24",
@@ -21,6 +21,10 @@ vibevoice_image = (
         "uvicorn[standard]>=0.29,<0.31",
         "pydantic>=2.0",
         "python-multipart>=0.0.9",
+        "vibevoice",
+        "ml-collections",
+        "absl-py",
+        "diffusers",
     )
 )
 
@@ -54,31 +58,23 @@ class VibeVoice:
         import torch
         from transformers import AutoModelForCausalLM, AutoProcessor, AutoConfig
         # VibeVoice has custom code, trust_remote_code=True
+        # VibeVoice native loader (vibevoice package)
         try:
-            self.processor = AutoProcessor.from_pretrained(self.model_dir, trust_remote_code=True)
-            self.model = AutoModelForCausalLM.from_pretrained(
+            from vibevoice.modular.modeling_vibevoice_inference import VibeVoiceForConditionalGenerationInference
+            from vibevoice.processor.vibevoice_processor import VibeVoiceProcessor
+            self.processor = VibeVoiceProcessor.from_pretrained(self.model_dir)
+            self.model = VibeVoiceForConditionalGenerationInference.from_pretrained(
                 self.model_dir,
                 torch_dtype=torch.bfloat16,
                 device_map="cuda",
-                trust_remote_code=True,
                 attn_implementation="sdpa",
             )
             self.model.eval()
-            self.runtime = "transformers_auto"
-            print("[VibeVoice] Loaded via AutoModelForCausalLM in", round(time.time() - t0, 1), "s")
+            self.runtime = "vibevoice_native"
+            print("[VibeVoice] Loaded via vibevoice native in", round(time.time() - t0, 1), "s")
         except Exception as e:
-            print("[VibeVoice] AutoModelForCausalLM fail:", str(e)[:300])
-            # Fallback: try VibeVoiceForConditionalGeneration directly
-            from transformers import AutoModel
-            self.processor = AutoProcessor.from_pretrained(self.model_dir, trust_remote_code=True)
-            self.model = AutoModel.from_pretrained(
-                self.model_dir,
-                torch_dtype=torch.bfloat16,
-                device_map="cuda",
-                trust_remote_code=True,
-            )
-            self.model.eval()
-            self.runtime = "transformers_automodel"
+            print("[VibeVoice] native fail:", str(e)[:500])
+            raise
         print("[VibeVoice] Ready", self.runtime, "cold start:", round(time.time() - t0, 1), "s")
 
     @modal.method()
@@ -88,34 +84,38 @@ class VibeVoice:
         import soundfile as sf
         import numpy as np
         t0 = time.time()
-        # VibeVoice expects script format: "Speaker N: text"
-        # Use VibeVoice native demo voice. Default speaker = "en-Alice" or built-in zh speaker
-        # script format
-        speaker_names = ["en-Alice_woman", "en-Carter_man", "in-Samuel_man", "zh-Bowen_man"]
-        spk = speaker_names[speaker_id % len(speaker_names)]
-        script = f"Speaker 0: {text}"
-        # processor expects list of scripts + list of voice samples (paths)
+        # VibeVoice script format: "Speaker 0: text"
+        # Use prebuilt voice samples bundled by HF demo (or use built-in synthesizer)
+        # For zero-shot, we need a voice sample. Use a short synthetic placeholder if none provided.
+        spk = "en-Alice_woman"
+        if not hasattr(self, "_default_voice_sample"):
+            import numpy as np
+            # Generate 3-second silent audio with low noise as fallback voice sample
+            sr_voice = 24000
+            self._default_voice_sample = (np.random.randn(sr_voice * 3).astype("float32") * 0.001)
+        script = "Speaker 0: " + text
         try:
             inputs = self.processor(
                 text=[script],
-                voice_samples=[[f"/root/.cache/vibevoice/demo/{spk}.wav"]],
+                voice_samples=[[self._default_voice_sample]],
                 padding=True,
                 return_tensors="pt",
-            ).to("cuda")
+            )
+            # move tensors to cuda
+            inputs = {k: (v.to("cuda") if hasattr(v, "to") else v) for k, v in inputs.items()}
         except Exception as e:
-            print("[VibeVoice] processor without voice_samples...", str(e)[:200])
-            inputs = self.processor(text=[script], padding=True, return_tensors="pt").to("cuda")
+            print("[VibeVoice] processor build fail:", str(e)[:200])
+            raise
         t_in = time.time()
         with torch.no_grad():
             out = self.model.generate(
                 **inputs,
-                max_new_tokens=4096,
+                max_new_tokens=2048,
                 do_sample=False,
                 cfg_scale=1.3,
                 tokenizer=self.processor.tokenizer,
             )
         t_gen = time.time()
-        # decode audio: VibeVoice returns audio in out.speech_outputs or via processor.batch_decode
         audio = None
         try:
             audio = out.speech_outputs[0].cpu().float().numpy()
