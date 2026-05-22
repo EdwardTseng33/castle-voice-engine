@@ -42,6 +42,19 @@ weights/
 *.pt
 test_outputs/
 
+# Phase 3.2 SoulX-FlashHead 1.3B Lite (6.4GB · gitignore 防漏)
+models/
+soulx_flashhead/
+*.gguf
+*.onnx
+
+# 第三方 clone (Soul-AILab/SoulX-FlashHead · 不 commit 別人的 code)
+external/
+pretrained_models/
+poc/*.wav
+poc/*.mp4
+poc/*.png
+
 # voice samples (PRIVACY CRITICAL - Edward 個人聲紋樣本不上 git)
 # (Phase 1 PoC 2026-05-22 卡西法新增、跨 PoC 永遠不解禁)
 voice_samples/
