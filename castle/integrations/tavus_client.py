@@ -182,7 +182,6 @@ async def create_conversation(
         )
     body: dict[str, Any] = {
         "conversation_name": conversation_name,
-        "participant_name": participant_name,  # 跳過 prejoin
     }
     if replica_id:
         body["replica_id"] = replica_id
@@ -196,9 +195,16 @@ async def create_conversation(
         body["audio_only"] = True
     if callback_url:
         body["callback_url"] = callback_url
-    # properties: 額外 Daily.co iframe 控制 (enable_recording / language / etc)
+    # properties: Tavus 規定 participant_name / enable_prejoin_ui / language /
+    # apply_greenscreen / max_call_duration 等子欄位必須在 properties 內、不能在頂層
+    # (5/23 bug: 放頂層 → 400 "Unknown field" · 改 nest 進 properties 修)
+    merged_properties: dict[str, Any] = {
+        "participant_name": participant_name,
+        "enable_prejoin_ui": False,  # 直接進對話 · 跳過「Enter your name」friction
+    }
     if properties:
-        body["properties"] = properties
+        merged_properties.update(properties)
+    body["properties"] = merged_properties
     return await _post("/conversations", body)
 
 
