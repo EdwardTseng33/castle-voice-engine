@@ -14,7 +14,30 @@
 | **Phase 2 前置（Eagle / Porcupine 探索）** | ✅ ship | breeze_poc/phase2-poc/ · register_eagle_speaker.py · wake_word_setup.md（卡西法 5/22 Day 3-4） |
 | **Phase 2 後半段（蘇菲手寫）** | ✅ ship | 3 commits（`3344a24` + `37ed9f7` + `a355488`）· 城堡 7 同事派工 + spaCy NER + SpeechBrain 聲紋 |
 | **Phase 3 鏡頭多模態（卡西法）** | ✅ ship | commit `666832d` · 8 檔 +1457/-39 · Modal deploy 成功 · kill switch 0ms |
+| **Phase 3.1.1 直播感版面** | ✅ ship | commit `c6ee66f` 等 · 雙欄 layout / 收音波形 / selfie 小窗 / 呼吸燈動畫 · 暖琥珀 DNA token 6 個新 |
+| **Phase 3.1.2 council 5 工具評估** | ✅ 完成 | sulima #1-#4: SoulX/Higgs/SentiAvatar/Alibaba/Duix 全 NO-GO (Track B) · sulima #5 解禁 SoulX-FlashHead 1.3B Lite (Track A 個人自用 GO) |
+| **Phase 3.2 SoulX-FlashHead PoC** | 🔄 Modal deploy 4th attempt | branch `voice-path/v0.3.2-soulx-flashhead-poc` · models 已 download (13.67 GB) · poc/ 程式碼 commit |
 | **桌面情境感知（pywin32）** | ⏸ Edward 待拍板 | A · Phase 3.5 延後（蘇菲推薦）/ B · 拉進 Phase 3 |
+
+---
+
+## 🌸 ADR-020 雙軌 risk 框架（2026-05-22 · 取代 ADR-018「中國公司 Tier D」教條 partial）
+
+Edward 親口拍板：「只要沒有惡意、好的開源與技術應該是不分國界的」+「我沒有打算商業化、只是做為我自己的超強蘇菲在不斷演化」
+
+### Track A · 個人自用 daily driver（Edward 自用 + 不商業化）
+- 3 條 audit：跑得動 / 能斷網跑 / Sally 邊界 hard rule
+- 公司國籍不在禁用範圍
+- SoulX-FlashHead 1.3B Lite 用此 framework Tier C+ GO
+
+### Track B · 對外商業化（給客戶 / 朋友 ship）
+- 原 6 條 audit + 公司國籍是 risk profile 一維（非禁用條件）
+- 觸發升 A → B：對外 demo / 對外賣 / 對外 open source / 對外背書
+
+### Sally 6 歲 hard rule（不論 Track）
+- Edward 自己樣本 OK · Qiana informed consent OK · **Sally 永不餵**
+
+完整 ADR-020：`Moving Castle/projects/voice-path/specs/ADR-020-individual-vs-commercial-dual-track-risk-framework-2026-05-22.md`
 
 ---
 
