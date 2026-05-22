@@ -1,0 +1,23 @@
+{
+  "name": "蘇菲",
+  "short_name": "蘇菲",
+  "description": "城堡 Voice Path · 蘇菲真人視訊對話",
+  "lang": "zh-Hant",
+  "dir": "ltr",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "any",
+  "start_url": "/static/index.html?launched_from=pwa",
+  "scope": "/static/",
+  "icons": [
+    { "src": "/static/sophie-portrait.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ],
+  "shortcuts": [
+    {
+      "name": "立刻喚醒",
+      "url": "/static/index.html?wake=1"
+    }
+  ]
+}
