@@ -1,6 +1,7 @@
 # castle-voice-engine - Copyright (c) 2026 Edward / BeyondPath
 # app.py - Modal deploy entrypoint. `modal deploy app.py` to push runtime.
 #
+# v0.2.3 (2026-05-22 hotfix #2): switch OpenAI SDP target to /v1/realtime/calls (GA)
 # v0.2.0 (2026-05-22): gpt-realtime-2 upgrade + browser demo at /
 #   - realtime_endpoints.py now defaults to gpt-realtime-2 (5/8 release) with
 #     auto-fallback to gpt-realtime on model_not_found.
