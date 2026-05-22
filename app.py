@@ -77,6 +77,7 @@ def fastapi_app():
     attach_tavus_routes(fastapi_instance)  # v0.3.2 Phase 3.2: Tavus CVI 即時對話 video
 
     # Mount /static for demo HTML + add root redirect.
+    # v0.4.2 fix: 強制不快取 (避免 Edward 瀏覽器 cache 舊版本 / 每次 push 都要 Ctrl+Shift+R)
     static_dir = Path("/root/castle/static")
     if static_dir.exists():
         fastapi_instance.mount("/static", StaticFiles(directory=str(static_dir), html=True), name="static")
@@ -84,6 +85,16 @@ def fastapi_app():
         @fastapi_instance.get("/")
         async def _root():
             return RedirectResponse(url="/static/index.html")
+
+        # v0.4.2 · 替 /static/* 加 no-cache header (確保 Edward 永遠拿最新版)
+        @fastapi_instance.middleware("http")
+        async def _no_cache_static(request, call_next):
+            resp = await call_next(request)
+            if request.url.path.startswith("/static/"):
+                resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+                resp.headers["Pragma"] = "no-cache"
+                resp.headers["Expires"] = "0"
+            return resp
 
     return fastapi_instance
 
