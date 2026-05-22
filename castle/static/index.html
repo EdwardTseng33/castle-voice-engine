@@ -3,698 +3,584 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>蘇菲 · castle-voice-engine v0.3.3 直播感 · Duix-style</title>
+  <title>蘇菲 · castle-voice-engine v0.4.0 Duix 範式</title>
   <style>
     :root {
-      /* Phase 1+3 既有 token (ADR-008 暖琥珀 DNA) */
-      --bg: #FAF6F0;
-      --panel: #F5EDE0;
-      --ink: #2B2018;
+      --ink: #1a120c;
       --amber: #D4712A;
       --amber-deep: #A4571F;
-      --muted: #8A7A65;
-      --ok: #6B8E5A;
-      --warn: #B85C00;
-      --err: #B33A3A;
-
-      /* Phase 3.1.1 新增 (女巫 spec · 暖琥珀延伸) */
       --amber-glow: #E8A45F;
-      --amber-soft: #D4712A33;
+      --amber-soft: #D4712A55;
       --amber-bright: #FFB570;
-      --cream-deep: #EFE4D0;
-      --ink-soft: #4A3A2C;
-      --visitor: #C8852E;
+      --cream: #F2D4B3;
+      --muted: rgba(255,255,255,0.55);
+      --muted-strong: rgba(255,255,255,0.78);
+      --err: #e3392b;
     }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; min-height: 100vh; }
-    body {
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: #000;
       font-family: Georgia, "Source Han Serif TC", "Noto Serif TC", serif;
-      background: var(--bg);
-      color: var(--ink);
-      display: flex; flex-direction: column;
-    }
-
-    /* === Top status bar === */
-    .topbar {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 24px;
-      background: var(--cream-deep);
-      border-bottom: 1px solid #d4c4a8;
-      font-size: 14px;
-    }
-    .topbar .who {
-      font-style: italic;
-      color: var(--amber-deep);
-      font-size: 16px;
-    }
-    .topbar .meta { color: var(--muted); font-size: 13px; }
-    .topbar .end-btn {
-      padding: 6px 14px;
-      background: transparent;
-      border: 1px solid var(--muted);
-      color: var(--ink);
-      border-radius: 6px;
-      font: inherit; font-size: 13px;
-      cursor: pointer;
-      width: auto; margin: 0;
-    }
-    .topbar .end-btn:hover { background: var(--err); color: white; border-color: var(--err); }
-    .topbar .end-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-    /* === Main stage (live grid) === */
-    .stage {
-      flex: 1;
-      display: grid;
-      grid-template-columns: 1fr 280px;
-      gap: 24px;
-      padding: 28px 32px;
-      max-width: 1280px;
-      width: 100%;
-      margin: 0 auto;
-    }
-
-    /* === Sophie avatar zone === */
-    .sophie-zone {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: flex-start;
-      gap: 24px;
-    }
-    .sophie-avatar-wrap {
-      width: 380px; height: 380px;
-      position: relative;
-    }
-    .sophie-avatar {
-      width: 100%; height: 100%;
-      border-radius: 50%;
-      background: linear-gradient(135deg, var(--cream-deep) 0%, var(--panel) 100%);
-      border: 3px solid var(--amber);
-      display: flex; align-items: center; justify-content: center;
-      position: relative;
-      overflow: hidden;
-      transition: border-color 0.3s ease, transform 0.3s ease, filter 0.3s ease;
-    }
-    /* idle breathing - 沒講話也有節奏 */
-    @keyframes sophie-idle-breathing {
-      0%, 100% { transform: scale(1.0); opacity: 0.95; }
-      50%      { transform: scale(1.015); opacity: 1.0; }
-    }
-    .sophie-avatar.idle {
-      animation: sophie-idle-breathing 3.6s ease-in-out infinite;
-    }
-    /* speaking pulse - 暖琥珀呼吸燈 */
-    @keyframes sophie-speaking-pulse {
-      0%, 100% { box-shadow: 0 0 0 0 var(--amber-glow), 0 0 0 0 var(--amber-soft); }
-      50%      { box-shadow: 0 0 24px 8px var(--amber-glow), 0 0 48px 16px var(--amber-soft); }
-    }
-    .sophie-avatar.speaking {
-      animation: sophie-speaking-pulse 1.4s ease-in-out infinite;
-      border-color: var(--amber);
-    }
-    /* sleep · 沒人鏡頭 / 等很久 */
-    .sophie-avatar.sleep {
-      filter: saturate(0.6) brightness(0.85);
-      opacity: 0.6;
-    }
-    .sophie-avatar svg { width: 70%; height: 70%; }
-
-    /* 蘇菲 placeholder illustration (SVG 簡筆) · VRM 是 Phase 3.1.2 範圍 */
-    .sophie-face .hair { fill: #4A3A2C; }
-    .sophie-face .skin { fill: #F2D4B3; }
-    .sophie-face .eye { fill: var(--ink); }
-    .sophie-face .cheek { fill: #E8A45F; opacity: 0.5; }
-    .sophie-face .mouth { fill: var(--amber-deep); }
-
-    .sophie-name {
-      font-style: italic;
-      color: var(--amber-deep);
-      font-size: 24px;
-      margin-top: 8px;
-    }
-    .sophie-state {
-      color: var(--muted);
-      font-size: 13px;
-      margin-top: -8px;
-    }
-
-    /* Sophie speech bubble */
-    .sophie-speech {
-      max-width: 480px;
-      padding: 14px 18px;
-      background: var(--panel);
-      border-left: 3px solid var(--amber);
-      border-radius: 8px;
-      font-style: italic;
-      color: var(--ink);
-      font-size: 16px;
-      min-height: 48px;
-      line-height: 1.55;
-    }
-    .sophie-speech.empty {
-      color: var(--muted);
-      font-style: normal;
-      font-size: 14px;
-    }
-
-    /* === Right rail · selfie + 多人 PiP === */
-    .rail {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .pip-tile {
-      width: 100%;
-      max-width: 260px;
-      background: var(--cream-deep);
-      border: 2px solid var(--amber-soft);
-      border-radius: 12px;
-      overflow: hidden;
-      transition: border-color 0.3s ease, box-shadow 0.3s ease;
-      position: relative;
-    }
-    .pip-tile.active {
-      border-color: var(--amber);
-      box-shadow: 0 0 16px var(--amber-soft);
-    }
-    .pip-video {
-      width: 100%;
-      aspect-ratio: 4/3;
-      background: #1a1410;
-      display: block;
-      object-fit: cover;
-    }
-    .pip-video.no-feed {
-      display: flex; align-items: center; justify-content: center;
-      color: var(--muted);
-      font-size: 12px;
-    }
-    .pip-label {
-      padding: 8px 12px;
-      font-size: 13px;
-      color: var(--ink);
-      background: var(--panel);
-      display: flex; align-items: center; justify-content: space-between;
-    }
-    .pip-label .who-name { font-weight: 600; }
-    .pip-label .talking-dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      background: var(--amber-bright);
-      opacity: 0;
-      transition: opacity 0.2s ease;
-    }
-    .pip-tile.talking .talking-dot { opacity: 1; }
-    .pip-placeholder {
-      width: 100%; max-width: 260px;
-      padding: 24px 18px;
-      background: transparent;
-      border: 1px dashed var(--muted);
-      border-radius: 12px;
-      color: var(--muted);
-      font-size: 12px;
-      text-align: center;
-      font-style: italic;
-    }
-
-    /* === Bottom: waveform + tool bar === */
-    .bottom {
-      grid-column: 1 / -1;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      margin-top: 8px;
-    }
-    .waveform-wrap {
-      background: var(--panel);
-      border-radius: 12px;
-      padding: 16px 20px;
-      display: flex; align-items: center; gap: 14px;
-    }
-    .waveform-label {
-      font-size: 13px;
-      color: var(--muted);
-      min-width: 80px;
-    }
-    .waveform {
-      flex: 1;
-      height: 40px;
-      display: flex;
-      gap: 3px;
-      align-items: center;
-    }
-    .waveform-bar {
-      flex: 1;
-      max-width: 6px;
-      min-width: 3px;
-      background: linear-gradient(180deg, var(--muted) 0%, var(--amber) 70%, var(--amber-bright) 100%);
-      border-radius: 2px;
-      transition: height 80ms ease-out;
-      height: 4px;
-    }
-
-    /* === Tool bar === */
-    .toolbar {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-    .tool-btn {
-      width: auto; margin: 0;
-      min-width: 120px;
-      padding: 12px 18px;
-      background: var(--panel);
-      color: var(--ink);
-      border: 1px solid var(--muted);
-      border-radius: 10px;
-      font: inherit; font-size: 14px;
-      cursor: pointer;
-      display: flex; align-items: center; gap: 8px;
-      transition: background 0.2s, color 0.2s, border-color 0.2s;
-      font-weight: normal;
-    }
-    .tool-btn:hover { border-color: var(--amber); background: var(--cream-deep); }
-    .tool-btn.active {
-      background: var(--amber);
       color: white;
-      border-color: var(--amber);
-    }
-    .tool-btn.active:hover { background: var(--amber-deep); border-color: var(--amber-deep); }
-    .tool-btn.danger {
-      background: transparent;
-      color: var(--err);
-      border-color: var(--err);
-    }
-    .tool-btn.danger:hover { background: var(--err); color: white; }
-    .tool-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .tool-btn.disabled-look { opacity: 0.7; }
-    .tool-icon { font-size: 18px; line-height: 1; }
-
-    /* === Idle state CTA (沒對話、沒鏡頭時) === */
-    .idle-cta {
-      grid-column: 1 / -1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 18px;
-      padding: 80px 24px 40px;
-    }
-    .idle-cta h1 {
-      font-style: italic;
-      color: var(--amber-deep);
-      margin: 0;
-      font-size: 32px;
-      text-align: center;
-    }
-    .idle-cta .lead {
-      color: var(--muted);
-      font-size: 15px;
-      text-align: center;
-      max-width: 480px;
-    }
-    .start-cta {
-      width: auto; margin: 8px 0 0;
-      padding: 14px 32px;
-      background: var(--amber);
-      color: white;
-      border: none;
-      border-radius: 12px;
-      font: inherit;
-      font-size: 17px;
-      font-weight: 600;
-      cursor: pointer;
-      box-shadow: 0 4px 14px var(--amber-soft);
-      transition: background 0.2s, transform 0.2s;
-    }
-    .start-cta:hover { background: var(--amber-deep); transform: translateY(-1px); }
-    .start-cta:disabled { background: #c4b8a4; cursor: not-allowed; box-shadow: none; transform: none; }
-
-    /* === Settings (折疊 · 不顯眼) === */
-    .settings {
-      display: flex;
-      gap: 14px;
-      align-items: center;
-      font-size: 13px;
-      color: var(--muted);
-      margin-top: 16px;
-    }
-    .settings select {
-      padding: 6px 10px;
-      border: 1px solid #d4c4a8;
-      border-radius: 6px;
-      background: var(--bg);
-      color: var(--ink);
-      font: inherit;
-      font-size: 13px;
     }
 
-    /* === Privacy note (鏡頭附近) === */
-    .privacy-note {
-      background: #fef4e8;
-      border: 1px solid #d4712a55;
-      padding: 8px 12px;
-      border-radius: 6px;
-      font-size: 11px;
-      color: var(--amber-deep);
-      line-height: 1.5;
-    }
-
-    /* === Log (debug · 折疊) === */
-    .log-toggle {
-      font-size: 11px;
-      color: var(--muted);
-      cursor: pointer;
-      padding: 6px 12px;
-      text-align: center;
-      user-select: none;
-    }
-    .log-toggle:hover { color: var(--amber-deep); }
-    .log {
-      display: none;
-      margin: 12px 24px 24px;
-      padding: 12px 14px;
-      background: #2B2018;
-      color: #d4c4a8;
-      font-family: ui-monospace, "Cascadia Code", monospace;
-      font-size: 11px;
-      border-radius: 8px;
-      max-height: 200px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-    }
-    .log.open { display: block; }
-
-    audio { display: none; }
-
-    /* === Tavus CVI · v0.3.3 真臉蘇菲 Duix-style Fullscreen === */
-    .tavus-fullscreen {
+    /* === Duix shell === */
+    .duix-shell {
       position: fixed;
       inset: 0;
-      background: #000;
-      z-index: 1000;
-      display: none;
+      background: radial-gradient(ellipse at center, #2a1d12 0%, #120a06 60%, #050302 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
     }
-    .tavus-fullscreen.active { display: block; }
-    .tavus-fullscreen iframe {
+    /* 真臉模式啟用時改純黑 */
+    .duix-shell.tavus-on {
+      background: #000;
+    }
+
+    /* === Top overlay (永遠) === */
+    .duix-top {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      padding: 22px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 20;
+      pointer-events: none;
+    }
+    .duix-top-left {
+      display: flex; align-items: center; gap: 10px;
+      pointer-events: auto;
+      text-shadow: 0 1px 6px rgba(0,0,0,0.7);
+    }
+    .duix-name {
+      font-style: italic;
+      font-size: 18px;
+      color: rgba(255,255,255,0.95);
+      letter-spacing: 0.3px;
+    }
+    .duix-name-info {
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.45);
+      color: rgba(255,255,255,0.7);
+      font-size: 11px;
+      font-family: Georgia, serif;
+      font-style: normal;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: help;
+    }
+    .duix-top-right {
+      display: flex; gap: 10px; pointer-events: auto;
+    }
+    .duix-settings-btn {
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.06);
+      color: rgba(255,255,255,0.85);
+      font-size: 18px;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+      transition: background 0.15s;
+    }
+    .duix-settings-btn:hover { background: rgba(255,255,255,0.16); }
+
+    /* === Center stage === */
+    .duix-center {
+      position: relative;
+      width: 100%;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .duix-avatar-wrap {
+      position: relative;
+      width: 320px; height: 320px;
+      transition: opacity 0.3s;
+    }
+    .duix-avatar {
+      width: 100%; height: 100%;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--cream) 0%, var(--amber-glow) 100%);
+      border: 3px solid var(--amber);
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+      box-shadow: 0 12px 60px rgba(212, 113, 42, 0.25);
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+    @keyframes idle-breathing {
+      0%, 100% { transform: scale(1.0); }
+      50%      { transform: scale(1.025); }
+    }
+    .duix-avatar.idle {
+      animation: idle-breathing 3.6s ease-in-out infinite;
+    }
+    @keyframes speaking-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 var(--amber-glow), 0 12px 60px rgba(212,113,42,0.3); }
+      50%      { box-shadow: 0 0 32px 12px var(--amber-glow), 0 0 80px 24px var(--amber-soft); }
+    }
+    .duix-avatar.speaking {
+      animation: speaking-pulse 1.4s ease-in-out infinite;
+    }
+    .duix-avatar.sleep {
+      filter: saturate(0.5) brightness(0.7);
+    }
+    .duix-avatar svg { width: 72%; height: 72%; }
+    .duix-face .hair { fill: #4A3A2C; }
+    .duix-face .skin { fill: #F2D4B3; }
+    .duix-face .eye { fill: var(--ink); }
+    .duix-face .cheek { fill: #E8A45F; opacity: 0.55; }
+
+    /* idle hint under avatar */
+    .duix-idle-hint {
+      position: absolute;
+      bottom: 18%;
+      left: 0; right: 0;
+      text-align: center;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    .duix-idle-hint h1 {
+      font-style: italic;
+      font-size: 28px;
+      color: rgba(255,255,255,0.95);
+      font-weight: normal;
+      margin-bottom: 8px;
+      text-shadow: 0 2px 12px rgba(0,0,0,0.5);
+    }
+    .duix-idle-hint p {
+      font-size: 14px;
+      color: rgba(255,255,255,0.62);
+      line-height: 1.5;
+    }
+    .duix-shell.active .duix-idle-hint { opacity: 0; pointer-events: none; }
+
+    /* === Tavus 真臉 iframe (絕對覆蓋 center) === */
+    .duix-tavus-frame {
       position: absolute;
       inset: 0;
       width: 100%;
       height: 100%;
       border: 0;
       background: #000;
+      display: none;
+      z-index: 5;
     }
-    /* fullscreen overlay chrome */
-    .tavus-fs-topbar {
+    .duix-shell.tavus-on .duix-tavus-frame { display: block; }
+    .duix-shell.tavus-on .duix-avatar-wrap { display: none; }
+
+    /* === Selfie PiP (右上偏下、active 鏡頭開時) === */
+    .duix-selfie-pip {
       position: absolute;
-      top: 0; left: 0; right: 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 18px 24px;
-      z-index: 1010;
-      pointer-events: none;
+      top: 80px;
+      right: 28px;
+      width: 180px;
+      aspect-ratio: 4/3;
+      background: rgba(0,0,0,0.65);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px;
+      overflow: hidden;
+      display: none;
+      z-index: 15;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
     }
-    .tavus-fs-name {
-      color: rgba(255,255,255,0.95);
-      font-size: 17px;
-      font-style: italic;
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      pointer-events: auto;
-      text-shadow: 0 1px 6px rgba(0,0,0,0.7);
-      letter-spacing: 0.3px;
+    .duix-selfie-pip.on { display: block; }
+    .duix-selfie-pip video {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
     }
-    .tavus-fs-info {
-      cursor: help;
-      width: 18px; height: 18px;
-      border-radius: 50%;
-      border: 1px solid rgba(255,255,255,0.55);
-      color: rgba(255,255,255,0.75);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
+    .duix-selfie-label {
+      position: absolute;
+      bottom: 4px; left: 8px;
       font-size: 11px;
-      font-style: normal;
-      font-family: Georgia, serif;
+      color: rgba(255,255,255,0.78);
+      text-shadow: 0 1px 4px rgba(0,0,0,0.7);
     }
-    .tavus-fs-watermark {
-      color: rgba(255,255,255,0.42);
-      font-size: 11px;
-      letter-spacing: 0.5px;
-      pointer-events: auto;
-      text-shadow: 0 1px 6px rgba(0,0,0,0.7);
-    }
-    .tavus-fs-bottombar {
+
+    /* === Bottom overlay === */
+    .duix-bottom {
       position: absolute;
       bottom: 0; left: 0; right: 0;
+      padding: 24px 28px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 24px 28px;
-      z-index: 1010;
+      z-index: 20;
       pointer-events: none;
     }
-    .tavus-fs-timer {
-      color: rgba(255,255,255,0.88);
+    .duix-timer {
+      color: rgba(255,255,255,0.85);
       font-size: 15px;
       font-variant-numeric: tabular-nums;
       font-family: ui-monospace, "Cascadia Code", monospace;
       pointer-events: auto;
-      text-shadow: 0 1px 6px rgba(0,0,0,0.7);
       min-width: 60px;
+      text-shadow: 0 1px 6px rgba(0,0,0,0.7);
+      opacity: 0;
+      transition: opacity 0.3s;
     }
-    .tavus-fs-actions {
-      display: flex;
-      gap: 14px;
+    .duix-shell.active .duix-timer { opacity: 1; }
+
+    .duix-actions {
       pointer-events: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    .tavus-fs-end-btn {
-      width: 60px; height: 60px;
+
+    /* idle 時 = 單一橘色開始按鈕 */
+    .duix-start {
+      padding: 14px 36px;
+      border-radius: 999px;
+      border: 0;
+      background: var(--amber);
+      color: white;
+      font-family: inherit;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 6px 24px rgba(212, 113, 42, 0.45);
+      transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+    }
+    .duix-start:hover {
+      background: var(--amber-deep);
+      transform: translateY(-1px);
+      box-shadow: 0 8px 28px rgba(212, 113, 42, 0.55);
+    }
+    .duix-start:active { transform: scale(0.97); }
+    .duix-start:disabled {
+      background: rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.4);
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+    .duix-shell.active .duix-start { display: none; }
+
+    /* active 時 = icon row */
+    .duix-icon-row {
+      display: none;
+      gap: 14px;
+    }
+    .duix-shell.active .duix-icon-row { display: flex; }
+    .duix-icon-btn {
+      width: 52px; height: 52px;
       border-radius: 50%;
       border: 0;
-      background: #e3392b;
+      background: rgba(255,255,255,0.12);
       color: white;
-      font-size: 22px;
+      font-size: 20px;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       transition: background 0.15s, transform 0.15s;
+      backdrop-filter: blur(8px);
+      position: relative;
+    }
+    .duix-icon-btn:hover { background: rgba(255,255,255,0.22); }
+    .duix-icon-btn:active { transform: scale(0.95); }
+    .duix-icon-btn.on {
+      background: var(--amber);
+      box-shadow: 0 4px 18px rgba(212,113,42,0.4);
+    }
+    .duix-icon-btn.on:hover { background: var(--amber-deep); }
+    .duix-icon-btn.muted { background: rgba(227, 57, 43, 0.32); }
+    .duix-icon-btn.end {
+      background: var(--err);
       box-shadow: 0 4px 18px rgba(227, 57, 43, 0.45);
-      font-weight: 600;
     }
-    .tavus-fs-end-btn:hover {
-      background: #c12d22;
-      transform: scale(1.05);
+    .duix-icon-btn.end:hover { background: #c12d22; }
+    .duix-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .duix-icon-tip {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.85);
+      color: white;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
     }
-    .tavus-fs-end-btn:active { transform: scale(0.96); }
-    .tavus-fs-spacer { min-width: 60px; }
-    @media (max-width: 767px) {
-      .tavus-fs-end-btn { width: 54px; height: 54px; font-size: 20px; }
-      .tavus-fs-bottombar { padding: 18px 18px; }
-      .tavus-fs-topbar { padding: 14px 18px; }
-      .tavus-fs-name { font-size: 15px; }
-      .tavus-fs-spacer { min-width: 54px; }
+    .duix-icon-btn:hover .duix-icon-tip { opacity: 1; }
+
+    .duix-watermark {
+      color: rgba(255,255,255,0.32);
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      pointer-events: auto;
+      min-width: 60px;
+      text-align: right;
+      text-shadow: 0 1px 6px rgba(0,0,0,0.7);
     }
 
-    /* === Responsive: tablet === */
-    @media (max-width: 1023px) {
-      .stage { grid-template-columns: 1fr 220px; padding: 20px; gap: 18px; }
-      .sophie-avatar-wrap { width: 300px; height: 300px; }
-      .pip-tile { max-width: 200px; }
+    /* === Speech overlay (字幕 · active 時用) === */
+    .duix-speech {
+      position: absolute;
+      bottom: 110px;
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: 70%;
+      padding: 12px 20px;
+      background: rgba(0,0,0,0.55);
+      border-radius: 12px;
+      color: white;
+      font-style: italic;
+      font-size: 15px;
+      line-height: 1.55;
+      backdrop-filter: blur(10px);
+      text-align: center;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+      z-index: 18;
     }
-    /* === Responsive: mobile === */
+    .duix-speech.show { opacity: 1; }
+
+    /* === Settings panel (slide-in from right · 預設 hidden) === */
+    .duix-settings-panel {
+      position: absolute;
+      top: 0; right: 0;
+      width: 320px;
+      height: 100%;
+      background: rgba(20, 14, 8, 0.96);
+      border-left: 1px solid rgba(255,255,255,0.08);
+      padding: 64px 24px 24px;
+      transform: translateX(100%);
+      transition: transform 0.25s;
+      z-index: 50;
+      overflow-y: auto;
+      backdrop-filter: blur(20px);
+    }
+    .duix-settings-panel.open { transform: translateX(0); }
+    .duix-settings-panel h3 {
+      font-style: italic;
+      font-size: 18px;
+      color: var(--amber-bright);
+      margin-bottom: 18px;
+      font-weight: normal;
+    }
+    .duix-settings-panel label {
+      display: block;
+      margin-bottom: 14px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.78);
+    }
+    .duix-settings-panel select {
+      display: block;
+      width: 100%;
+      margin-top: 6px;
+      padding: 8px 10px;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 6px;
+      background: rgba(0,0,0,0.4);
+      color: white;
+      font-family: inherit;
+      font-size: 13px;
+    }
+    .duix-settings-panel .privacy-note {
+      font-size: 11px;
+      color: rgba(255,180,112,0.85);
+      line-height: 1.6;
+      padding: 10px 12px;
+      background: rgba(212,113,42,0.12);
+      border: 1px solid rgba(212,113,42,0.32);
+      border-radius: 6px;
+      margin-top: 18px;
+    }
+    .duix-log-toggle {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.62);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+      margin-top: 18px;
+    }
+    .duix-log-toggle:hover { color: rgba(255,255,255,0.9); border-color: rgba(255,255,255,0.3); }
+    .duix-log {
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: rgba(0,0,0,0.6);
+      color: #d4c4a8;
+      font-family: ui-monospace, "Cascadia Code", monospace;
+      font-size: 10px;
+      border-radius: 6px;
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      display: none;
+    }
+    .duix-log.open { display: block; }
+    .duix-settings-close {
+      position: absolute;
+      top: 16px; right: 16px;
+      width: 30px; height: 30px;
+      border: 0;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.85);
+      cursor: pointer;
+      font-size: 18px;
+    }
+    .duix-settings-close:hover { background: rgba(255,255,255,0.18); }
+
+    audio { display: none; }
+
+    /* === Responsive · mobile === */
     @media (max-width: 767px) {
-      .stage { grid-template-columns: 1fr; padding: 14px; gap: 14px; }
-      .sophie-avatar-wrap { width: 240px; height: 240px; }
-      .rail {
-        flex-direction: row;
-        overflow-x: auto;
-        gap: 8px;
-      }
-      .pip-tile { max-width: 130px; min-width: 130px; flex-shrink: 0; }
-      .pip-video { aspect-ratio: 4/3; }
-      .toolbar .tool-btn { min-width: 0; padding: 12px; }
-      .toolbar .tool-btn .btn-label { display: none; }
-      .idle-cta h1 { font-size: 24px; }
+      .duix-avatar-wrap { width: 240px; height: 240px; }
+      .duix-idle-hint h1 { font-size: 22px; }
+      .duix-idle-hint p { font-size: 13px; padding: 0 24px; }
+      .duix-top, .duix-bottom { padding: 16px 18px; }
+      .duix-icon-btn { width: 46px; height: 46px; font-size: 18px; }
+      .duix-icon-row { gap: 10px; }
+      .duix-selfie-pip { width: 110px; top: 66px; right: 18px; }
+      .duix-settings-panel { width: 100%; }
+      .duix-watermark, .duix-timer { font-size: 11px; min-width: 50px; }
+      .duix-name { font-size: 15px; }
+    }
+    @media (max-height: 600px) {
+      .duix-avatar-wrap { width: 200px; height: 200px; }
+      .duix-idle-hint { bottom: 12%; }
     }
   </style>
 </head>
 <body>
 
-  <!-- Top status bar -->
-  <div class="topbar">
-    <div>
-      <span class="who" id="topbarWho">蘇菲 · 待命中</span>
-      <span class="meta" id="topbarMeta" style="margin-left: 12px;"></span>
+  <div class="duix-shell" id="shell">
+
+    <!-- Top overlay -->
+    <div class="duix-top">
+      <div class="duix-top-left">
+        <span class="duix-name" id="topName">蘇菲</span>
+        <span class="duix-name-info" title="Voice Path v0.4.0 · 城堡 voice engine · 鏡頭預設關 · 不存盤 · 不錄影">i</span>
+      </div>
+      <div class="duix-top-right">
+        <button class="duix-settings-btn" id="settingsBtn" title="設定">⚙</button>
+      </div>
     </div>
-    <button class="end-btn" id="endBtn" disabled>結束對話</button>
-  </div>
 
-  <!-- Main stage -->
-  <div class="stage" id="stage">
-
-    <!-- Idle CTA · State A -->
-    <div class="idle-cta" id="idleCTA">
-      <div class="sophie-avatar-wrap" style="width: 280px; height: 280px;">
-        <div class="sophie-avatar idle">
-          <svg class="sophie-face" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-            <!-- 頭髮（後）-->
+    <!-- Center stage · avatar OR tavus iframe -->
+    <div class="duix-center" id="center">
+      <div class="duix-avatar-wrap" id="avatarWrap">
+        <div class="duix-avatar idle" id="sophieAvatar">
+          <svg class="duix-face" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
             <path class="hair" d="M 20 38 Q 20 12, 50 12 Q 80 12, 80 38 L 80 62 Q 75 70, 65 70 L 35 70 Q 25 70, 20 62 Z" />
-            <!-- 臉 -->
             <ellipse class="skin" cx="50" cy="52" rx="22" ry="26" />
-            <!-- 瀏海 -->
             <path class="hair" d="M 28 32 Q 35 25, 50 26 Q 65 25, 72 32 Q 64 38, 50 36 Q 36 38, 28 32 Z" />
-            <!-- 雙頰 -->
             <ellipse class="cheek" cx="36" cy="58" rx="4" ry="3" />
             <ellipse class="cheek" cx="64" cy="58" rx="4" ry="3" />
-            <!-- 眼睛 -->
             <ellipse class="eye" cx="40" cy="50" rx="2" ry="3" />
             <ellipse class="eye" cx="60" cy="50" rx="2" ry="3" />
-            <!-- 嘴 -->
-            <path class="mouth" d="M 44 64 Q 50 67, 56 64" stroke="#A4571F" stroke-width="1.5" fill="none" stroke-linecap="round" />
+            <path d="M 44 64 Q 50 67, 56 64" stroke="#A4571F" stroke-width="1.5" fill="none" stroke-linecap="round" />
           </svg>
         </div>
       </div>
+      <iframe class="duix-tavus-frame" id="tavusFrame" allow="camera; microphone; autoplay; clipboard-write" allowfullscreen></iframe>
+      <div class="duix-selfie-pip" id="selfiePip">
+        <video id="selfieVideo" autoplay muted playsinline></video>
+        <div class="duix-selfie-label">你</div>
+      </div>
+    </div>
+
+    <!-- Idle hint (避在 active 時擋住 avatar) -->
+    <div class="duix-idle-hint" id="idleHint">
       <h1>今天想跟我聊什麼？</h1>
-      <div class="lead">按「開始對話」、允許麥克風、講中文就可以。<br />鏡頭跟個資守衛要不要開、隨你按。</div>
-      <button class="start-cta" id="startBtn">開始對話</button>
-      <div class="settings">
-        <span>聲音</span>
+      <p>按下方「開始對話」、允許麥克風、講中文就可以。</p>
+    </div>
+
+    <!-- Speech (字幕 · active 時) -->
+    <div class="duix-speech" id="speech"></div>
+
+    <!-- Bottom overlay -->
+    <div class="duix-bottom">
+      <div class="duix-timer" id="timer">00:00</div>
+      <div class="duix-actions">
+        <button class="duix-start" id="startBtn">開始對話</button>
+        <div class="duix-icon-row" id="iconRow">
+          <button class="duix-icon-btn on" id="micBtn">
+            🎙<span class="duix-icon-tip">麥克風 開</span>
+          </button>
+          <button class="duix-icon-btn" id="cameraBtn">
+            📷<span class="duix-icon-tip">開鏡頭</span>
+          </button>
+          <button class="duix-icon-btn" id="tavusBtn">
+            🎭<span class="duix-icon-tip">真臉蘇菲</span>
+          </button>
+          <button class="duix-icon-btn end" id="endBtn">
+            ✕<span class="duix-icon-tip">結束對話</span>
+          </button>
+        </div>
+      </div>
+      <div class="duix-watermark">城堡 · BeyondPath</div>
+    </div>
+
+    <!-- Settings panel (slide-in) -->
+    <div class="duix-settings-panel" id="settingsPanel">
+      <button class="duix-settings-close" id="settingsClose">✕</button>
+      <h3>設定</h3>
+      <label>
+        聲音
         <select id="persona">
           <option value="sophie" selected>蘇菲（中文 · marin 暖嗓）</option>
           <option value="lily">Lily（English · alloy）</option>
         </select>
-        <span>模型</span>
+      </label>
+      <label>
+        模型
         <select id="model">
           <option value="" selected>預設（gpt-realtime-2）</option>
           <option value="gpt-realtime-2">gpt-realtime-2</option>
           <option value="gpt-realtime">gpt-realtime（fallback）</option>
         </select>
+      </label>
+      <div class="privacy-note">
+        鏡頭預設關 · 畫面只在這頁活著 · 不存盤、不錄影、不外傳。
       </div>
-    </div>
-
-    <!-- Active stage · State B/C (對話中 hidden until start) -->
-    <div class="sophie-zone" id="sophieZone" style="display: none;">
-      <div class="sophie-avatar-wrap">
-        <div class="sophie-avatar idle" id="sophieAvatar">
-          <svg class="sophie-face" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-            <path class="hair" d="M 20 38 Q 20 12, 50 12 Q 80 12, 80 38 L 80 62 Q 75 70, 65 70 L 35 70 Q 25 70, 20 62 Z" />
-            <ellipse class="skin" cx="50" cy="52" rx="22" ry="26" />
-            <path class="hair" d="M 28 32 Q 35 25, 50 26 Q 65 25, 72 32 Q 64 38, 50 36 Q 36 38, 28 32 Z" />
-            <ellipse class="cheek" cx="36" cy="58" rx="4" ry="3" />
-            <ellipse class="cheek" cx="64" cy="58" rx="4" ry="3" />
-            <ellipse class="eye" cx="40" cy="50" rx="2" ry="3" />
-            <ellipse class="eye" cx="60" cy="50" rx="2" ry="3" />
-            <path class="mouth" id="sophieMouth" d="M 44 64 Q 50 67, 56 64" stroke="#A4571F" stroke-width="1.5" fill="none" stroke-linecap="round" />
-          </svg>
-        </div>
-      </div>
-      <div class="sophie-name">蘇菲</div>
-      <div class="sophie-state" id="sophieState">在聽你說...</div>
-      <div class="sophie-speech empty" id="sophieSpeech">蘇菲還沒講話、你先開口。</div>
-    </div>
-
-    <!-- Right rail · selfie + visitors (hidden until start) -->
-    <div class="rail" id="rail" style="display: none;">
-      <div class="pip-tile" id="selfieTile">
-        <video class="pip-video" id="selfieVideo" autoplay muted playsinline></video>
-        <div class="pip-label">
-          <span class="who-name">你</span>
-          <span class="talking-dot"></span>
-        </div>
-      </div>
-      <div class="pip-placeholder" id="cameraOffPlaceholder">
-        按下方「📷 開鏡頭」<br />讓蘇菲看到你
-      </div>
-
-      <div class="privacy-note" style="margin-top: 8px;">
-        🔒 鏡頭預設關 · 畫面只在這頁活著 · 不存盤、不錄影、不外傳。緊急關按下方紅鈕（&lt; 200 毫秒）。
-      </div>
-    </div>
-
-    <!-- Bottom: waveform + toolbar (hidden until start) -->
-    <div class="bottom" id="bottomBar" style="display: none;">
-      <div class="waveform-wrap">
-        <span class="waveform-label" id="waveformLabel">收音 · 待機</span>
-        <div class="waveform" id="waveform"></div>
-      </div>
-      <div class="toolbar">
-        <button class="tool-btn active" id="micBtn">
-          <span class="tool-icon">🎙</span>
-          <span class="btn-label">麥克風 開</span>
-        </button>
-        <button class="tool-btn" id="cameraBtn">
-          <span class="tool-icon">📷</span>
-          <span class="btn-label">開鏡頭</span>
-        </button>
-        <button class="tool-btn" id="visionBtn" disabled>
-          <span class="tool-icon">👀</span>
-          <span class="btn-label">開始蘇菲看</span>
-        </button>
-        <button class="tool-btn" id="tavusBtn">
-          <span class="tool-icon">🎭</span>
-          <span class="btn-label">真臉蘇菲</span>
-        </button>
-        <button class="tool-btn danger" id="killBtn" disabled>
-          <span class="tool-icon">🚨</span>
-          <span class="btn-label">緊急關鏡頭</span>
-        </button>
-      </div>
+      <button class="duix-log-toggle" id="logToggle">▾ 開發者 log</button>
+      <div class="duix-log" id="log"></div>
     </div>
 
   </div>
-
-  <div class="log-toggle" id="logToggle">▾ 開發者 log（除錯用 · 預設折疊）</div>
-  <div class="log" id="log"></div>
 
   <audio id="remoteAudio" autoplay></audio>
-
-  <!-- v0.3.3 真臉蘇菲 · Duix-style fullscreen modal · 純黑乾淨俐落 -->
-  <div class="tavus-fullscreen" id="tavusFullscreen">
-    <iframe id="tavusFrame" allow="camera; microphone; autoplay; clipboard-write" allowfullscreen></iframe>
-    <div class="tavus-fs-topbar">
-      <div class="tavus-fs-name">
-        <span>蘇菲</span>
-        <span class="tavus-fs-info" title="Tavus CVI · 雲端真臉 · 不錄影不存盤">i</span>
-      </div>
-      <div class="tavus-fs-watermark">Powered by Castle · Tavus CVI</div>
-    </div>
-    <div class="tavus-fs-bottombar">
-      <div class="tavus-fs-timer" id="tavusFsTimer">00:00</div>
-      <div class="tavus-fs-actions">
-        <button class="tavus-fs-end-btn" id="tavusFsEndBtn" title="結束真臉模式">✕</button>
-      </div>
-      <div class="tavus-fs-spacer"></div>
-    </div>
-  </div>
 
 <script>
 (function () {
   // === DOM refs ===
+  const shell = document.getElementById("shell");
   const startBtn = document.getElementById("startBtn");
   const endBtn = document.getElementById("endBtn");
-  const idleCTA = document.getElementById("idleCTA");
-  const sophieZone = document.getElementById("sophieZone");
-  const rail = document.getElementById("rail");
-  const bottomBar = document.getElementById("bottomBar");
   const sophieAvatar = document.getElementById("sophieAvatar");
-  const sophieState = document.getElementById("sophieState");
-  const sophieSpeech = document.getElementById("sophieSpeech");
-  const topbarWho = document.getElementById("topbarWho");
-  const topbarMeta = document.getElementById("topbarMeta");
-  const selfieTile = document.getElementById("selfieTile");
-  const selfieVideo = document.getElementById("selfieVideo");
-  const cameraOffPlaceholder = document.getElementById("cameraOffPlaceholder");
+  const idleHint = document.getElementById("idleHint");
+  const speech = document.getElementById("speech");
+  const timerEl = document.getElementById("timer");
   const micBtn = document.getElementById("micBtn");
   const cameraBtn = document.getElementById("cameraBtn");
-  const visionBtn = document.getElementById("visionBtn");
-  const killBtn = document.getElementById("killBtn");
-  const waveformEl = document.getElementById("waveform");
-  const waveformLabel = document.getElementById("waveformLabel");
+  const tavusBtn = document.getElementById("tavusBtn");
+  const selfiePip = document.getElementById("selfiePip");
+  const selfieVideo = document.getElementById("selfieVideo");
+  const tavusFrame = document.getElementById("tavusFrame");
+  const settingsBtn = document.getElementById("settingsBtn");
+  const settingsPanel = document.getElementById("settingsPanel");
+  const settingsClose = document.getElementById("settingsClose");
   const logEl = document.getElementById("log");
   const logToggle = document.getElementById("logToggle");
   const personaSel = document.getElementById("persona");
@@ -708,22 +594,15 @@
   let active = false;
   let micOn = true;
   let cameraOn = false;
-  let visionOn = false;
-  let visionPollTimer = null;
-  let lastObservationTs = 0;
+  let tavusConversationId = null;
   let startedAt = 0;
   let timerInterval = null;
-
-  // Audio analysis
+  let selfieStream = null;
   let audioCtx = null;
-  let analyser = null;
-  let waveformAnimFrame = null;
-  let waveformBars = [];
-
-  // Avatar talking detection (heuristic via remote audio level)
   let remoteAnalyser = null;
   let remoteAudioCtx = null;
   let avatarStateAnimFrame = null;
+  let speechTimer = null;
 
   // === Logging ===
   function log(msg) {
@@ -735,96 +614,34 @@
     logEl.classList.toggle("open");
     logToggle.textContent = logEl.classList.contains("open")
       ? "▴ 折疊開發者 log"
-      : "▾ 開發者 log（除錯用 · 預設折疊）";
+      : "▾ 開發者 log";
   });
+  settingsBtn.addEventListener("click", () => settingsPanel.classList.add("open"));
+  settingsClose.addEventListener("click", () => settingsPanel.classList.remove("open"));
 
-  // === Status helpers ===
-  function setSophieState(text, cls) {
-    sophieState.textContent = text;
-    if (cls === "speaking") {
-      sophieAvatar.classList.remove("idle", "sleep");
-      sophieAvatar.classList.add("speaking");
-    } else if (cls === "sleep") {
-      sophieAvatar.classList.remove("idle", "speaking");
-      sophieAvatar.classList.add("sleep");
-    } else {
-      sophieAvatar.classList.remove("speaking", "sleep");
-      sophieAvatar.classList.add("idle");
-    }
+  function setAvatarState(cls) {
+    sophieAvatar.classList.remove("idle", "speaking", "sleep");
+    sophieAvatar.classList.add(cls || "idle");
   }
-  function setSpeech(text) {
+  function showSpeech(text) {
     if (!text) {
-      sophieSpeech.textContent = "蘇菲還沒講話、你先開口。";
-      sophieSpeech.classList.add("empty");
-    } else {
-      sophieSpeech.textContent = "「" + text + "」";
-      sophieSpeech.classList.remove("empty");
+      speech.classList.remove("show");
+      return;
     }
+    speech.textContent = text;
+    speech.classList.add("show");
+    if (speechTimer) clearTimeout(speechTimer);
+    speechTimer = setTimeout(() => speech.classList.remove("show"), 4500);
   }
   function updateTimer() {
     if (!startedAt) return;
     const elapsed = Math.floor((Date.now() - startedAt) / 1000);
-    const m = Math.floor(elapsed / 60);
+    const m = String(Math.floor(elapsed / 60)).padStart(2, "0");
     const s = String(elapsed % 60).padStart(2, "0");
-    topbarMeta.textContent = m + ":" + s;
+    timerEl.textContent = m + ":" + s;
   }
 
-  // === Waveform setup ===
-  function buildWaveformBars(n) {
-    waveformEl.innerHTML = "";
-    waveformBars = [];
-    for (let i = 0; i < n; i++) {
-      const bar = document.createElement("div");
-      bar.className = "waveform-bar";
-      bar.style.height = "4px";
-      waveformEl.appendChild(bar);
-      waveformBars.push(bar);
-    }
-  }
-  function updateWaveform() {
-    if (!analyser || !waveformBars.length) return;
-    const data = new Uint8Array(analyser.frequencyBinCount);
-    analyser.getByteFrequencyData(data);
-    const step = Math.floor(data.length / waveformBars.length) || 1;
-    let total = 0;
-    for (let i = 0; i < waveformBars.length; i++) {
-      const slice = data.slice(i * step, (i + 1) * step);
-      let sum = 0;
-      for (const v of slice) sum += v;
-      const avg = sum / slice.length;
-      total += avg;
-      const h = Math.max(4, Math.min(36, (avg / 255) * 40 + 4));
-      waveformBars[i].style.height = h + "px";
-    }
-    // mic active hint
-    const overall = total / waveformBars.length;
-    if (overall > 20) {
-      waveformLabel.textContent = "收音 · 你在講話";
-      selfieTile.classList.add("talking");
-    } else {
-      waveformLabel.textContent = "收音 · 靜音中";
-      selfieTile.classList.remove("talking");
-    }
-    waveformAnimFrame = requestAnimationFrame(updateWaveform);
-  }
-  function startWaveform(stream) {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const source = audioCtx.createMediaStreamSource(stream);
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.6;
-    source.connect(analyser);
-    buildWaveformBars(40);
-    updateWaveform();
-  }
-  function stopWaveform() {
-    if (waveformAnimFrame) cancelAnimationFrame(waveformAnimFrame);
-    waveformAnimFrame = null;
-    waveformBars.forEach(b => b.style.height = "4px");
-    waveformLabel.textContent = "收音 · 待機";
-  }
-
-  // === Avatar talking detection (用遠端 audio level 偵測蘇菲在不在講話) ===
+  // === Avatar talking detection (用遠端 audio level) ===
   function startAvatarTalkingDetection(stream) {
     try {
       if (!remoteAudioCtx) remoteAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -846,9 +663,9 @@
     for (const v of data) sum += v;
     const avg = sum / data.length;
     if (avg > 12) {
-      setSophieState("正在說...", "speaking");
+      setAvatarState("speaking");
     } else if (active) {
-      setSophieState("在聽你說...", "idle");
+      setAvatarState("idle");
     }
     avatarStateAnimFrame = requestAnimationFrame(detectAvatarSpeaking);
   }
@@ -862,21 +679,17 @@
     if (!micStream) return;
     micStream.getAudioTracks().forEach(t => t.enabled = on);
     micOn = on;
-    micBtn.classList.toggle("active", on);
-    micBtn.querySelector(".btn-label").textContent = on ? "麥克風 開" : "麥克風 關";
-    micBtn.querySelector(".tool-icon").textContent = on ? "🎙" : "🔇";
-    if (!on) {
-      waveformLabel.textContent = "收音 · 已靜音";
-      waveformBars.forEach(b => b.style.height = "4px");
-    }
+    micBtn.classList.toggle("on", on);
+    micBtn.classList.toggle("muted", !on);
+    micBtn.querySelector(".duix-icon-tip").textContent = on ? "麥克風 開" : "麥克風 關";
+    micBtn.firstChild.textContent = on ? "🎙" : "🔇";
   }
   micBtn.addEventListener("click", () => {
     if (!micStream) return;
     setMicEnabled(!micOn);
   });
 
-  // === Selfie webcam (純前端 · 不送伺服器 · 卡西法 v0.3.1 規格的瀏覽器端) ===
-  let selfieStream = null;
+  // === Selfie webcam (browser only · 純前端 · 不送伺服器) ===
   async function startSelfie() {
     try {
       selfieStream = await navigator.mediaDevices.getUserMedia({
@@ -884,14 +697,13 @@
         audio: false
       });
       selfieVideo.srcObject = selfieStream;
-      selfieTile.style.display = "";
-      cameraOffPlaceholder.style.display = "none";
+      selfiePip.classList.add("on");
       log("selfie 鏡頭啟動");
+      return true;
     } catch (e) {
       log("selfie 鏡頭拒絕：" + e.message);
-      selfieTile.style.display = "none";
-      cameraOffPlaceholder.style.display = "";
-      cameraOffPlaceholder.innerHTML = "鏡頭被拒絕<br /><span style='font-size:11px'>(" + e.name + ")</span>";
+      selfiePip.classList.remove("on");
+      return false;
     }
   }
   function stopSelfie() {
@@ -900,328 +712,36 @@
       selfieStream = null;
     }
     selfieVideo.srcObject = null;
-    selfieTile.style.display = "none";
-    cameraOffPlaceholder.style.display = "";
-    cameraOffPlaceholder.innerHTML = "按下方「📷 開鏡頭」<br />讓蘇菲看到你";
+    selfiePip.classList.remove("on");
   }
-  cameraBtn.addEventListener("click", async () => {
-    if (cameraOn) {
-      await cameraDisable();
-    } else {
-      await cameraEnable();
-    }
-  });
-
-  // === Camera (server-side · Phase 3 既有 backend) ===
   async function cameraEnable() {
     cameraBtn.disabled = true;
+    const ok = await startSelfie();
     try {
-      // 先 browser selfie
-      await startSelfie();
-      // 再 backend camera (server-side MediaPipe / Claude vision)
-      const resp = await fetch("/camera/enable", { method: "POST" });
-      const data = await resp.json();
-      if (data.ok) {
-        cameraOn = true;
-        cameraBtn.classList.add("active");
-        cameraBtn.querySelector(".btn-label").textContent = "關鏡頭";
-        cameraBtn.disabled = false;
-        visionBtn.disabled = false;
-        killBtn.disabled = false;
-        log("camera (backend) enabled");
-      } else {
-        // Backend 失敗（Modal sandbox 沒實體鏡頭）但 selfie 可能還在
-        log("backend /camera/enable 503 (Modal 無 webcam · 預期)。selfie 仍 work、Phase 3 vision 不可用。");
-        cameraOn = true;
-        cameraBtn.classList.add("active");
-        cameraBtn.querySelector(".btn-label").textContent = "關鏡頭";
-        cameraBtn.disabled = false;
-        visionBtn.disabled = true; // Modal 沒 webcam 不能跑 server vision
-        killBtn.disabled = false;
-      }
-    } catch (e) {
-      log("camera enable err: " + e.message);
-      cameraBtn.disabled = false;
+      await fetch("/camera/enable", { method: "POST" });
+    } catch (_) {}
+    if (ok) {
+      cameraOn = true;
+      cameraBtn.classList.add("on");
+      cameraBtn.querySelector(".duix-icon-tip").textContent = "關鏡頭";
     }
+    cameraBtn.disabled = false;
   }
   async function cameraDisable() {
     cameraBtn.disabled = true;
     stopSelfie();
     try { await fetch("/camera/disable", { method: "POST" }); } catch (_) {}
     cameraOn = false;
-    visionOn = false;
-    cameraBtn.classList.remove("active");
-    cameraBtn.querySelector(".btn-label").textContent = "開鏡頭";
+    cameraBtn.classList.remove("on");
+    cameraBtn.querySelector(".duix-icon-tip").textContent = "開鏡頭";
     cameraBtn.disabled = false;
-    visionBtn.disabled = true;
-    visionBtn.classList.remove("active");
-    visionBtn.querySelector(".btn-label").textContent = "開始蘇菲看";
-    killBtn.disabled = true;
-    if (visionPollTimer) { clearInterval(visionPollTimer); visionPollTimer = null; }
-    log("camera disabled");
   }
-  async function cameraKill() {
-    killBtn.disabled = true;
-    stopSelfie();
-    try {
-      const t0 = performance.now();
-      const resp = await fetch("/camera/kill", { method: "POST" });
-      const elapsed = performance.now() - t0;
-      const data = await resp.json();
-      log("緊急關鏡頭 · " + Math.round(elapsed) + "ms (server " + data.elapsed_ms + "ms)");
-    } catch (_) {}
-    cameraOn = false;
-    visionOn = false;
-    cameraBtn.classList.remove("active");
-    cameraBtn.querySelector(".btn-label").textContent = "開鏡頭";
-    cameraBtn.disabled = false;
-    visionBtn.disabled = true;
-    visionBtn.classList.remove("active");
-    visionBtn.querySelector(".btn-label").textContent = "開始蘇菲看";
-    if (visionPollTimer) { clearInterval(visionPollTimer); visionPollTimer = null; }
-  }
-  killBtn.addEventListener("click", cameraKill);
-
-  // === Vision (server-side · Phase 3 既有) ===
-  visionBtn.addEventListener("click", async () => {
-    if (visionOn) {
-      await fetch("/vision/disable", { method: "POST" }).catch(()=>{});
-      visionOn = false;
-      visionBtn.classList.remove("active");
-      visionBtn.querySelector(".btn-label").textContent = "開始蘇菲看";
-      if (visionPollTimer) { clearInterval(visionPollTimer); visionPollTimer = null; }
-    } else {
-      try {
-        const resp = await fetch("/vision/enable", { method: "POST" });
-        const data = await resp.json();
-        if (data.ok) {
-          visionOn = true;
-          visionBtn.classList.add("active");
-          visionBtn.querySelector(".btn-label").textContent = "停止蘇菲看";
-          visionPollTimer = setInterval(pollVisionLatest, 1000);
-        }
-      } catch (e) { log("vision enable err: " + e.message); }
-    }
-  });
-  async function pollVisionLatest() {
-    if (!visionOn) return;
-    try {
-      const resp = await fetch("/vision/latest");
-      const data = await resp.json();
-      const text = data.text || "";
-      const ts = data.ts || 0;
-      if (text && ts > lastObservationTs) {
-        lastObservationTs = ts;
-        log("vision: " + text);
-        if (dataChannel && dataChannel.readyState === "open") {
-          dataChannel.send(JSON.stringify({
-            type: "session.update",
-            session: {
-              instructions: window.__pendingInstructions +
-                "\n\n--- 你剛看到 ---\n" + text + "\n值得講就主動講、講完馬上停。",
-            },
-          }));
-        }
-      }
-    } catch (_) {}
-  }
-
-  // === Main start / stop ===
-  async function start() {
-    if (active) return;
-    startBtn.disabled = true;
-    setSophieState("申請麥克風...", "idle");
-
-    try {
-      micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      log("mic granted");
-    } catch (e) {
-      setSophieState("無法取得麥克風：" + e.message, "sleep");
-      startBtn.disabled = false;
-      return;
-    }
-
-    // Layout swap idle → active
-    idleCTA.style.display = "none";
-    sophieZone.style.display = "flex";
-    rail.style.display = "flex";
-    bottomBar.style.display = "flex";
-    topbarWho.textContent = "蘇菲";
-    endBtn.disabled = false;
-    startedAt = Date.now();
-    timerInterval = setInterval(updateTimer, 1000);
-
-    // Start mic waveform
-    startWaveform(micStream);
-
-    // WebRTC
-    pc = new RTCPeerConnection();
-    pc.ontrack = (ev) => {
-      log("track received: " + ev.track.kind);
-      if (ev.track.kind === "audio") {
-        remoteAudio.srcObject = ev.streams[0];
-        startAvatarTalkingDetection(ev.streams[0]);
-      }
-    };
-    pc.onconnectionstatechange = () => {
-      log("pc state: " + pc.connectionState);
-      if (pc.connectionState === "connected") {
-        setSophieState("在聽你說...", "idle");
-        active = true;
-      } else if (pc.connectionState === "failed" || pc.connectionState === "closed") {
-        setSophieState("連線中斷", "sleep");
-        cleanup();
-      }
-    };
-    micStream.getTracks().forEach((t) => pc.addTrack(t, micStream));
-
-    dataChannel = pc.createDataChannel("oai-events");
-    dataChannel.onmessage = (ev) => {
-      try {
-        const obj = JSON.parse(ev.data);
-        if (obj.type === "response.audio_transcript.delta" && obj.delta) {
-          // Sophie 即時 transcript · 累積顯示
-          const cur = sophieSpeech.classList.contains("empty") ? "" : sophieSpeech.textContent.replace(/^「|」$/g, "");
-          setSpeech(cur + obj.delta);
-        } else if (obj.type === "response.audio_transcript.done" && obj.transcript) {
-          setSpeech(obj.transcript);
-        } else if (obj.type) {
-          log("evt: " + obj.type);
-        }
-      } catch (_) {}
-    };
-    dataChannel.onopen = () => {
-      log("data channel open, injecting persona...");
-      if (window.__pendingInstructions) {
-        const sessionUpdate = {
-          type: "session.update",
-          session: {
-            instructions: window.__pendingInstructions,
-            voice: window.__pendingVoice || "marin",
-            modalities: ["audio", "text"],
-            input_audio_transcription: { model: "gpt-4o-transcribe", language: "zh" },
-            turn_detection: {
-              type: "server_vad",
-              threshold: 0.8,
-              prefix_padding_ms: 300,
-              silence_duration_ms: 1000,
-              create_response: true,
-              interrupt_response: false,
-            },
-            temperature: 0.8,
-          },
-        };
-        dataChannel.send(JSON.stringify(sessionUpdate));
-        log("session.update sent");
-      }
-    };
-
-    setSophieState("連線中...", "idle");
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    const persona = personaSel.value || "sophie";
-    const model = modelSel.value || "";
-    const url = "/sdp?persona=" + encodeURIComponent(persona) + (model ? "&model=" + encodeURIComponent(model) : "");
-
-    let resp;
-    try {
-      resp = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/sdp" },
-        body: offer.sdp,
-      });
-    } catch (e) {
-      setSophieState("連不到伺服器：" + e.message, "sleep");
-      cleanup();
-      return;
-    }
-
-    if (!resp.ok) {
-      let detail = "";
-      try { detail = JSON.stringify(await resp.json()); } catch (_) { detail = await resp.text(); }
-      setSophieState("伺服器 " + resp.status, "sleep");
-      log("server " + resp.status + ": " + detail.slice(0, 200));
-      cleanup();
-      return;
-    }
-
-    const answerSdp = await resp.text();
-    const usedModel = resp.headers.get("x-realtime-model") || "?";
-    const usedVoice = resp.headers.get("x-realtime-voice") || "?";
-    const warning = resp.headers.get("x-realtime-warning");
-    const instrB64 = resp.headers.get("x-realtime-instructions-b64");
-    if (instrB64) {
-      try {
-        window.__pendingInstructions = decodeURIComponent(escape(atob(instrB64)));
-      } catch (e) { log("decode instructions fail: " + e.message); }
-    }
-    window.__pendingVoice = usedVoice;
-    log("answer · model=" + usedModel + " voice=" + usedVoice);
-    if (warning) log("WARNING: " + warning);
-
-    try {
-      await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
-    } catch (e) {
-      setSophieState("連線失敗：" + e.message, "sleep");
-      cleanup();
-    }
-  }
-
-  function cleanup() {
-    active = false;
-    startBtn.disabled = false;
-    endBtn.disabled = true;
-    topbarWho.textContent = "蘇菲 · 待命中";
-    topbarMeta.textContent = "";
-    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-    startedAt = 0;
-
-    stopWaveform();
-    stopAvatarTalkingDetection();
-    if (dataChannel) { try { dataChannel.close(); } catch (_) {} dataChannel = null; }
-    if (pc) { try { pc.close(); } catch (_) {} pc = null; }
-    if (micStream) {
-      micStream.getTracks().forEach((t) => t.stop());
-      micStream = null;
-    }
-    stopSelfie();
-    remoteAudio.srcObject = null;
-
-    // Layout swap active → idle
-    idleCTA.style.display = "flex";
-    sophieZone.style.display = "none";
-    rail.style.display = "none";
-    bottomBar.style.display = "none";
-    setSpeech("");
-  }
-  endBtn.addEventListener("click", () => {
-    log("user end");
-    cleanup();
-  });
-  startBtn.addEventListener("click", start);
-  window.addEventListener("beforeunload", () => {
-    cleanup();
-    if (cameraOn) navigator.sendBeacon("/camera/kill", "");
+  cameraBtn.addEventListener("click", async () => {
+    if (cameraOn) await cameraDisable();
+    else await cameraEnable();
   });
 
-  // === Tavus CVI · v0.3.3 真臉蘇菲 · Duix-style fullscreen ===
-  const tavusBtn = document.getElementById("tavusBtn");
-  const tavusFullscreen = document.getElementById("tavusFullscreen");
-  const tavusFrame = document.getElementById("tavusFrame");
-  const tavusFsEndBtn = document.getElementById("tavusFsEndBtn");
-  const tavusFsTimer = document.getElementById("tavusFsTimer");
-  let tavusConversationId = null;
-  let tavusStartedAt = 0;
-  let tavusTimerInterval = null;
-
-  function updateTavusTimer() {
-    if (!tavusStartedAt) return;
-    const elapsed = Math.floor((Date.now() - tavusStartedAt) / 1000);
-    const m = String(Math.floor(elapsed / 60)).padStart(2, "0");
-    const s = String(elapsed % 60).padStart(2, "0");
-    tavusFsTimer.textContent = m + ":" + s;
-  }
-
+  // === Tavus 真臉 toggle ===
   async function tavusEnable() {
     tavusBtn.disabled = true;
     try {
@@ -1238,12 +758,9 @@
       }
       tavusConversationId = data.conversation_id;
       tavusFrame.src = data.conversation_url;
-      tavusFullscreen.classList.add("active");
-      tavusBtn.classList.add("active");
-      tavusBtn.querySelector(".btn-label").textContent = "關真臉";
-      tavusStartedAt = Date.now();
-      tavusFsTimer.textContent = "00:00";
-      tavusTimerInterval = setInterval(updateTavusTimer, 1000);
+      shell.classList.add("tavus-on");
+      tavusBtn.classList.add("on");
+      tavusBtn.querySelector(".duix-icon-tip").textContent = "關真臉";
       tavusBtn.disabled = false;
       log("tavus conversation started: " + tavusConversationId);
     } catch (e) {
@@ -1251,54 +768,200 @@
       tavusBtn.disabled = false;
     }
   }
-
   async function tavusDisable() {
     tavusBtn.disabled = true;
-    if (tavusTimerInterval) {
-      clearInterval(tavusTimerInterval);
-      tavusTimerInterval = null;
-    }
-    tavusStartedAt = 0;
     if (tavusConversationId) {
       try {
         await fetch(`/tavus/conversation/${tavusConversationId}/end`, { method: "POST" });
-        log("tavus conversation ended: " + tavusConversationId);
-      } catch (e) {
-        log("tavus end err: " + e.message);
-      }
+        log("tavus ended: " + tavusConversationId);
+      } catch (e) { log("tavus end err: " + e.message); }
       tavusConversationId = null;
     }
     tavusFrame.src = "";
-    tavusFullscreen.classList.remove("active");
-    tavusBtn.classList.remove("active");
-    tavusBtn.querySelector(".btn-label").textContent = "真臉蘇菲";
+    shell.classList.remove("tavus-on");
+    tavusBtn.classList.remove("on");
+    tavusBtn.querySelector(".duix-icon-tip").textContent = "真臉蘇菲";
     tavusBtn.disabled = false;
   }
-
   tavusBtn.addEventListener("click", () => {
-    if (tavusFullscreen.classList.contains("active")) {
-      tavusDisable();
-    } else {
-      tavusEnable();
-    }
-  });
-  tavusFsEndBtn.addEventListener("click", tavusDisable);
-  // ESC 結束真臉
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && tavusFullscreen.classList.contains("active")) {
-      tavusDisable();
-    }
+    if (shell.classList.contains("tavus-on")) tavusDisable();
+    else tavusEnable();
   });
 
-  // 確保關 tab 時也 end 對話（不繼續燒 Tavus 分鐘）
+  // === Main start / stop ===
+  async function start() {
+    if (active) return;
+    startBtn.disabled = true;
+    idleHint.querySelector("h1").textContent = "申請麥克風...";
+
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      log("mic granted");
+    } catch (e) {
+      idleHint.querySelector("h1").textContent = "麥克風被拒絕";
+      idleHint.querySelector("p").textContent = e.message;
+      startBtn.disabled = false;
+      return;
+    }
+
+    shell.classList.add("active");
+    startedAt = Date.now();
+    timerInterval = setInterval(updateTimer, 1000);
+
+    pc = new RTCPeerConnection();
+    pc.ontrack = (ev) => {
+      log("track received: " + ev.track.kind);
+      if (ev.track.kind === "audio") {
+        remoteAudio.srcObject = ev.streams[0];
+        startAvatarTalkingDetection(ev.streams[0]);
+      }
+    };
+    pc.onconnectionstatechange = () => {
+      log("pc state: " + pc.connectionState);
+      if (pc.connectionState === "connected") {
+        active = true;
+        setAvatarState("idle");
+      } else if (pc.connectionState === "failed" || pc.connectionState === "closed") {
+        setAvatarState("sleep");
+        cleanup();
+      }
+    };
+    micStream.getTracks().forEach((t) => pc.addTrack(t, micStream));
+
+    dataChannel = pc.createDataChannel("oai-events");
+    dataChannel.onmessage = (ev) => {
+      try {
+        const obj = JSON.parse(ev.data);
+        if (obj.type === "response.audio_transcript.delta" && obj.delta) {
+          // Sophie 即時 transcript
+          const cur = speech.classList.contains("show") ? speech.textContent : "";
+          showSpeech(cur + obj.delta);
+        } else if (obj.type === "response.audio_transcript.done" && obj.transcript) {
+          showSpeech(obj.transcript);
+        }
+      } catch (_) {}
+    };
+    dataChannel.onopen = () => {
+      log("data channel open · injecting persona");
+      if (window.__pendingInstructions) {
+        dataChannel.send(JSON.stringify({
+          type: "session.update",
+          session: {
+            instructions: window.__pendingInstructions,
+            voice: window.__pendingVoice || "marin",
+            modalities: ["audio", "text"],
+            input_audio_transcription: { model: "gpt-4o-transcribe", language: "zh" },
+            turn_detection: {
+              type: "server_vad",
+              threshold: 0.8,
+              prefix_padding_ms: 300,
+              silence_duration_ms: 1000,
+              create_response: true,
+              interrupt_response: false,
+            },
+            temperature: 0.8,
+          },
+        }));
+      }
+    };
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    const persona = personaSel.value || "sophie";
+    const model = modelSel.value || "";
+    const url = "/sdp?persona=" + encodeURIComponent(persona) + (model ? "&model=" + encodeURIComponent(model) : "");
+
+    let resp;
+    try {
+      resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/sdp" },
+        body: offer.sdp,
+      });
+    } catch (e) {
+      log("server unreachable: " + e.message);
+      cleanup();
+      return;
+    }
+    if (!resp.ok) {
+      let detail = "";
+      try { detail = JSON.stringify(await resp.json()); } catch (_) { detail = await resp.text(); }
+      log("server " + resp.status + ": " + detail.slice(0, 200));
+      cleanup();
+      return;
+    }
+
+    const answerSdp = await resp.text();
+    const instrB64 = resp.headers.get("x-realtime-instructions-b64");
+    if (instrB64) {
+      try { window.__pendingInstructions = decodeURIComponent(escape(atob(instrB64))); } catch (_) {}
+    }
+    window.__pendingVoice = resp.headers.get("x-realtime-voice") || "marin";
+    log("answer · model=" + (resp.headers.get("x-realtime-model") || "?") + " voice=" + window.__pendingVoice);
+
+    try {
+      await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
+    } catch (e) {
+      log("setRemoteDescription fail: " + e.message);
+      cleanup();
+    }
+  }
+
+  function cleanup() {
+    active = false;
+    startBtn.disabled = false;
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    startedAt = 0;
+    timerEl.textContent = "00:00";
+
+    stopAvatarTalkingDetection();
+    if (dataChannel) { try { dataChannel.close(); } catch (_) {} dataChannel = null; }
+    if (pc) { try { pc.close(); } catch (_) {} pc = null; }
+    if (micStream) {
+      micStream.getTracks().forEach((t) => t.stop());
+      micStream = null;
+    }
+    stopSelfie();
+    remoteAudio.srcObject = null;
+    if (shell.classList.contains("tavus-on")) tavusDisable();
+
+    cameraOn = false;
+    cameraBtn.classList.remove("on");
+    cameraBtn.querySelector(".duix-icon-tip").textContent = "開鏡頭";
+    setMicEnabled(true);
+
+    shell.classList.remove("active");
+    showSpeech("");
+    setAvatarState("idle");
+    idleHint.querySelector("h1").textContent = "今天想跟我聊什麼？";
+    idleHint.querySelector("p").textContent = "按下方「開始對話」、允許麥克風、講中文就可以。";
+  }
+
+  startBtn.addEventListener("click", start);
+  endBtn.addEventListener("click", () => {
+    log("user end");
+    cleanup();
+  });
   window.addEventListener("beforeunload", () => {
-    if (tavusConversationId) {
-      navigator.sendBeacon(`/tavus/conversation/${tavusConversationId}/end`, "");
+    if (tavusConversationId) navigator.sendBeacon(`/tavus/conversation/${tavusConversationId}/end`, "");
+    if (cameraOn) navigator.sendBeacon("/camera/kill", "");
+    cleanup();
+  });
+
+  // === Keyboard ===
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      if (settingsPanel.classList.contains("open")) {
+        settingsPanel.classList.remove("open");
+      } else if (shell.classList.contains("tavus-on")) {
+        tavusDisable();
+      } else if (active) {
+        cleanup();
+      }
     }
   });
 
-  // Init
-  log("Voice Path v0.3.3 直播感版面 ready · ADR-008 暖琥珀 DNA · ADR-018 隱私守則 · Tavus CVI fullscreen Duix-style");
+  log("Voice Path v0.4.0 Duix 範式 ready · 全屏單一介面 · ADR-008 暖琥珀 DNA 中央 avatar");
 })();
 </script>
 </body>
