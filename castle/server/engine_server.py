@@ -20,7 +20,7 @@ from castle import wire_protocol as wp
 PERSONAS_DIR = Path(__file__).resolve().parent.parent / "personas"
 AUTH_TOKEN = os.environ.get("CVE_AUTH_TOKEN")  # required in prod; mock-bypass if unset
 
-app = FastAPI(title="castle-voice-engine", version="0.1.0")
+app = FastAPI(title="castle-voice-engine", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # tighten before prod
@@ -46,7 +46,7 @@ def check_auth(token: Optional[str]) -> None:
 
 @app.get("/health")
 async def health() -> dict[str, Any]:
-    return {"ok": True, "engine": "castle-voice-engine", "version": "0.1.0", "licence": "NOML"}
+    return {"ok": True, "engine": "castle-voice-engine", "version": "0.2.0", "model_default": "gpt-realtime-2", "licence": "NOML"}
 
 @app.get("/personas")
 async def list_personas() -> dict[str, Any]:

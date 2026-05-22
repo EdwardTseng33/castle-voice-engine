@@ -1,41 +1,31 @@
-# castle-voice-engine - (c) 2026 Edward / BeyondPath
-# castle/server/realtime_endpoints.py - v0.1.5 OpenAI Realtime ephemeral token mint.
+# castle-voice-engine - v0.2.1 GA Realtime API
+# (c) 2026 Edward / BeyondPath
+# castle/server/realtime_endpoints.py
 #
-# Background:
-#   v0.1.1 PersonaPlex hack confirmed unfit (model OOD on system prompt; only
-#   replied "say hello" regardless of zh-TW input). v0.2 voice = OpenAI Realtime
-#   API (gpt-realtime, unified speech-to-speech, $0.06/min in + $0.24/min out).
-#
-# This module:
-#   - Loads Sophie persona prompt from castle/personas/sophie.yaml (380-word
-#     mandate, zh-TW Mandarin, warm "I'm here / I get it / let me / we" tone).
-#   - Exposes POST /session/token: server-side mint of an *ephemeral* Realtime
-#     session token via OpenAI REST POST /v1/realtime/sessions.
-#   - Returns the ephemeral client_secret so the browser can open
-#     wss://api.openai.com/v1/realtime?model=gpt-realtime directly without ever
-#     touching the master API key.
-#
-# Security:
-#   - Master OPENAI_API_KEY is read only from env (Modal secret "openai").
-#     It is never returned to the client. Only the ephemeral client_secret
-#     (~1 min TTL) leaves the server.
+# v0.2.0 -> v0.2.1 (2026-05-22 hotfix after deploy smoke):
+#   - OpenAI GA: Beta /v1/realtime/sessions deprecated 5/8.
+#   - /sdp now bypasses mint: forwards SDP straight to /v1/realtime.
+#   - /session/token returns 410 Gone (deprecation notice).
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
+from urllib.parse import quote as urlquote
 
 import httpx
 import yaml
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 
 PERSONAS_DIR = Path(__file__).resolve().parent.parent / "personas"
-OPENAI_REALTIME_SESSIONS_URL = "https://api.openai.com/v1/realtime/sessions"
-DEFAULT_MODEL = "gpt-realtime"
-DEFAULT_VOICE = "marin"  # Edward 拍板 2026-04-28; OpenAI Realtime 2025 new voice
+OPENAI_REALTIME_URL = "https://api.openai.com/v1/realtime"
+
+DEFAULT_MODEL = os.environ.get("OPENAI_REALTIME_MODEL", "gpt-realtime-2").strip() or "gpt-realtime-2"
+FALLBACK_MODEL = "gpt-realtime"
+DEFAULT_VOICE = "marin"
+_VALID_VOICES = {"alloy", "ash", "ballad", "coral", "echo", "marin", "nova", "sage", "shimmer", "verse", "cedar"}
 
 
 class TokenRequest(BaseModel):
@@ -44,184 +34,125 @@ class TokenRequest(BaseModel):
     model: str | None = None
 
 
-def _load_persona(name: str) -> dict[str, Any]:
-    path = PERSONAS_DIR / f"{name}.yaml"
+def _load_persona(name):
+    path = PERSONAS_DIR / (name + ".yaml")
     if not path.exists():
-        raise HTTPException(status_code=404, detail=f"persona '{name}' not registered")
+        raise HTTPException(status_code=404, detail="persona not registered")
     with path.open("r", encoding="utf-8") as fh:
         return yaml.safe_load(fh) or {}
 
 
-def _build_instructions(persona_data: dict[str, Any]) -> str:
-    """Compose Realtime `instructions` from persona prompt + language hint.
-
-    v0.2.0: language hint now reads `persona_data.language` (zh-TW or en)
-    so Sophie stays in Mandarin while Lily stays in English.
-    """
+def _build_instructions(persona_data):
     persona = persona_data.get("persona", {}) or {}
     prompt = (persona.get("prompt") or "").strip()
     if not prompt:
         prompt = "You are an attentive companion."
     lang = (persona_data.get("language") or "zh-TW").strip().lower()
     if lang.startswith("en"):
-        suffix = (
-            "\n\n--- Output language ---\n"
-            "Always respond in English. Keep replies short, conversational, "
-            "and warm. Prefer 1-2 sentences over paragraphs."
-        )
+        suffix = "\n\n--- Output language ---\nAlways respond in English. Keep replies short, conversational, and warm."
     else:
-        suffix = (
-            "\n\n--- Output language ---\n"
-            "Always respond in Traditional Chinese (zh-TW / Taiwan Mandarin) "
-            "unless Edward explicitly switches to English. Keep replies short, "
-            "conversational, and warm. Prefer 1-2 sentences over paragraphs."
-        )
+        suffix = "\n\n--- Output language ---\nAlways respond in Traditional Chinese (zh-TW / Taiwan Mandarin) unless Edward explicitly switches to English. Keep replies short, conversational, and warm."
     return prompt + suffix
 
 
-def _build_transcription_config(persona_data: dict[str, Any]) -> dict[str, Any]:
-    """v0.2.0: transcription language + prompt now follow persona.language.
+def _resolve_voice(persona_data, requested_voice):
+    persona_voice = ((persona_data.get("voice") or {}).get("preset_id") or "").strip()
+    if persona_voice not in _VALID_VOICES:
+        persona_voice = ""
+    return requested_voice or persona_voice or DEFAULT_VOICE
 
-    Sophie (zh-TW) -> language=zh + Taiwan-accent hint.
-    Lily   (en)    -> language=en + casual conversational English hint.
-    """
-    lang = (persona_data.get("language") or "zh-TW").strip().lower()
-    if lang.startswith("en"):
-        return {
-            "model": "gpt-4o-transcribe",
-            "language": "en",
-            "prompt": "Casual conversational English, may include some Mandarin words.",
-        }
-    return {
-        "model": "gpt-4o-transcribe",
-        "language": "zh",
-        "prompt": "繁體中文、台灣口音、可能混些英文 / 台語",
+
+def _sanitize_master_key():
+    raw_key = os.environ.get("OPENAI_API_KEY", "")
+    master_key = raw_key.strip().strip("<>")
+    if not master_key:
+        return None, JSONResponse(status_code=503, content={"error": "openai_key_missing", "detail": "OPENAI_API_KEY env var not set"})
+    if not master_key.startswith(("sk-", "sess-")):
+        return None, JSONResponse(status_code=503, content={"error": "openai_key_malformed", "detail": "OPENAI_API_KEY does not start with sk- or sess-"})
+    return master_key, None
+
+
+async def _post_sdp_to_openai(master_key, model, voice, instructions, sdp_offer):
+    qs = "?model=" + urlquote(model)
+    if voice:
+        qs += "&voice=" + urlquote(voice)
+    url = OPENAI_REALTIME_URL + qs
+    headers = {
+        "Authorization": "Bearer " + master_key,
+        "Content-Type": "application/sdp",
     }
+    # v0.2.2: instructions are NOT forwarded to OpenAI here; the browser
+    # injects them via data channel session.update on connection open. We just
+    # need to ensure the SDP exchange works; persona prompt is bundled into the
+    # response headers so the browser can use it.
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(url, headers=headers, content=sdp_offer)
+    except httpx.HTTPError as e:
+        return None, 502, "openai unreachable: " + str(e)
+    if resp.status_code >= 400:
+        return None, resp.status_code, resp.text
+    return resp.text, resp.status_code, None
 
 
-def attach_realtime_routes(app: FastAPI) -> None:
-    """Attach POST /session/token onto an existing FastAPI instance."""
+def _looks_like_model_not_found(status, text):
+    if status not in (400, 404):
+        return False
+    needle = (text or "").lower()
+    return ("model_not_found" in needle) or ("does not exist" in needle) or ("invalid model" in needle) or ("unknown model" in needle)
 
+
+def attach_realtime_routes(app):
     @app.post("/session/token")
-    async def mint_session_token(req: TokenRequest):
-        raw_key = os.environ.get("OPENAI_API_KEY", "")
-        # Sanitize: trim whitespace + strip leading/trailing angle brackets that
-        # operators sometimes paste in from placeholder examples like <sk-proj-...>.
-        master_key = raw_key.strip().strip("<>")
-        if not master_key:
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "error": "openai_key_missing",
-                    "detail": "OPENAI_API_KEY env var not set on Modal container",
-                },
-            )
-        if not master_key.startswith(("sk-", "sess-")):
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "error": "openai_key_malformed",
-                    "detail": (
-                        "OPENAI_API_KEY does not start with sk- or sess-; "
-                        "check Modal secret value for stray quotes / brackets / whitespace"
-                    ),
-                },
-            )
-
-        try:
-            persona_data = _load_persona(req.persona)
-        except HTTPException as e:
-            return JSONResponse(
-                status_code=e.status_code, content={"error": "persona_not_found", "detail": e.detail}
-            )
-
-        # v0.2.0: persona may carry its own voice (Sophie=marin, Lily=alloy);
-        # explicit req.voice overrides; final fallback DEFAULT_VOICE.
-        # Whitelist current OpenAI Realtime voices (filter out legacy persona-internal
-        # presets like PersonaPlex "NATF1" which would 4xx the session create).
-        _VALID_REALTIME_VOICES = {"alloy", "ash", "ballad", "coral", "echo", "marin", "nova", "sage", "shimmer", "verse", "cedar"}
-        persona_voice = ((persona_data.get("voice") or {}).get("preset_id") or "").strip()
-        if persona_voice not in _VALID_REALTIME_VOICES:
-            persona_voice = ""
-        voice = req.voice or persona_voice or DEFAULT_VOICE
-        model = req.model or DEFAULT_MODEL
-        instructions = _build_instructions(persona_data)
-
-        # OpenAI Realtime session config. `voice` and `instructions` here are
-        # baked into the ephemeral token — the client cannot override server-side
-        # persona without a fresh /session/token call.
-        body = {
-            "model": model,
-            "voice": voice,
-            "instructions": instructions,
-            "modalities": ["audio", "text"],
-            "input_audio_format": "pcm16",
-            "output_audio_format": "pcm16",
-            # v0.2.0: transcription language follows persona (Sophie=zh, Lily=en)
-            "input_audio_transcription": _build_transcription_config(persona_data),
-            # Server-side VAD: OpenAI handles turn detection so the browser
-            # mic doesn't have to. Edward can keep mic on the whole session.
-            "turn_detection": {
-                "type": "server_vad",
-                "threshold": 0.8,  # v0.1.11: 從 0.7 再拉高（Edward 說 0.7 仍敏感）
-                "prefix_padding_ms": 300,
-                # v0.1.6.1: 從 500 → 1000ms 拉長靜音判斷、降低 echo loop 觸發
-                "silence_duration_ms": 1000,
-                "create_response": True,
-                # v0.1.6.1: 關掉 echo barge-in（speaker 漏音不會自動 interrupt model）
-                "interrupt_response": False,
+    async def session_token_gone(req: TokenRequest):
+        return JSONResponse(
+            status_code=410,
+            content={
+                "error": "session_token_endpoint_removed",
+                "detail": "OpenAI Realtime Beta API (/v1/realtime/sessions) was deprecated on 2026-05-08. Use POST /sdp with a WebRTC SDP offer instead.",
+                "upgrade_path": "POST /sdp?persona=sophie&model=gpt-realtime-2 with body = WebRTC SDP offer (Content-Type: application/sdp)",
             },
-            "temperature": 0.8,
-        }
+        )
 
+    @app.post("/sdp")
+    async def exchange_sdp(request: Request):
+        master_key, err = _sanitize_master_key()
+        if err is not None:
+            return err
+        persona_name = request.query_params.get("persona", "sophie")
+        voice_q = request.query_params.get("voice", "") or ""
+        req_model = (request.query_params.get("model") or DEFAULT_MODEL).strip() or DEFAULT_MODEL
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                resp = await client.post(
-                    OPENAI_REALTIME_SESSIONS_URL,
-                    headers={
-                        "Authorization": f"Bearer {master_key}",
-                        "Content-Type": "application/json",
-                        "OpenAI-Beta": "realtime=v1",
-                    },
-                    json=body,
-                )
-        except httpx.HTTPError as e:
-            return JSONResponse(
-                status_code=502,
-                content={"error": "openai_unreachable", "detail": str(e)},
-            )
-
-        if resp.status_code >= 400:
-            return JSONResponse(
-                status_code=resp.status_code,
-                content={
-                    "error": "openai_session_create_failed",
-                    "status": resp.status_code,
-                    "detail": resp.text[:500],
-                },
-            )
-
-        data = resp.json()
-        client_secret = (data or {}).get("client_secret") or {}
-        ephemeral_value = client_secret.get("value")
-        ephemeral_expires = client_secret.get("expires_at")
-
-        if not ephemeral_value:
-            return JSONResponse(
-                status_code=502,
-                content={
-                    "error": "openai_no_client_secret",
-                    "detail": "OpenAI response missing client_secret.value",
-                    "raw_keys": list((data or {}).keys()),
-                },
-            )
-
-        # Return the minimum the browser needs to open the WebSocket.
-        return {
-            "client_secret": ephemeral_value,
-            "expires_at": ephemeral_expires,
-            "model": model,
-            "voice": voice,
-            "persona": req.persona,
-            "session_id": (data or {}).get("id"),
+            persona_data = _load_persona(persona_name)
+        except HTTPException as e:
+            return JSONResponse(status_code=e.status_code, content={"error": "persona_not_found", "detail": e.detail})
+        sdp_offer = (await request.body()).decode("utf-8", errors="replace")
+        if not sdp_offer.startswith("v=0"):
+            return JSONResponse(status_code=400, content={"error": "bad_sdp_offer", "detail": "body must be a raw SDP offer (text/plain)"})
+        voice = _resolve_voice(persona_data, voice_q)
+        instructions = _build_instructions(persona_data)
+        answer, status, err_text = await _post_sdp_to_openai(master_key, req_model, voice, instructions, sdp_offer)
+        used_model = req_model
+        warning = None
+        if answer is None and _looks_like_model_not_found(status, err_text) and req_model != FALLBACK_MODEL:
+            answer2, status2, err_text2 = await _post_sdp_to_openai(master_key, FALLBACK_MODEL, voice, instructions, sdp_offer)
+            if answer2 is not None:
+                answer = answer2
+                used_model = FALLBACK_MODEL
+                warning = "primary_model_unavailable_used_fallback:" + req_model
+            else:
+                return JSONResponse(status_code=status2, content={"error": "openai_sdp_exchange_failed_both", "primary_status": status, "primary_detail": (err_text or "")[:500], "fallback_status": status2, "fallback_detail": (err_text2 or "")[:500], "primary_model": req_model, "fallback_model": FALLBACK_MODEL})
+        if answer is None:
+            return JSONResponse(status_code=status, content={"error": "openai_sdp_exchange_failed", "status": status, "detail": (err_text or "")[:500], "model_tried": used_model})
+        import base64 as _b64
+        instr_b64 = _b64.b64encode(instructions.encode("utf-8")).decode("ascii")
+        headers = {
+            "x-realtime-model": used_model,
+            "x-realtime-voice": voice,
+            "x-realtime-persona": persona_name,
+            "x-realtime-instructions-b64": instr_b64,
         }
+        if warning:
+            headers["x-realtime-warning"] = warning
+            headers["x-realtime-fallback-from"] = req_model
+        return PlainTextResponse(content=answer, media_type="application/sdp", headers=headers)

@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>蘇菲語音 demo · castle-voice-engine v0.2.0</title>
+  <style>
+    :root {
+      --bg: #FAF6F0;
+      --panel: #F5EDE0;
+      --ink: #2B2018;
+      --amber: #D4712A;
+      --amber-deep: #A4571F;
+      --muted: #8A7A65;
+      --ok: #6B8E5A;
+      --warn: #B85C00;
+      --err: #B33A3A;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0;
+      font-family: Georgia, "Source Han Serif TC", "Noto Serif TC", serif;
+      background: var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: var(--panel);
+      border-radius: 16px;
+      padding: 32px 36px;
+      max-width: 540px;
+      width: 100%;
+      box-shadow: 0 8px 24px rgba(43, 32, 24, 0.12);
+    }
+    h1 {
+      font-style: italic;
+      color: var(--amber-deep);
+      margin: 0 0 8px;
+      font-size: 28px;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+    .row { display: flex; gap: 12px; align-items: center; margin: 12px 0; }
+    label { font-size: 13px; color: var(--muted); min-width: 64px; }
+    select, input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid #d4c4a8;
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--ink);
+      font: inherit;
+      font-size: 14px;
+    }
+    button {
+      width: 100%;
+      padding: 14px 18px;
+      background: var(--amber);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font: inherit;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 16px;
+      transition: background 0.15s;
+    }
+    button:hover:not(:disabled) { background: var(--amber-deep); }
+    button:disabled { background: #c4b8a4; cursor: not-allowed; }
+    button.stop { background: var(--err); }
+    button.stop:hover:not(:disabled) { background: #8a2a2a; }
+    .status {
+      margin-top: 20px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      background: var(--bg);
+      border-left: 3px solid var(--muted);
+      font-size: 13px;
+      min-height: 40px;
+      color: var(--ink);
+    }
+    .status.ok { border-left-color: var(--ok); }
+    .status.err { border-left-color: var(--err); color: var(--err); }
+    .status.warn { border-left-color: var(--warn); color: var(--warn); }
+    .log {
+      margin-top: 12px;
+      padding: 10px 14px;
+      background: #2B2018;
+      color: #d4c4a8;
+      font-family: ui-monospace, "Cascadia Code", monospace;
+      font-size: 11px;
+      border-radius: 6px;
+      max-height: 160px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    .meta {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px dashed #d4c4a8;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .meta strong { color: var(--ink); }
+    audio { display: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>蘇菲語音 demo</h1>
+    <div class="subtitle">castle-voice-engine v0.2.0 · gpt-realtime-2 · WebRTC</div>
+
+    <div class="row">
+      <label>persona</label>
+      <select id="persona">
+        <option value="sophie" selected>sophie（中文 · marin 聲音）</option>
+        <option value="lily">lily（English · alloy）</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>model</label>
+      <select id="model">
+        <option value="" selected>(server 預設 · gpt-realtime-2)</option>
+        <option value="gpt-realtime-2">gpt-realtime-2</option>
+        <option value="gpt-realtime">gpt-realtime（fallback）</option>
+      </select>
+    </div>
+
+    <button id="startBtn">開始對話</button>
+
+    <div class="status" id="status">準備就緒。按上面的按鈕、開麥克風講中文。</div>
+
+    <div class="meta">
+      <strong>怎麼用：</strong><br />
+      1. 按「開始對話」、瀏覽器會問你要不要開麥克風 → 允許<br />
+      2. 等狀態變綠「連線完成、你講話蘇菲就會回」<br />
+      3. 直接講中文。蘇菲會即時聽 + 即時回。<br />
+      4. 想結束按「結束對話」。<br /><br />
+      <strong>注意：</strong><br />
+      • 建議用 Chrome / Edge / Firefox（Safari 也行但 WebRTC 有時不穩）<br />
+      • 第一次連 Modal cold start 可能 3-5 秒<br />
+      • 端到端延遲 500ms-1.5s（OpenAI Realtime spec）<br />
+      • 廠商 voice = marin（溫暖中性女聲、最新 OpenAI Realtime 2026 voice）
+    </div>
+
+    <div class="log" id="log"></div>
+
+    <audio id="remoteAudio" autoplay></audio>
+  </div>
+
+<script>
+(function () {
+  const startBtn = document.getElementById("startBtn");
+  const statusEl = document.getElementById("status");
+  const logEl = document.getElementById("log");
+  const remoteAudio = document.getElementById("remoteAudio");
+  const personaSel = document.getElementById("persona");
+  const modelSel = document.getElementById("model");
+
+  let pc = null;
+  let micStream = null;
+  let dataChannel = null;
+  let active = false;
+
+  function log(msg) {
+    const ts = new Date().toLocaleTimeString();
+    logEl.textContent += "[" + ts + "] " + msg + "\n";
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  function setStatus(msg, cls) {
+    statusEl.textContent = msg;
+    statusEl.className = "status" + (cls ? " " + cls : "");
+  }
+
+  async function start() {
+    if (active) return stop();
+    startBtn.disabled = true;
+    setStatus("申請麥克風權限…", "");
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      log("mic granted, " + micStream.getAudioTracks().length + " track(s)");
+    } catch (e) {
+      setStatus("無法取得麥克風：" + e.message, "err");
+      startBtn.disabled = false;
+      return;
+    }
+
+    setStatus("建立 WebRTC PeerConnection…", "");
+    pc = new RTCPeerConnection();
+
+    pc.ontrack = (ev) => {
+      log("track received: " + ev.track.kind);
+      if (ev.track.kind === "audio") {
+        remoteAudio.srcObject = ev.streams[0];
+      }
+    };
+    pc.onconnectionstatechange = () => {
+      log("pc state: " + pc.connectionState);
+      if (pc.connectionState === "connected") {
+        setStatus("連線完成 · 你講話蘇菲就會回。", "ok");
+        startBtn.textContent = "結束對話";
+        startBtn.classList.add("stop");
+        startBtn.disabled = false;
+        active = true;
+      } else if (pc.connectionState === "failed" || pc.connectionState === "closed") {
+        setStatus("連線中斷。", "err");
+        cleanup();
+      }
+    };
+    pc.oniceconnectionstatechange = () => log("ice: " + pc.iceConnectionState);
+
+    micStream.getTracks().forEach((t) => pc.addTrack(t, micStream));
+
+    dataChannel = pc.createDataChannel("oai-events");
+    dataChannel.onmessage = (ev) => {
+      try {
+        const obj = JSON.parse(ev.data);
+        if (obj.type) log("evt: " + obj.type);
+      } catch (e) {
+        log("evt raw: " + ev.data.slice(0, 80));
+      }
+    };
+    dataChannel.onopen = () => {
+      log("data channel open, injecting persona instructions...");
+      if (window.__pendingInstructions) {
+        const sessionUpdate = {
+          type: "session.update",
+          session: {
+            instructions: window.__pendingInstructions,
+            voice: window.__pendingVoice || "marin",
+            modalities: ["audio", "text"],
+            input_audio_transcription: { model: "gpt-4o-transcribe", language: "zh" },
+            turn_detection: {
+              type: "server_vad",
+              threshold: 0.8,
+              prefix_padding_ms: 300,
+              silence_duration_ms: 1000,
+              create_response: true,
+              interrupt_response: false,
+            },
+            temperature: 0.8,
+          },
+        };
+        dataChannel.send(JSON.stringify(sessionUpdate));
+        log("session.update sent (" + window.__pendingInstructions.length + " chars instructions)");
+      }
+    };
+
+    setStatus("建立 SDP offer…", "");
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    setStatus("跟伺服器交換 SDP（Modal -> OpenAI）…", "");
+    const persona = personaSel.value || "sophie";
+    const model = modelSel.value || "";
+    const url = "/sdp?persona=" + encodeURIComponent(persona) + (model ? "&model=" + encodeURIComponent(model) : "");
+
+    let resp;
+    try {
+      resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/sdp" },
+        body: offer.sdp,
+      });
+    } catch (e) {
+      setStatus("/sdp 連不到：" + e.message, "err");
+      cleanup();
+      return;
+    }
+
+    if (!resp.ok) {
+      let detail = "";
+      try { detail = JSON.stringify(await resp.json()); } catch (_) { detail = await resp.text(); }
+      setStatus("伺服器 " + resp.status + "：" + detail.slice(0, 200), "err");
+      cleanup();
+      return;
+    }
+
+    const answerSdp = await resp.text();
+    const usedModel = resp.headers.get("x-realtime-model") || "?";
+    const usedVoice = resp.headers.get("x-realtime-voice") || "?";
+    const warning = resp.headers.get("x-realtime-warning");
+    // v0.2.2: server returns base64-encoded instructions in header. Stash so
+    // dataChannel.onopen can push a session.update event with the persona prompt.
+    const instrB64 = resp.headers.get("x-realtime-instructions-b64");
+    if (instrB64) {
+      try {
+        window.__pendingInstructions = decodeURIComponent(escape(atob(instrB64)));
+        log("instructions loaded (" + window.__pendingInstructions.length + " chars)");
+      } catch (e) {
+        log("failed to decode instructions: " + e.message);
+      }
+    }
+    window.__pendingVoice = usedVoice;
+    log("answer received, model=" + usedModel + " voice=" + usedVoice);
+    if (warning) {
+      log("WARNING: " + warning + " (fallback from " + (resp.headers.get("x-realtime-fallback-from") || "?") + ")");
+      setStatus("注意：gpt-realtime-2 不可用、自動降回 " + usedModel, "warn");
+    }
+
+    try {
+      await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
+      log("remote description set, waiting for ICE…");
+    } catch (e) {
+      setStatus("SDP setRemoteDescription failed: " + e.message, "err");
+      cleanup();
+    }
+  }
+
+  function stop() {
+    log("user stop");
+    cleanup();
+    setStatus("已結束。再按一次重新對話。", "");
+  }
+
+  function cleanup() {
+    active = false;
+    startBtn.textContent = "開始對話";
+    startBtn.classList.remove("stop");
+    startBtn.disabled = false;
+    if (dataChannel) { try { dataChannel.close(); } catch (_) {} dataChannel = null; }
+    if (pc) { try { pc.close(); } catch (_) {} pc = null; }
+    if (micStream) {
+      micStream.getTracks().forEach((t) => t.stop());
+      micStream = null;
+    }
+    remoteAudio.srcObject = null;
+  }
+
+  startBtn.addEventListener("click", start);
+  window.addEventListener("beforeunload", cleanup);
+})();
+</script>
+</body>
+</html>
