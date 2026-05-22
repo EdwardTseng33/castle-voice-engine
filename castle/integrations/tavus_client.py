@@ -168,13 +168,28 @@ async def create_conversation(
     replica_id: Optional[str] = None,
     persona_id: Optional[str] = None,
     conversation_name: str = "Castle Sophie",
-    participant_name: str = "Edward",  # 預設 · 跳過 Daily prejoin "Enter your name" friction
     conversational_context: Optional[str] = None,
     custom_greeting: Optional[str] = None,
     audio_only: bool = False,
     callback_url: str = "",
     properties: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
+    """
+    Create a Tavus CVI conversation.
+
+    Tavus body 合法頂層欄位 (per 5/23 hard-tested · 不在這清單裡的會 400):
+      replica_id / persona_id / conversation_name / conversational_context /
+      custom_greeting / audio_only / callback_url / properties
+
+    properties 合法子欄位 (per Tavus docs):
+      max_call_duration / participant_left_timeout / participant_absent_timeout /
+      enable_recording / enable_closed_captions / enable_transcription /
+      apply_greenscreen / language / recording_s3_bucket_name
+
+    注意 (5/23 lesson)：participant_name 跟 enable_prejoin_ui 都不是合法欄位、
+    放任何位置都會 400 "Unknown field"。Daily prejoin UI 跳過要用 conversation_url
+    加 query string 或 fragment (e.g. `&showLocalVideo=false`)、不是改 body。
+    """
     if not replica_id and not persona_id:
         raise TavusAPIError(
             status=0,
@@ -195,16 +210,8 @@ async def create_conversation(
         body["audio_only"] = True
     if callback_url:
         body["callback_url"] = callback_url
-    # properties: Tavus 規定 participant_name / enable_prejoin_ui / language /
-    # apply_greenscreen / max_call_duration 等子欄位必須在 properties 內、不能在頂層
-    # (5/23 bug: 放頂層 → 400 "Unknown field" · 改 nest 進 properties 修)
-    merged_properties: dict[str, Any] = {
-        "participant_name": participant_name,
-        "enable_prejoin_ui": False,  # 直接進對話 · 跳過「Enter your name」friction
-    }
     if properties:
-        merged_properties.update(properties)
-    body["properties"] = merged_properties
+        body["properties"] = properties
     return await _post("/conversations", body)
 
 
