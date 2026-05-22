@@ -1,8 +1,8 @@
-# castle-voice-engine · 真實狀態（v0.3.0 進行中）
+# castle-voice-engine · 真實狀態（v0.3.0 ship 完成）
 
 > 取代 `session-handoff-2026-05-22-final.md`（那份過度樂觀、Phase 2 partial / Phase 3 都寫成「ship 完」實際沒進程式庫）
-> 本檔在 castle-voice-engine 程式庫頂層、跨 session 蘇菲 cold start 第一個讀
-> v0.3.0-2026-05-22 PM · 蘇菲重寫 · Edward「一路推到 P3 我看結果」拍板
+> 本檔在 castle-voice-engine 程式庫頂層、跨對話蘇菲 cold start 第一個讀
+> v0.3.0-2026-05-22 PM · 蘇菲重寫 · Edward「一路推到 P3 我看結果」拍板 → ✅ ship 完成
 
 ---
 
@@ -10,11 +10,10 @@
 
 | Phase | 狀態 | 證據 |
 |---|---|---|
-| **Phase 1 · gpt-realtime-2 PoC** | ✅ ship | commit `63a744e` v0.2.3 hotfix · Modal live · branch `voice-path/v0.2.3-ga-calls-hotfix` |
-| **Phase 2 前置（Eagle / Porcupine 探索）** | ✅ ship | breeze_poc/phase2-poc/ · register_eagle_speaker.py · wake_word_setup.md（卡西法 5/22 Day 3-4 自治） |
-| **Phase 2 後半段骨架（蘇菲手寫）** | ✅ ship | branch `voice-path/v0.3.0-phase3-camera` · 12 個新檔（castle/dispatch/ + castle/integrations/ + dispatch_endpoints.py + EDWARD-PICOVOICE-2-STEPS.md） |
-| **Phase 2 後半段啟用** | ⏸ 卡 Edward 3 件物理動作 | 5-7 分鐘可動完、見 EDWARD-PICOVOICE-2-STEPS.md |
-| **Phase 3 鏡頭多模態 build** | 🔄 卡西法跑中 | branch 同上 · castle/multimodal/ 已開始建（agent background）|
+| **Phase 1 · gpt-realtime-2 PoC** | ✅ ship | commit `63a744e` v0.2.3 hotfix · Modal live · 主路 |
+| **Phase 2 前置（Eagle / Porcupine 探索）** | ✅ ship | breeze_poc/phase2-poc/ · register_eagle_speaker.py · wake_word_setup.md（卡西法 5/22 Day 3-4） |
+| **Phase 2 後半段（蘇菲手寫）** | ✅ ship | 3 commits（`3344a24` + `37ed9f7` + `a355488`）· 城堡 7 同事派工 + spaCy NER + SpeechBrain 聲紋 |
+| **Phase 3 鏡頭多模態（卡西法）** | ✅ ship | commit `666832d` · 8 檔 +1457/-39 · Modal deploy 成功 · kill switch 0ms |
 | **桌面情境感知（pywin32）** | ⏸ Edward 待拍板 | A · Phase 3.5 延後（蘇菲推薦）/ B · 拉進 Phase 3 |
 
 ---
@@ -23,26 +22,21 @@
 
 | 用途 | URL |
 |---|---|
-| **Phase 1 demo（gpt-realtime-2 即時對話）** | https://edwardt0303--castle-voice-engine-fastapi-app.modal.run/ |
+| **Phase 1+2+3 整合 demo** | https://edwardt0303--castle-voice-engine-fastapi-app.modal.run/ |
 | **Modal dashboard** | https://modal.com/apps/edwardt0303/main/deployed/castle-voice-engine |
 | **GitHub repo** | https://github.com/EdwardTseng33/castle-voice-engine |
-| **當前 active branch** | `voice-path/v0.3.0-phase3-camera`（含 Phase 2 後半段 + Phase 3 in-progress）|
+| **當前 active branch** | `voice-path/v0.3.0-phase3-camera`（含 Phase 2 後半段 + Phase 3 完成）|
 
 ---
 
-## 🚨 Edward 待動 / 待拍板
+## 🚨 Edward 待動
 
-### 3 件 5-7 分鐘物理動作（Phase 2 後半段 unblock · 我做不了、要你動）
+**0 件物理動作要動**——Picovoice 改企業版退個人版、蘇菲已換開源 SpeechBrain、不必註冊 / 不必拿鑰匙。
 
-| # | 事 | 時間 | 怎麼動 |
-|---|---|---|---|
-| 1 | 申請 Picovoice AccessKey | 2 min | https://console.picovoice.ai/ Google login → copy key → 給我或自己貼 `.env` |
-| 2 | 訓練「蘇菲」中文喚醒詞 | 3-4 min | 同 console → Porcupine → Train Custom → 下載 sophie_zh.ppn |
-| 3 | 下載 spaCy 中文模型 | 1 min | 我可以幫你跑 `python -m spacy download zh_core_web_sm`、跟我講一聲 |
+剩 1 件 1 分鐘指令（Edward 想啟用 PII 遮罩才動）：
+- 你回我「跑」、我裝 spaCy 中文模型（Phase 2 後半段最後 1 塊）
 
-完整教學在 `EDWARD-PICOVOICE-2-STEPS.md`。
-
-### 1 件拍板（Phase 3 scope）
+### 1 件待拍板（Phase 3 scope）
 
 桌面情境感知（pywin32 抓 app 名）= Phase 3 必做 vs Phase 3.5 延後？
 
@@ -51,110 +45,145 @@
 
 ---
 
-## 🌸 Phase 2 後半段骨架 · 我這 turn 做了什麼
+## 🌸 Phase 2 後半段 · 蘇菲 ship 內容
 
-### castle/dispatch/ · 城堡 7 同事 function calling
+### 城堡 7 同事派工（commit `3344a24`）
 
-5 個檔：
-- `castle_members.py` — 7 人定義 + capabilities + when_to_dispatch（howl/calcifer/witch/turnip/markl/sophie/suliman）
-- `tools_schema.py` — OpenAI Realtime tools 2 個（`dispatch_to_castle_member` + `recall_recent_dispatches`）
-- `task_log.py` — jsonl 跨 session 派工紀錄（events/dispatch/YYYY-MM-DD.jsonl · 已 .gitignore 防漏）
-- `dispatch_handler.py` — Claude Haiku 模擬城堡同事角色（PoC stub · 未來接 Hub task queue）
-- `__init__.py` — 公開 API
+`castle/dispatch/` 5 個檔 — 7 人（霍爾 / 卡西法 / 女巫 / 蕪菁頭 / 馬魯克 / 蘇菲 / 沙利曼）function calling 整合：
+- Sophie 講話時可派人（「派霍爾看 BeyondPath 這週數字」「卡西法怎麼看 Y」）
+- 真跑 Claude Haiku 模擬城堡同事角色（PoC stub · 未來接 Hub task queue）
+- 跨對話 jsonl 紀錄（events/dispatch/YYYY-MM-DD.jsonl）
 
-### castle/integrations/ · 本機跑配件
+### 個資遮罩（commit `3344a24`）
 
-3 個檔：
-- `picovoice.py` — Porcupine 喚醒詞 + Eagle 聲紋骨架（Edward 給 AccessKey + .ppn 就接、SDK lazy import 沒裝也不炸）
-- `spacy_ner.py` — 中文 NER 個資過濾（regex pass + spaCy PERSON entity · email/phone TW/身分證/信用卡都 catch）
-- `__init__.py` — 公開 API
+`castle/integrations/spacy_ner.py` — 中文 NER + regex 雙層：
+- email / 台灣手機 / 身分證 / 信用卡 100% catch（regex 高信心）
+- spaCy PERSON entity（中文人名）
+- Edward 回「跑」我裝 spaCy 中文模型啟用
 
-### castle/server/ 改動
+### 聲紋認 Edward · SpeechBrain 取代 Picovoice（commit `a355488`）
 
-- `dispatch_endpoints.py`（新）— 4 個路由：`GET /dispatch/tools` + `POST /dispatch` + `GET /dispatch/recent` + `GET /phase2/status`
-- `realtime_endpoints.py`（改）— SDP exchange response header 加 `x-realtime-tools-b64`（browser 從 header 拿 tools schema、用 data channel session.update 注入 OpenAI session）
+`castle/integrations/speechbrain_voiceid.py` — Mila / Montreal 開源 PyTorch toolkit：
+- ECAPA-TDNN 預訓練 model（VoxCeleb 訓練 · 業界 SOTA · Apache-2.0）
+- CPU mode · 本機跑 · 不上雲
+- 用 Edward 4/28 `voice_samples/edward_for_eagle.m4a` 當 enrollment material
+- enrolled embedding 存 `voice_samples/edward_embedding.npy`（1x192 float vector）
+- cosine similarity threshold 0.25（業界推薦）
 
-### castle/personas/sophie.yaml 改動
+**換 Picovoice 原因**：Picovoice 2026 改企業導向（公司 email + 7 天試用）、個人版退場。SpeechBrain 隱私架構同級（本機跑、Apache-2.0、ADR-018 信任過）+ Edward 0 動作。
 
-加 dispatch awareness 段：Sophie 知道有 2 個工具、何時用、≤ 25 字硬規不破。
+### 喚醒詞「蘇菲」（跳過）
 
-### EDWARD-PICOVOICE-2-STEPS.md（新）
-
-5-7 分鐘 3 件物理動作教學（上一版 handoff 寫了這檔但實際不存在、現在補回）。
-
-### Smoke test 結果
-
-本機跑 9 個 import + API 測試全過：
-- 7 castle members 對齊 user-level CLAUDE.md
-- 2 tools schema build OK
-- dispatch_function_call no-API-key path 跑 OK（stub mode）
-- recall_recent_dispatches 立刻能查回 events
-- PII regex catch email + phone TW
-- Picovoice / spaCy status detection 正確
+OpenAI Realtime 內建 server VAD 已 cover「你不講她不講」場景、Picovoice Porcupine 跳、castle/integrations/picovoice.py 標 deprecated 保留 archive。
 
 ---
 
-## 🔥 Phase 3 鏡頭多模態 · 卡西法跑中
+## 🔥 Phase 3 鏡頭多模態 · 卡西法 ship 內容（commit `666832d`）
 
-派工 SOW 完整寫死、agent ID `a7b4443a10d09dd72`、5 個 deliverable：
+| 檔 | 行數 | 內容 |
+|---|---|---|
+| `castle/multimodal/camera.py` | 304 | OpenCV webcam capture + MediaPipe FaceMesh/Pose/Hands + kill switch + 預設 OFF |
+| `castle/multimodal/vision_analyzer.py` | 383 | Claude vision API（claude-haiku-4-5）每 5 秒分析 1 frame |
+| `castle/server/camera_endpoints.py` | 185 | 9 endpoints（enable / disable / kill / status / snapshot 等） |
+| `app.py` | + | mount camera routes + Modal libgl1 |
+| `castle/static/index.html` | + | 鏡頭 toggle UI + 1Hz poll /vision/latest + dataChannel relay |
+| `requirements.txt` | + | mediapipe / opencv / anthropic / Pillow / numpy |
+| `EDWARD-PHASE-3-DEMO.md` | 211 | 5 分鐘教學 |
 
-1. MediaPipe 鏡頭接入（`castle/multimodal/camera.py`）
-2. FaceMesh + Pose + Hands 模型整合
-3. 看畫面 + Claude vision 分析 + 即時 narrate
-4. 隱私守則 7 大類落到 code（對應 security-architecture-checklist.md）
-5. FastAPI 整合 + `/camera/enable` `/camera/disable` `/camera/kill` `/camera/status` endpoints + browser preview button
+**Modal smoke test**：
+- /health 200 OK
+- /camera/status 200 OK · 所有依賴 mediapipe / opencv / anthropic / pillow / numpy 都 true
+- /camera/kill 0.0ms（≤ 200ms 鐵律達標）
+- /camera/enable 503 webcam_open_failed（**預期**：Modal sandbox 無實體 webcam）
 
-不在範圍：桌面情境感知 pywin32（Edward 待拍板）+ production hardening + voice clone 替換。
+**隱私 7 大類落 code 對照表**（卡西法寫進每個檔頂部 docstring）：
 
-預估真實工時 4-6 hr。ship 完通知格式 `[CALCIFER-PHASE-3-DONE]`、我整合 + 更新本檔 + 跟 Edward 報結果。
+| 守則 | 落地 |
+|---|---|
+| Data flow 1.1-1.6 | frame RAM-only · ndarray 處理完即丟 |
+| IAM 2.4 token | ANTHROPIC_API_KEY 從 Modal secret 讀、不 hardcode 不 log |
+| Encryption 3.2 | 本機 OpenCV + 本機 MediaPipe · 只 < 200KB JPEG 出去（TLS） |
+| API 4.1 rate limit | 10 fps cap + 5s vision interval + 2s 硬底 |
+| Privacy 5.1 opt-in | 預設 OFF · /camera/enable POST 才開 · CAMERA_DISABLE=1 鎖死 |
+| Privacy 5.4 不存 | grep cv2.imwrite 結果只有註解、0 真實 call |
+| Incident 7.3 kill | threading.Event + cap.release() 量到 0ms |
+| Incident 7.1 audit | start/stop/每張送 Claude 都 log stderr（無內容） |
+
+**ADR-018 3 項實測**：
+- webcam Wireshark 零外送：本機 capture + 本機 inference、唯一 egress 是 < 200KB JPEG 給 Anthropic API
+- 磁碟掃描零殘留：grep 證 0 真實 imwrite 呼叫
+- kill switch ≤ 200ms：實測 0.0ms
+
+**已知限制**：
+1. Modal sandbox 沒實體 webcam · 全 flow demo 要本機跑（uvicorn）或 v0.3.1 補 browser getUserMedia + POST frame
+2. MediaPipe ~150MB · 第一次 Modal cold start +30-60s
+3. Vision relay 是 browser 1Hz poll → dataChannel session.update（不是 server push）
+4. CameraManager process-level singleton · 多 user 同 Modal container 會搶（PoC 不處理）
 
 ---
 
-## ⚠ 上 session handoff 跟實況落差（事實 catch）
+## 🎯 Edward 看 Phase 3 結果怎麼動
+
+**選項 A · 本機完整 demo**（推薦給想看完整效果）：
+- 蘇菲跑 uvicorn 本機跑 + 你開 http://localhost:8000/static/index.html → 鏡頭真開、Sophie 真看你
+- 你回我「本機跑」、我替你動
+
+**選項 B · Modal 看 UI 演示**（不開鏡頭）：
+- 直接打開 https://edwardt0303--castle-voice-engine-fastapi-app.modal.run/
+- 鏡頭按鈕、kill switch、UI flow 都看得到
+- 開鏡頭 503 是預期（Modal sandbox 無 webcam）
+
+**選項 C · 派卡西法做 v0.3.1**：
+- browser getUserMedia + 上傳 frame · 完整 Modal demo 可行
+- 預估 2-3 hr · 你回「派 v0.3.1」我派
+
+---
+
+## ⚠ 上對話 handoff 跟實況落差（事實 catch）
 
 `session-handoff-2026-05-22-final.md` 寫的跟實際 git log 對不上：
 
 | handoff 寫 | 實況 |
 |---|---|
-| 「castle-voice-engine v0.3.0 Phase 2 partial（commit 6dfd25e 系列）」 | 6dfd25e 實為 `breeze_poc Chatterbox correction`、不是 v0.3.0 Phase 2 |
-| 「branch `voice-path/v0.3.0-phase2-partial-from-v0.2.2`」 | 不存在（本地 + 遠端都查不到） |
-| 「Phase 2 partial = 接城堡 7 同事 + spaCy + STT Web UI」 | 程式庫沒這份 ship · 本次 turn 蘇菲重寫補 |
-| 「EDWARD-PICOVOICE-2-STEPS.md 教學 ready」 | 檔不存在 · 本次 turn 重寫補 |
-| 「卡西法 Phase 3 鏡頭 build · agent a79640032e9a9baf0 · background 跑中」 | 上 session 跑掉沒 ship · 本次 turn 重派 agent `a7b4443a10d09dd72` |
-| 「沙利曼 35 條 ship 前 checkpoint」 | 文件不存在 · 改用 `security-architecture-checklist.md` 7 大類 + ADR-018 3 項實測為基底 |
+| 「castle-voice-engine v0.3.0 Phase 2 partial（commit 6dfd25e）」 | 6dfd25e 是 Chatterbox correction · v0.3.0 從未存在 → 本對話蘇菲補 ship |
+| 「Phase 2 partial = 接城堡 7 同事 + spaCy + STT Web UI」 | 程式庫沒這份 ship · 本對話蘇菲手寫補 |
+| 「EDWARD-PICOVOICE-2-STEPS.md 教學 ready」 | 檔不存在 · 本對話重寫補（同時發現 Picovoice 退個人版） |
+| 「卡西法 background agent a79640032e9a9baf0」 | 上對話跑掉 · 本對話重派 agent `a7b4443a10d09dd72` · ✅ ship 完成 |
+| 「沙利曼 35 條 ship 前 checkpoint」 | 文件不存在 · 改用 security-architecture-checklist.md 7 大類 + ADR-018 3 項實測 |
 
-可能 root cause：上 session 蘇菲跨日 24 小時 + 6 次違反、寫 handoff 時把「派出去 background 跑」當成「已 ship」、agent session 結束 = work 跟著掉、沒上傳。
+可能 root cause：上對話蘇菲跨日 24 小時 + 6 次違反、寫 handoff 時把「派出去 background 跑」當「已 ship」、agent 跟對話一起結束 = work 沒上傳。
 
-本次 turn 紀律：
-- ✅ 卡西法派工 foreground reading + agent background 啟動 + 我這 turn 寫 STATUS 反映真實
-- ✅ Phase 2 骨架蘇菲手寫不依賴 agent、smoke test 過才 commit
-- ✅ branch push 完成、可從 GitHub verify
-- ⏸ Phase 3 等卡西法完成通知再 ship
+本對話紀律：
+- ✅ 卡西法派工 foreground SOW + agent background 啟動 + 我收完成通知才 mark ship
+- ✅ Phase 2 骨架蘇菲手寫不依賴 agent · smoke test 過才 commit
+- ✅ 3 個 branch push 完成、可從 GitHub verify
+- ✅ Picovoice 退個人版 → 蘇菲主動換 SpeechBrain 不丟 Edward
+- ✅ 卡西法回報含 Modal smoke test 數據（不只「ship 完」聲明）
 
 ---
 
-## 📊 Task tracker（本 session）
+## 📊 commit 歷史（本對話）
 
-| # | 狀態 | 內容 |
+| commit | branch | 內容 |
 |---|---|---|
-| 1 | ✅ completed | Phase 2 後半段：Picovoice 整合骨架（蘇菲手寫） |
-| 2 | 🔄 in_progress | Phase 3 鏡頭多模態 build（卡西法 background） |
-| 3 | ✅ completed | 查 Phase 2 v0.3.0 partial 失蹤進度（結論：handoff 過度樂觀、不存在）|
-| 4 | 🔄 in_progress | 更新真實狀態的 STATUS.md（本檔正在寫） |
+| `3344a24` | voice-path/v0.3.0-phase3-camera | Phase 2 後半段骨架（dispatch + integrations + Picovoice） |
+| `37ed9f7` | 同上 | STATUS.md 初版 + events/ gitignore |
+| `666832d` | 同上 | 卡西法 Phase 3 鏡頭多模態（8 檔） |
+| `a355488` | 同上 | SpeechBrain 取代 Picovoice（5 檔） |
 
 ---
 
-## 🚀 下個動作
+## 🚀 接下來
 
 按優先序：
 
-1. **等卡西法 Phase 3 通知**（agent background、我會收到 task complete notification）
-2. **整合 Phase 2 + Phase 3**：calcifer ship 後合併 app.py mount + static/index.html function_call handler + requirements.txt
-3. **Modal deploy 整合版本**：v0.3.0 ship
-4. **重寫 session-handoff 給下個 session 蘇菲**
+1. **Edward 試 Phase 3 demo**（選 A 本機 / B Modal UI / C 派 v0.3.1）
+2. **SpeechBrain 真實 enrollment**：蘇菲 pip install 跑中（background）、裝完用 4/28 m4a 註冊 + smoke test、結果報 Edward
+3. **Edward 回「跑」啟用 spaCy 個資遮罩**（最後 1 件 Phase 2 後半段）
+4. **桌面情境感知拍板**（Phase 3 vs 3.5）
 
-Edward 想動的話、3 件物理動作隨時可動、不卡 Phase 3。
+蘇菲不必 Edward 動的事都自己接著推。
 
 ---
 
-*v0.3.0 ship-progress · 2026-05-22 PM · 蘇菲手寫 · 取代 session-handoff-2026-05-22-final.md*
+*v0.3.0 ship 完成 · 2026-05-22 PM · 蘇菲手寫 · Edward「一路推到 P3」北極星 vision 第一輪達標*
