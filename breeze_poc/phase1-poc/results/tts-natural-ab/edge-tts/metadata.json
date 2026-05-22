@@ -79,5 +79,6 @@
   ],
   "latency_p50_ms": 555.8,
   "latency_p95_ms": 1296.3,
-  "latency_mean_ms": 596.0
+  "latency_mean_ms": 596.0,
+  "success_count": 10
 }

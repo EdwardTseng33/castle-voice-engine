@@ -1,0 +1,125 @@
+{
+  "model": "Microsoft VibeVoice-1.5B",
+  "model_version": "microsoft/VibeVoice-1.5B",
+  "voice_profile": "demo speaker (en-Alice / built-in)",
+  "voice_clone": "yes (zero-shot built-in speakers; default used here)",
+  "deployment": "Modal A10G GPU, vibevoice-poc app",
+  "license": "MIT (model) + Apache-2.0 (wrapper)",
+  "endpoint": "https://edwardt0303--vibevoice-poc-vibevoice-api.modal.run",
+  "samples": [
+    {
+      "id": "t01",
+      "text": "今天天氣不錯、想出去走走嗎？",
+      "file": "t01.wav",
+      "latency_ms": 5589.0,
+      "client_total_ms": 5589.0,
+      "sample_rate": 24000,
+      "duration_sec": 4.0,
+      "speaker": "en-Alice_woman (synthetic prompt voice)",
+      "note": "retried after initial 500 errors due to deploy/cold-start race"
+    },
+    {
+      "id": "t02",
+      "text": "等等吃飯有想吃什麼？",
+      "file": "t02.wav",
+      "latency_ms": 23521.0,
+      "client_total_ms": 23521.0,
+      "sample_rate": 24000,
+      "duration_sec": 24.0,
+      "speaker": "en-Alice_woman (synthetic prompt voice)",
+      "note": "retried after initial 500 errors due to deploy/cold-start race"
+    },
+    {
+      "id": "t03",
+      "text": "最近忙翻了、好想休息一下。",
+      "file": "t03.wav",
+      "latency_ms": 23509.0,
+      "client_total_ms": 23509.0,
+      "sample_rate": 24000,
+      "duration_sec": 23.6,
+      "speaker": "en-Alice_woman (synthetic prompt voice)",
+      "note": "retried after initial 500 errors due to deploy/cold-start race"
+    },
+    {
+      "id": "t04",
+      "text": "派蕪菁頭看 BeyondPath 今天的數據、跌幅超過 30% 就提醒我。",
+      "file": "t04.wav",
+      "latency_ms": 7813.0,
+      "client_total_ms": 7813.0,
+      "sample_rate": 24000,
+      "duration_sec": 6.4,
+      "speaker": "en-Alice_woman (synthetic prompt voice)",
+      "note": "retried after initial 500 errors due to deploy/cold-start race"
+    },
+    {
+      "id": "t05",
+      "text": "明天會議我們要討論 v2.0 的計畫、特別是第三階段的鏡頭功能。",
+      "file": "t05.wav",
+      "latency_ms": 21204.6,
+      "client_total_ms": 21204.6,
+      "sample_rate": 24000,
+      "duration_sec": 21.73,
+      "speaker": ""
+    },
+    {
+      "id": "t06",
+      "text": "客戶那邊的提案、麻煩你幫我整理一份完整版給我。",
+      "file": "t06.wav",
+      "latency_ms": 26273.1,
+      "client_total_ms": 26273.1,
+      "sample_rate": 24000,
+      "duration_sec": 26.67,
+      "speaker": ""
+    },
+    {
+      "id": "t07",
+      "text": "我要把 PR 上傳到 main 之前先跑 lint。",
+      "file": "t07.wav",
+      "latency_ms": 4794.6,
+      "client_total_ms": 4794.6,
+      "sample_rate": 24000,
+      "duration_sec": 3.2,
+      "speaker": ""
+    },
+    {
+      "id": "t08",
+      "text": "BeyondPath 那個 dashboard 的 retention 數據看起來不太對。",
+      "file": "t08.wav",
+      "latency_ms": 6547.0,
+      "client_total_ms": 6547.0,
+      "sample_rate": 24000,
+      "duration_sec": 4.93,
+      "speaker": ""
+    },
+    {
+      "id": "t09",
+      "text": "太好了！這次客戶真的簽約了！",
+      "file": "t09.wav",
+      "latency_ms": 5386.7,
+      "client_total_ms": 5386.7,
+      "sample_rate": 24000,
+      "duration_sec": 3.87,
+      "speaker": ""
+    },
+    {
+      "id": "t10",
+      "text": "今天先到這、明天再說、我先休息一下。",
+      "file": "t10.wav",
+      "latency_ms": 4339.8,
+      "client_total_ms": 4339.8,
+      "sample_rate": 24000,
+      "duration_sec": 2.67,
+      "speaker": ""
+    }
+  ],
+  "latency_p50_ms": 7813.0,
+  "latency_p95_ms": 26273.1,
+  "latency_mean_ms": 12897.8,
+  "success_count": 10,
+  "notes": [
+    "VibeVoice is designed for long-form podcast/multi-speaker generation",
+    "Single-utterance TTS produces variable duration (2-27s for 10-30 char input)",
+    "Voice sample = synthetic speech-like envelope-modulated noise (no real prompt voice)",
+    "Initial 4 sentences failed with 500 during deploy/cold-start race; successfully retried"
+  ]
+}

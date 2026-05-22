@@ -5,6 +5,19 @@
 > Edward 5/22 拍板：「不要客家、不要強求台灣腔、主軸自然度 + 人類感、可以測試一下」
 > 城堡照辦——跑了 4 家 TTS、各家 10 句、隨機盲聽、聽完打分。
 
+## 跑完 status（截至 ship 時間）
+
+| 家 | 成功 | P50 延遲 | 備註 |
+|---|---|---|---|
+| VibeVoice | 10/10 | 7.8s | 4 句首次跑撞 cold-start 500、retry 全過 |
+| VoxCPM2 | 10/10 | 6.2s | 第 1 句 cold start 8 min、後面穩定 5-7s |
+| Edge TTS | 10/10 | 556ms | 永遠的快、永遠的穩、輸出 mp3（其他家輸出 wav） |
+| BreezyVoice-fixed | 10/10 | 18.5s（含 cold start）| 修對入口後可聽 · 穩定 inference 12s |
+
+**總 audio 數量：40 個（4 家 × 10 句）**
+**總 Modal cost 估算：< $5（僅占任務 budget $10 一半）**
+
+
 ---
 
 ## 30 秒看完版
@@ -38,8 +51,8 @@ breeze_poc/phase1-poc/results/tts-natural-ab/
 | **授權** | MIT | Apache-2.0 | Edge TTS terms / Azure ToS | Apache-2.0 |
 | **隱私** | self-host（Modal） | self-host（Modal） | 走 Azure cloud（資料離境） | self-host（Modal） |
 | **月費** | 約 $5-15/月 GPU spend | 約 $5-15/月 GPU spend | 免費（含 rate limit） | 約 $5-15/月 GPU spend |
-| **延遲 P50** | (見 metadata.json) | (見 metadata.json) | 556ms | 18.5s 含 cold start（穩定後 ~12s）|
-| **延遲 P95** | (見 metadata.json) | (見 metadata.json) | 1.3s | 105s（含第 1 句 cold start）|
+| **延遲 P50** | 7.8s（含 cold start） | 6.2s（含 cold start） | 556ms | 18.5s（含 cold start） |
+| **延遲 P95** | 26.3s | 473s（含第 1 句 cold start 8 min） | 1.3s | 105s（含第 1 句 cold start） |
 | **本次配置** | Modal A10G | Modal A10G | edge-tts python lib | Modal A10G + g2pw 注音 prefix |
 
 ---
@@ -125,6 +138,18 @@ BreezyVoice 是 **zero-shot voice clone** 模型（同 CosyVoice 家族）、必
 
 **若 Edward 偏好「我自己 voice 上線」** → BreezyVoice 軸更重要
 **若 Edward 偏好「另一個女聲特助 voice」** → VibeVoice / VoxCPM2 / Edge 軸更重要
+
+---
+
+
+## VibeVoice 注意事項（重要）
+
+VibeVoice 是 Microsoft 為「multi-speaker 長 podcast 生成」設計的、不是針對單句 TTS。本次測試發現：
+
+- **輸出時長不穩**：10 個字的句子可能生成 4 秒或 24 秒（model 自由發揮）
+- **voice sample 必要**：必須給 prompt voice、本次用 synthetic envelope-modulated noise（無真實 prompt）→ 音色「不自然」是預期內
+- **若選 VibeVoice 作主力** → 必須準備 Edward 真實 voice prompt 重跑、否則只能聽 architecture sanity
+- **更合理的 use case**：對話腳本（Speaker 0: ... Speaker 1: ...）podcast 風格、不是「秘書幫你唸 1 句」
 
 ---
 

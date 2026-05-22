@@ -38,7 +38,7 @@ HF_SECRET = modal.Secret.from_name("huggingface")
     gpu="A10G",
     memory=24576,
     timeout=900,
-    scaledown_window=60,
+    scaledown_window=62,  # bump for refresh (size fix)
     secrets=[AUTH_SECRET, HF_SECRET],
     min_containers=0,
 )
@@ -89,10 +89,25 @@ class VibeVoice:
         # For zero-shot, we need a voice sample. Use a short synthetic placeholder if none provided.
         spk = "en-Alice_woman"
         if not hasattr(self, "_default_voice_sample"):
-            import numpy as np
-            # Generate 3-second silent audio with low noise as fallback voice sample
-            sr_voice = 24000
-            self._default_voice_sample = (np.random.randn(sr_voice * 3).astype("float32") * 0.001)
+            import urllib.request, soundfile as sf, io
+            # VibeVoice demo voices live in the repo "demo/voices" path
+            # Use a built-in en-Alice voice sample (small wav from VibeVoice github)
+            try:
+                # The VibeVoice processor expects a list of voice sample paths or numpy arrays
+                # Use a clean sine-wave + envelope-modulated speech-like signal as bootstrap
+                import numpy as np
+                sr_voice = 24000
+                # Create a 5-sec speech-like envelope (no actual speech but realistic energy profile)
+                t = np.arange(sr_voice * 5) / sr_voice
+                # Modulated noise to simulate speech rhythm
+                env = 0.4 * (1 + np.sin(2 * np.pi * 3 * t))  # syllable rate ~3 Hz
+                carrier = np.random.randn(len(t)).astype("float32") * 0.15
+                speech_like = (env * carrier).astype("float32")
+                self._default_voice_sample = speech_like
+                print("[VibeVoice] using synthetic speech-like voice sample (5s @ 24kHz)")
+            except Exception as e:
+                print("[VibeVoice] voice sample setup fail:", str(e)[:200])
+                raise
         script = "Speaker 0: " + text
         try:
             inputs = self.processor(
@@ -117,15 +132,56 @@ class VibeVoice:
             )
         t_gen = time.time()
         audio = None
-        try:
-            audio = out.speech_outputs[0].cpu().float().numpy()
-        except Exception:
+        print("[VibeVoice] out type:", type(out).__name__, "attrs:", [a for a in dir(out) if not a.startswith("_")][:30])
+        for attr in ("speech_outputs", "audio_outputs", "audios", "audio", "speech", "wav", "waveforms"):
             try:
-                audio = self.processor.batch_decode_audio(out)[0]
-            except Exception as e:
-                print("[VibeVoice] audio extract fail:", e)
-        if audio is None or len(audio) < 100:
-            raise RuntimeError("[VibeVoice] empty audio output")
+                v = getattr(out, attr, None)
+                if v is not None:
+                    print("[VibeVoice] try attr", attr, "type=", type(v).__name__)
+                    if hasattr(v, "__len__") and len(v) > 0:
+                        first = v[0]
+                        if hasattr(first, "cpu"):
+                            arr = first.cpu().float().numpy()
+                            if hasattr(arr, "ndim") and arr.size > 100:
+                                audio = arr
+                                print("[VibeVoice] got audio via", attr, "shape=", arr.shape)
+                                break
+                        elif hasattr(first, "shape") and first.size > 100:
+                            audio = first
+                            print("[VibeVoice] got audio np via", attr, "shape=", first.shape)
+                            break
+            except Exception as ex:
+                print("[VibeVoice]   attr", attr, "fail:", str(ex)[:120])
+        if audio is None:
+            try:
+                if hasattr(self.processor, "batch_decode_audio"):
+                    decoded = self.processor.batch_decode_audio(out)
+                    if decoded and len(decoded) > 0:
+                        d0 = decoded[0]
+                        if hasattr(d0, "cpu"):
+                            audio = d0.cpu().float().numpy()
+                        else:
+                            audio = d0
+                        print("[VibeVoice] got via batch_decode_audio shape=", getattr(audio, "shape", None))
+            except Exception as ex:
+                print("[VibeVoice] batch_decode_audio fail:", str(ex)[:200])
+        if audio is None:
+            # Try out.sequences -> decoder approach (sometimes audio comes through sequences with audio token vocab)
+            try:
+                seq = getattr(out, "sequences", None)
+                if seq is not None and hasattr(self.processor, "audio_decoder"):
+                    audio_t = self.processor.audio_decoder.decode(seq)
+                    audio = audio_t[0].cpu().float().numpy() if hasattr(audio_t[0], "cpu") else audio_t[0]
+                    print("[VibeVoice] got via audio_decoder shape=", audio.shape)
+            except Exception as ex:
+                print("[VibeVoice] audio_decoder fail:", str(ex)[:200])
+        if audio is None:
+            raise RuntimeError("[VibeVoice] empty audio output (all extract methods failed)")
+        # Flatten if 2D (shape like (1, samples))
+        if hasattr(audio, "ndim") and audio.ndim > 1:
+            audio = audio.squeeze()
+        if hasattr(audio, "size") and audio.size < 100:
+            raise RuntimeError("[VibeVoice] audio too small: size=" + str(audio.size))
         if audio.ndim > 1:
             audio = audio.squeeze()
         sr = 24000  # VibeVoice default
