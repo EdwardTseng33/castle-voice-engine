@@ -4,6 +4,19 @@
 > released under the **NVIDIA Open Model License (NOML)**, and on **Kyutai Moshi**
 > (MIT). All modifications by Edward / BeyondPath. See `LICENSE.NOML` for terms.
 
+## Talking-head module (v0.7+)
+
+This project uses **MuseTalk v1.5** (Lyra Lab, Tencent Music Entertainment)
+under the **MIT License** for real-time lipsync.
+
+Dependencies:
+- OpenAI Whisper (MIT)
+- IDEA-Research DWPose (Apache-2.0)
+- ft-mse-vae (CreativeML Open RAIL-M · Track B audit required for commercial use)
+- S3FD (license verification pending — see `docs/v0.7-trust-audit-suliman.md`)
+
+Reference: https://github.com/TMElyralab/MuseTalk
+
 Real-time voice runtime that powers the Sophie persona inside `project-sophie`
 (Moving Castle). Designed to:
 
