@@ -34,7 +34,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from castle.dispatch import build_realtime_tools, dispatch_function_call, recent_dispatches
-from castle.integrations import is_picovoice_ready, is_spacy_ready
+from castle.integrations import is_speechbrain_ready, is_spacy_ready
 
 
 # 簡單 in-memory rate limit (PoC 等級 · prod 該用 Redis / Modal Volume)
@@ -122,53 +122,47 @@ def attach_dispatch_routes(app):
     @app.get("/phase2/status")
     async def phase2_status():
         """
-        Edward 用瀏覽器打開這個 endpoint、看 Phase 2 後半段 3 件物理動作做完沒。
-        對齊 EDWARD-PICOVOICE-2-STEPS.md。
+        Edward 用瀏覽器打開、看 Phase 2 後半段 3 件功能 ready 沒。
+
+        2026-05-22 update:
+          - Picovoice 改企業版 only、本系統改用 SpeechBrain (聲紋) + OpenAI VAD (喚醒)
+          - Edward 不必動任何網站 / 鑰匙 / 註冊
         """
-        pico = is_picovoice_ready()
+        sb = is_speechbrain_ready()
         spacy_status = is_spacy_ready()
         return {
             "phase2_back_half": {
-                "step1_picovoice_access_key": {
-                    "done": pico["access_key_set"],
+                "castle_dispatch": {
+                    "ready": True,
+                    "tools_count": len(build_realtime_tools()),
+                    "hint": "✅ 城堡 7 同事派工已上線、Sophie 講話可派霍爾 / 卡西法 / 馬魯克等",
+                },
+                "voice_id_speechbrain": {
+                    "ready": sb["enrolled_embedding_exists"] and sb["speechbrain_installed"],
+                    "torch_installed": sb["torch_installed"],
+                    "speechbrain_installed": sb["speechbrain_installed"],
+                    "voice_sample_exists": sb["voice_sample_exists"],
+                    "enrolled": sb["enrolled_embedding_exists"],
+                    "model_cached": sb["model_cached"],
                     "hint": (
-                        "貼進 castle-voice-engine/.env 的 PICOVOICE_ACCESS_KEY"
-                        if not pico["access_key_set"]
-                        else "✅"
+                        "✅"
+                        if (sb["enrolled_embedding_exists"] and sb["speechbrain_installed"])
+                        else "蘇菲跑 pip install + 用 Edward 4/28 m4a 註冊、Edward 不必動"
                     ),
                 },
-                "step2_wake_word_ppn": {
-                    "done": pico["wake_word_ppn_exists"],
+                "pii_redaction_spacy": {
+                    "ready": spacy_status["model_loaded"],
+                    "spacy_installed": spacy_status["spacy_installed"],
+                    "model_loaded": spacy_status["model_loaded"],
                     "hint": (
-                        "Console 訓練「蘇菲」、改名 sophie_zh.ppn 放 breeze_poc/phase2-poc/wake_words/"
-                        if not pico["wake_word_ppn_exists"]
-                        else "✅"
-                    ),
-                },
-                "step3_spacy_model": {
-                    "done": spacy_status["model_loaded"],
-                    "hint": (
-                        "跑 `python -m spacy download zh_core_web_sm`"
-                        if not spacy_status["model_loaded"]
-                        else "✅"
-                    ),
-                },
-                "extra_eagle_profile": {
-                    "done": pico["eagle_profile_exists"],
-                    "hint": (
-                        "AccessKey 進 .env 後跑 register_eagle_speaker.py 註冊聲紋"
-                        if not pico["eagle_profile_exists"]
-                        else "✅"
+                        "✅"
+                        if spacy_status["model_loaded"]
+                        else "Edward 回「跑」、蘇菲裝 (`python -m spacy download zh_core_web_sm`)"
                     ),
                 },
             },
-            "sdks": {
-                "porcupine": pico["porcupine_sdk_installed"],
-                "eagle": pico["eagle_sdk_installed"],
-                "spacy": spacy_status["spacy_installed"],
+            "deprecated": {
+                "picovoice": "2026-05-22 改企業版 only、castle 改 SpeechBrain + OpenAI VAD",
             },
-            "dispatch": {
-                "tools_count": len(build_realtime_tools()),
-                "ready": True,
-            },
+            "edward_action_required": False,  # SpeechBrain + OpenAI VAD 都自動、不必註冊
         }

@@ -23,13 +23,26 @@ from castle.integrations.spacy_ner import (
     is_spacy_ready,
     redact_pii,
 )
+from castle.integrations.speechbrain_voiceid import (
+    SpeechBrainConfig,
+    is_speechbrain_ready,
+    enroll_speaker,
+    verify_speaker,
+)
 
 __all__ = [
+    # SpeechBrain (主路 · Picovoice Eagle 開源替代 · 2026-05-22 ship)
+    "SpeechBrainConfig",
+    "is_speechbrain_ready",
+    "enroll_speaker",
+    "verify_speaker",
+    # spaCy NER (個資遮罩)
+    "SpacyNerConfig",
+    "is_spacy_ready",
+    "redact_pii",
+    # Picovoice (deprecated · 改企業版 only · 保留 archive)
     "PicovoiceConfig",
     "is_picovoice_ready",
     "init_porcupine",
     "init_eagle_recognizer",
-    "SpacyNerConfig",
-    "is_spacy_ready",
-    "redact_pii",
 ]

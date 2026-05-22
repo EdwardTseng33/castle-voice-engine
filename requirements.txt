@@ -30,5 +30,14 @@ anthropic>=0.39,<1.0
 Pillow>=10.0,<12.0
 numpy>=1.26,<3.0
 
+# --- Phase 2 後半段 (v0.3.0 · 2026-05-22 蘇菲 ship · Picovoice 換 SpeechBrain) ---
+# SpeechBrain · 聲紋認 Edward (Apache-2.0 · Mila/Montreal · 業界 SOTA ECAPA-TDNN)
+# torch CPU build · ~200MB · 第一次 cold start +60-120s · Modal slim image 仍可裝
+speechbrain>=1.0,<2.0
+torch>=2.0,<3.0
+torchaudio>=2.0,<3.0
+# spaCy · 中文 NER 個資遮罩 (本機 · MIT · zh_core_web_sm ~50MB)
+spacy>=3.7,<4.0
+
 # --- Modal deploy ---
 modal>=0.65,<1.0

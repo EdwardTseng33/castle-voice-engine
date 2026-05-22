@@ -1,7 +1,16 @@
 # castle-voice-engine - castle/integrations/picovoice.py
 # (c) 2026 Edward / BeyondPath
 #
-# Picovoice Porcupine (中文喚醒詞「蘇菲」) + Eagle (聲紋認 Edward) 整合骨架
+# ⚠️ DEPRECATED 2026-05-22 ⚠️
+# Picovoice 2026 改純企業導向 (公司 email · 7 天試用)、個人版退場。
+# 主路改 SpeechBrain (聲紋 · Apache-2.0 · 開源) + OpenAI Realtime 內建 VAD (取代喚醒詞)。
+# 本檔保留 archive、未來若想再評估開源 OpenWakeWord 之類也可重用骨架。
+#
+# 替代方案:
+#   - 聲紋認證 → castle/integrations/speechbrain_voiceid.py (主路)
+#   - 喚醒詞 → 跳、OpenAI Realtime server VAD (你不講她不講)
+#
+# 以下為原 Picovoice Porcupine (中文喚醒詞「蘇菲」) + Eagle (聲紋認 Edward) 整合骨架
 # Voice Path v2.0 Phase 2 後半段
 #
 # 為什麼是骨架：
