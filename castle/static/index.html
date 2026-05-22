@@ -3,9 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>蘇菲語音 + 鏡頭 demo · castle-voice-engine v0.3.0</title>
+  <title>蘇菲 · castle-voice-engine v0.3.1 直播感</title>
   <style>
     :root {
+      /* Phase 1+3 既有 token (ADR-008 暖琥珀 DNA) */
       --bg: #FAF6F0;
       --panel: #F5EDE0;
       --ink: #2B2018;
@@ -15,311 +16,947 @@
       --ok: #6B8E5A;
       --warn: #B85C00;
       --err: #B33A3A;
+
+      /* Phase 3.1.1 新增 (女巫 spec · 暖琥珀延伸) */
+      --amber-glow: #E8A45F;
+      --amber-soft: #D4712A33;
+      --amber-bright: #FFB570;
+      --cream-deep: #EFE4D0;
+      --ink-soft: #4A3A2C;
+      --visitor: #C8852E;
     }
     * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; min-height: 100vh; }
     body {
-      margin: 0; padding: 0;
       font-family: Georgia, "Source Han Serif TC", "Noto Serif TC", serif;
       background: var(--bg);
       color: var(--ink);
-      min-height: 100vh;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      padding: 24px;
+      display: flex; flex-direction: column;
     }
-    .card {
-      background: var(--panel);
-      border-radius: 16px;
-      padding: 32px 36px;
-      max-width: 620px;
-      width: 100%;
-      box-shadow: 0 8px 24px rgba(43, 32, 24, 0.12);
+
+    /* === Top status bar === */
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 24px;
+      background: var(--cream-deep);
+      border-bottom: 1px solid #d4c4a8;
+      font-size: 14px;
     }
-    h1 {
+    .topbar .who {
       font-style: italic;
       color: var(--amber-deep);
-      margin: 0 0 8px;
-      font-size: 28px;
+      font-size: 16px;
     }
-    .subtitle {
-      color: var(--muted);
-      font-size: 14px;
-      margin-bottom: 24px;
-    }
-    .row { display: flex; gap: 12px; align-items: center; margin: 12px 0; }
-    label { font-size: 13px; color: var(--muted); min-width: 64px; }
-    select, input {
-      flex: 1;
-      padding: 8px 12px;
-      border: 1px solid #d4c4a8;
-      border-radius: 8px;
-      background: var(--bg);
+    .topbar .meta { color: var(--muted); font-size: 13px; }
+    .topbar .end-btn {
+      padding: 6px 14px;
+      background: transparent;
+      border: 1px solid var(--muted);
       color: var(--ink);
-      font: inherit;
+      border-radius: 6px;
+      font: inherit; font-size: 13px;
+      cursor: pointer;
+      width: auto; margin: 0;
+    }
+    .topbar .end-btn:hover { background: var(--err); color: white; border-color: var(--err); }
+    .topbar .end-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* === Main stage (live grid) === */
+    .stage {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 280px;
+      gap: 24px;
+      padding: 28px 32px;
+      max-width: 1280px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    /* === Sophie avatar zone === */
+    .sophie-zone {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 24px;
+    }
+    .sophie-avatar-wrap {
+      width: 380px; height: 380px;
+      position: relative;
+    }
+    .sophie-avatar {
+      width: 100%; height: 100%;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--cream-deep) 0%, var(--panel) 100%);
+      border: 3px solid var(--amber);
+      display: flex; align-items: center; justify-content: center;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.3s ease, transform 0.3s ease, filter 0.3s ease;
+    }
+    /* idle breathing - 沒講話也有節奏 */
+    @keyframes sophie-idle-breathing {
+      0%, 100% { transform: scale(1.0); opacity: 0.95; }
+      50%      { transform: scale(1.015); opacity: 1.0; }
+    }
+    .sophie-avatar.idle {
+      animation: sophie-idle-breathing 3.6s ease-in-out infinite;
+    }
+    /* speaking pulse - 暖琥珀呼吸燈 */
+    @keyframes sophie-speaking-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 var(--amber-glow), 0 0 0 0 var(--amber-soft); }
+      50%      { box-shadow: 0 0 24px 8px var(--amber-glow), 0 0 48px 16px var(--amber-soft); }
+    }
+    .sophie-avatar.speaking {
+      animation: sophie-speaking-pulse 1.4s ease-in-out infinite;
+      border-color: var(--amber);
+    }
+    /* sleep · 沒人鏡頭 / 等很久 */
+    .sophie-avatar.sleep {
+      filter: saturate(0.6) brightness(0.85);
+      opacity: 0.6;
+    }
+    .sophie-avatar svg { width: 70%; height: 70%; }
+
+    /* 蘇菲 placeholder illustration (SVG 簡筆) · VRM 是 Phase 3.1.2 範圍 */
+    .sophie-face .hair { fill: #4A3A2C; }
+    .sophie-face .skin { fill: #F2D4B3; }
+    .sophie-face .eye { fill: var(--ink); }
+    .sophie-face .cheek { fill: #E8A45F; opacity: 0.5; }
+    .sophie-face .mouth { fill: var(--amber-deep); }
+
+    .sophie-name {
+      font-style: italic;
+      color: var(--amber-deep);
+      font-size: 24px;
+      margin-top: 8px;
+    }
+    .sophie-state {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: -8px;
+    }
+
+    /* Sophie speech bubble */
+    .sophie-speech {
+      max-width: 480px;
+      padding: 14px 18px;
+      background: var(--panel);
+      border-left: 3px solid var(--amber);
+      border-radius: 8px;
+      font-style: italic;
+      color: var(--ink);
+      font-size: 16px;
+      min-height: 48px;
+      line-height: 1.55;
+    }
+    .sophie-speech.empty {
+      color: var(--muted);
+      font-style: normal;
       font-size: 14px;
     }
-    button {
+
+    /* === Right rail · selfie + 多人 PiP === */
+    .rail {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .pip-tile {
       width: 100%;
-      padding: 14px 18px;
+      max-width: 260px;
+      background: var(--cream-deep);
+      border: 2px solid var(--amber-soft);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+      position: relative;
+    }
+    .pip-tile.active {
+      border-color: var(--amber);
+      box-shadow: 0 0 16px var(--amber-soft);
+    }
+    .pip-video {
+      width: 100%;
+      aspect-ratio: 4/3;
+      background: #1a1410;
+      display: block;
+      object-fit: cover;
+    }
+    .pip-video.no-feed {
+      display: flex; align-items: center; justify-content: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .pip-label {
+      padding: 8px 12px;
+      font-size: 13px;
+      color: var(--ink);
+      background: var(--panel);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .pip-label .who-name { font-weight: 600; }
+    .pip-label .talking-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--amber-bright);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    .pip-tile.talking .talking-dot { opacity: 1; }
+    .pip-placeholder {
+      width: 100%; max-width: 260px;
+      padding: 24px 18px;
+      background: transparent;
+      border: 1px dashed var(--muted);
+      border-radius: 12px;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+      font-style: italic;
+    }
+
+    /* === Bottom: waveform + tool bar === */
+    .bottom {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-top: 8px;
+    }
+    .waveform-wrap {
+      background: var(--panel);
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex; align-items: center; gap: 14px;
+    }
+    .waveform-label {
+      font-size: 13px;
+      color: var(--muted);
+      min-width: 80px;
+    }
+    .waveform {
+      flex: 1;
+      height: 40px;
+      display: flex;
+      gap: 3px;
+      align-items: center;
+    }
+    .waveform-bar {
+      flex: 1;
+      max-width: 6px;
+      min-width: 3px;
+      background: linear-gradient(180deg, var(--muted) 0%, var(--amber) 70%, var(--amber-bright) 100%);
+      border-radius: 2px;
+      transition: height 80ms ease-out;
+      height: 4px;
+    }
+
+    /* === Tool bar === */
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .tool-btn {
+      width: auto; margin: 0;
+      min-width: 120px;
+      padding: 12px 18px;
+      background: var(--panel);
+      color: var(--ink);
+      border: 1px solid var(--muted);
+      border-radius: 10px;
+      font: inherit; font-size: 14px;
+      cursor: pointer;
+      display: flex; align-items: center; gap: 8px;
+      transition: background 0.2s, color 0.2s, border-color 0.2s;
+      font-weight: normal;
+    }
+    .tool-btn:hover { border-color: var(--amber); background: var(--cream-deep); }
+    .tool-btn.active {
+      background: var(--amber);
+      color: white;
+      border-color: var(--amber);
+    }
+    .tool-btn.active:hover { background: var(--amber-deep); border-color: var(--amber-deep); }
+    .tool-btn.danger {
+      background: transparent;
+      color: var(--err);
+      border-color: var(--err);
+    }
+    .tool-btn.danger:hover { background: var(--err); color: white; }
+    .tool-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .tool-btn.disabled-look { opacity: 0.7; }
+    .tool-icon { font-size: 18px; line-height: 1; }
+
+    /* === Idle state CTA (沒對話、沒鏡頭時) === */
+    .idle-cta {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      padding: 80px 24px 40px;
+    }
+    .idle-cta h1 {
+      font-style: italic;
+      color: var(--amber-deep);
+      margin: 0;
+      font-size: 32px;
+      text-align: center;
+    }
+    .idle-cta .lead {
+      color: var(--muted);
+      font-size: 15px;
+      text-align: center;
+      max-width: 480px;
+    }
+    .start-cta {
+      width: auto; margin: 8px 0 0;
+      padding: 14px 32px;
       background: var(--amber);
       color: white;
       border: none;
-      border-radius: 10px;
+      border-radius: 12px;
       font: inherit;
-      font-size: 16px;
-      font-weight: bold;
+      font-size: 17px;
+      font-weight: 600;
       cursor: pointer;
-      margin-top: 16px;
-      transition: background 0.15s;
+      box-shadow: 0 4px 14px var(--amber-soft);
+      transition: background 0.2s, transform 0.2s;
     }
-    button:hover:not(:disabled) { background: var(--amber-deep); }
-    button:disabled { background: #c4b8a4; cursor: not-allowed; }
-    button.stop { background: var(--err); }
-    button.stop:hover:not(:disabled) { background: #8a2a2a; }
-    button.secondary { background: #8a7a65; margin-top: 8px; }
-    button.secondary:hover:not(:disabled) { background: #6e5f4f; }
-    button.kill { background: var(--err); margin-top: 8px; }
-    .status {
-      margin-top: 20px;
-      padding: 12px 16px;
-      border-radius: 8px;
-      background: var(--bg);
-      border-left: 3px solid var(--muted);
+    .start-cta:hover { background: var(--amber-deep); transform: translateY(-1px); }
+    .start-cta:disabled { background: #c4b8a4; cursor: not-allowed; box-shadow: none; transform: none; }
+
+    /* === Settings (折疊 · 不顯眼) === */
+    .settings {
+      display: flex;
+      gap: 14px;
+      align-items: center;
       font-size: 13px;
-      min-height: 40px;
-      color: var(--ink);
+      color: var(--muted);
+      margin-top: 16px;
     }
-    .status.ok { border-left-color: var(--ok); }
-    .status.err { border-left-color: var(--err); color: var(--err); }
-    .status.warn { border-left-color: var(--warn); color: var(--warn); }
+    .settings select {
+      padding: 6px 10px;
+      border: 1px solid #d4c4a8;
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--ink);
+      font: inherit;
+      font-size: 13px;
+    }
+
+    /* === Privacy note (鏡頭附近) === */
+    .privacy-note {
+      background: #fef4e8;
+      border: 1px solid #d4712a55;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      color: var(--amber-deep);
+      line-height: 1.5;
+    }
+
+    /* === Log (debug · 折疊) === */
+    .log-toggle {
+      font-size: 11px;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 6px 12px;
+      text-align: center;
+      user-select: none;
+    }
+    .log-toggle:hover { color: var(--amber-deep); }
     .log {
-      margin-top: 12px;
-      padding: 10px 14px;
+      display: none;
+      margin: 12px 24px 24px;
+      padding: 12px 14px;
       background: #2B2018;
       color: #d4c4a8;
       font-family: ui-monospace, "Cascadia Code", monospace;
       font-size: 11px;
-      border-radius: 6px;
-      max-height: 160px;
+      border-radius: 8px;
+      max-height: 200px;
       overflow-y: auto;
       white-space: pre-wrap;
     }
-    .meta {
-      margin-top: 16px;
-      padding-top: 16px;
-      border-top: 1px dashed #d4c4a8;
-      font-size: 12px;
-      color: var(--muted);
-      line-height: 1.6;
-    }
-    .meta strong { color: var(--ink); }
+    .log.open { display: block; }
+
     audio { display: none; }
-    .section {
-      margin-top: 24px;
-      padding-top: 20px;
-      border-top: 2px solid #e4d4b8;
+
+    /* === Responsive: tablet === */
+    @media (max-width: 1023px) {
+      .stage { grid-template-columns: 1fr 220px; padding: 20px; gap: 18px; }
+      .sophie-avatar-wrap { width: 300px; height: 300px; }
+      .pip-tile { max-width: 200px; }
     }
-    .section-title {
-      font-style: italic;
-      color: var(--amber-deep);
-      font-size: 18px;
-      margin-bottom: 12px;
-    }
-    .camera-preview {
-      margin-top: 12px;
-      width: 100%;
-      max-width: 320px;
-      height: 180px;
-      background: #2B2018;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #8a7a65;
-      font-size: 12px;
-      overflow: hidden;
-    }
-    .camera-preview img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    .latest-obs {
-      margin-top: 12px;
-      padding: 12px 16px;
-      background: var(--bg);
-      border-left: 3px solid var(--amber);
-      border-radius: 6px;
-      font-size: 14px;
-      min-height: 36px;
-      font-style: italic;
-    }
-    .latest-obs.empty { color: var(--muted); }
-    .privacy-note {
-      background: #fef4e8;
-      border: 1px solid #d4712a55;
-      padding: 10px 14px;
-      border-radius: 6px;
-      font-size: 12px;
-      color: var(--amber-deep);
-      margin-top: 12px;
-      line-height: 1.6;
+    /* === Responsive: mobile === */
+    @media (max-width: 767px) {
+      .stage { grid-template-columns: 1fr; padding: 14px; gap: 14px; }
+      .sophie-avatar-wrap { width: 240px; height: 240px; }
+      .rail {
+        flex-direction: row;
+        overflow-x: auto;
+        gap: 8px;
+      }
+      .pip-tile { max-width: 130px; min-width: 130px; flex-shrink: 0; }
+      .pip-video { aspect-ratio: 4/3; }
+      .toolbar .tool-btn { min-width: 0; padding: 12px; }
+      .toolbar .tool-btn .btn-label { display: none; }
+      .idle-cta h1 { font-size: 24px; }
     }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>蘇菲語音 + 鏡頭 demo</h1>
-    <div class="subtitle">castle-voice-engine v0.3.0 · Phase 3 多模態 · gpt-realtime-2 + Claude vision</div>
 
-    <div class="row">
-      <label>persona</label>
-      <select id="persona">
-        <option value="sophie" selected>sophie（中文 · marin 聲音）</option>
-        <option value="lily">lily（English · alloy）</option>
-      </select>
+  <!-- Top status bar -->
+  <div class="topbar">
+    <div>
+      <span class="who" id="topbarWho">蘇菲 · 待命中</span>
+      <span class="meta" id="topbarMeta" style="margin-left: 12px;"></span>
     </div>
-    <div class="row">
-      <label>model</label>
-      <select id="model">
-        <option value="" selected>(server 預設 · gpt-realtime-2)</option>
-        <option value="gpt-realtime-2">gpt-realtime-2</option>
-        <option value="gpt-realtime">gpt-realtime（fallback）</option>
-      </select>
-    </div>
-
-    <button id="startBtn">開始對話</button>
-
-    <div class="status" id="status">準備就緒。按上面的按鈕、開麥克風講中文。</div>
-
-    <div class="section">
-      <div class="section-title">鏡頭多模態（Phase 3）</div>
-      <div class="privacy-note">
-        <strong>隱私守則：</strong>鏡頭預設關閉。按「開鏡頭」才會啟動。
-        畫面不會存到磁碟、不會錄影。每 5 秒會送一張縮圖（< 200KB）給 Claude 看、讓蘇菲做即時觀察。
-        要立刻關按「緊急關閉」(≤ 200ms)。
-      </div>
-
-      <button id="cameraBtn" class="secondary">開鏡頭</button>
-      <button id="visionBtn" class="secondary" disabled>開始蘇菲看畫面</button>
-      <button id="killBtn" class="kill" disabled>緊急關閉鏡頭</button>
-
-      <div class="camera-preview" id="cameraPreview">
-        <span id="cameraPreviewText">（鏡頭未開）</span>
-      </div>
-
-      <div class="latest-obs empty" id="latestObs">蘇菲還沒看到什麼...</div>
-
-      <div class="status" id="cameraStatus" style="margin-top: 12px;">鏡頭未啟動。</div>
-    </div>
-
-    <div class="meta">
-      <strong>怎麼用：</strong><br />
-      1. 按「開始對話」、允許麥克風 → 等狀態變綠<br />
-      2. 直接講中文。蘇菲會即時聽 + 即時回。<br />
-      3. （選擇性）按「開鏡頭」→ 按「開始蘇菲看畫面」→ 蘇菲每 5 秒會講一句觀察<br />
-      4. 想關鏡頭按「緊急關閉鏡頭」<br />
-      5. 結束對話按「結束對話」<br /><br />
-      <strong>注意：</strong><br />
-      • 鏡頭只在這個瀏覽器標籤頁有效、關掉就停<br />
-      • Claude vision 每 5 秒一張、單次 < 200KB 縮圖<br />
-      • 觀察結果會送到 OpenAI session 讓蘇菲開口講<br />
-      • 廠商 voice = marin（溫暖中性女聲）
-    </div>
-
-    <div class="log" id="log"></div>
-
-    <audio id="remoteAudio" autoplay></audio>
+    <button class="end-btn" id="endBtn" disabled>結束對話</button>
   </div>
+
+  <!-- Main stage -->
+  <div class="stage" id="stage">
+
+    <!-- Idle CTA · State A -->
+    <div class="idle-cta" id="idleCTA">
+      <div class="sophie-avatar-wrap" style="width: 280px; height: 280px;">
+        <div class="sophie-avatar idle">
+          <svg class="sophie-face" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <!-- 頭髮（後）-->
+            <path class="hair" d="M 20 38 Q 20 12, 50 12 Q 80 12, 80 38 L 80 62 Q 75 70, 65 70 L 35 70 Q 25 70, 20 62 Z" />
+            <!-- 臉 -->
+            <ellipse class="skin" cx="50" cy="52" rx="22" ry="26" />
+            <!-- 瀏海 -->
+            <path class="hair" d="M 28 32 Q 35 25, 50 26 Q 65 25, 72 32 Q 64 38, 50 36 Q 36 38, 28 32 Z" />
+            <!-- 雙頰 -->
+            <ellipse class="cheek" cx="36" cy="58" rx="4" ry="3" />
+            <ellipse class="cheek" cx="64" cy="58" rx="4" ry="3" />
+            <!-- 眼睛 -->
+            <ellipse class="eye" cx="40" cy="50" rx="2" ry="3" />
+            <ellipse class="eye" cx="60" cy="50" rx="2" ry="3" />
+            <!-- 嘴 -->
+            <path class="mouth" d="M 44 64 Q 50 67, 56 64" stroke="#A4571F" stroke-width="1.5" fill="none" stroke-linecap="round" />
+          </svg>
+        </div>
+      </div>
+      <h1>今天想跟我聊什麼？</h1>
+      <div class="lead">按「開始對話」、允許麥克風、講中文就可以。<br />鏡頭跟個資守衛要不要開、隨你按。</div>
+      <button class="start-cta" id="startBtn">開始對話</button>
+      <div class="settings">
+        <span>聲音</span>
+        <select id="persona">
+          <option value="sophie" selected>蘇菲（中文 · marin 暖嗓）</option>
+          <option value="lily">Lily（English · alloy）</option>
+        </select>
+        <span>模型</span>
+        <select id="model">
+          <option value="" selected>預設（gpt-realtime-2）</option>
+          <option value="gpt-realtime-2">gpt-realtime-2</option>
+          <option value="gpt-realtime">gpt-realtime（fallback）</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Active stage · State B/C (對話中 hidden until start) -->
+    <div class="sophie-zone" id="sophieZone" style="display: none;">
+      <div class="sophie-avatar-wrap">
+        <div class="sophie-avatar idle" id="sophieAvatar">
+          <svg class="sophie-face" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <path class="hair" d="M 20 38 Q 20 12, 50 12 Q 80 12, 80 38 L 80 62 Q 75 70, 65 70 L 35 70 Q 25 70, 20 62 Z" />
+            <ellipse class="skin" cx="50" cy="52" rx="22" ry="26" />
+            <path class="hair" d="M 28 32 Q 35 25, 50 26 Q 65 25, 72 32 Q 64 38, 50 36 Q 36 38, 28 32 Z" />
+            <ellipse class="cheek" cx="36" cy="58" rx="4" ry="3" />
+            <ellipse class="cheek" cx="64" cy="58" rx="4" ry="3" />
+            <ellipse class="eye" cx="40" cy="50" rx="2" ry="3" />
+            <ellipse class="eye" cx="60" cy="50" rx="2" ry="3" />
+            <path class="mouth" id="sophieMouth" d="M 44 64 Q 50 67, 56 64" stroke="#A4571F" stroke-width="1.5" fill="none" stroke-linecap="round" />
+          </svg>
+        </div>
+      </div>
+      <div class="sophie-name">蘇菲</div>
+      <div class="sophie-state" id="sophieState">在聽你說...</div>
+      <div class="sophie-speech empty" id="sophieSpeech">蘇菲還沒講話、你先開口。</div>
+    </div>
+
+    <!-- Right rail · selfie + visitors (hidden until start) -->
+    <div class="rail" id="rail" style="display: none;">
+      <div class="pip-tile" id="selfieTile">
+        <video class="pip-video" id="selfieVideo" autoplay muted playsinline></video>
+        <div class="pip-label">
+          <span class="who-name">你</span>
+          <span class="talking-dot"></span>
+        </div>
+      </div>
+      <div class="pip-placeholder" id="cameraOffPlaceholder">
+        按下方「📷 開鏡頭」<br />讓蘇菲看到你
+      </div>
+
+      <div class="privacy-note" style="margin-top: 8px;">
+        🔒 鏡頭預設關 · 畫面只在這頁活著 · 不存盤、不錄影、不外傳。緊急關按下方紅鈕（&lt; 200 毫秒）。
+      </div>
+    </div>
+
+    <!-- Bottom: waveform + toolbar (hidden until start) -->
+    <div class="bottom" id="bottomBar" style="display: none;">
+      <div class="waveform-wrap">
+        <span class="waveform-label" id="waveformLabel">收音 · 待機</span>
+        <div class="waveform" id="waveform"></div>
+      </div>
+      <div class="toolbar">
+        <button class="tool-btn active" id="micBtn">
+          <span class="tool-icon">🎙</span>
+          <span class="btn-label">麥克風 開</span>
+        </button>
+        <button class="tool-btn" id="cameraBtn">
+          <span class="tool-icon">📷</span>
+          <span class="btn-label">開鏡頭</span>
+        </button>
+        <button class="tool-btn" id="visionBtn" disabled>
+          <span class="tool-icon">👀</span>
+          <span class="btn-label">開始蘇菲看</span>
+        </button>
+        <button class="tool-btn danger" id="killBtn" disabled>
+          <span class="tool-icon">🚨</span>
+          <span class="btn-label">緊急關鏡頭</span>
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="log-toggle" id="logToggle">▾ 開發者 log（除錯用 · 預設折疊）</div>
+  <div class="log" id="log"></div>
+
+  <audio id="remoteAudio" autoplay></audio>
 
 <script>
 (function () {
+  // === DOM refs ===
   const startBtn = document.getElementById("startBtn");
-  const statusEl = document.getElementById("status");
-  const logEl = document.getElementById("log");
-  const remoteAudio = document.getElementById("remoteAudio");
-  const personaSel = document.getElementById("persona");
-  const modelSel = document.getElementById("model");
+  const endBtn = document.getElementById("endBtn");
+  const idleCTA = document.getElementById("idleCTA");
+  const sophieZone = document.getElementById("sophieZone");
+  const rail = document.getElementById("rail");
+  const bottomBar = document.getElementById("bottomBar");
+  const sophieAvatar = document.getElementById("sophieAvatar");
+  const sophieState = document.getElementById("sophieState");
+  const sophieSpeech = document.getElementById("sophieSpeech");
+  const topbarWho = document.getElementById("topbarWho");
+  const topbarMeta = document.getElementById("topbarMeta");
+  const selfieTile = document.getElementById("selfieTile");
+  const selfieVideo = document.getElementById("selfieVideo");
+  const cameraOffPlaceholder = document.getElementById("cameraOffPlaceholder");
+  const micBtn = document.getElementById("micBtn");
   const cameraBtn = document.getElementById("cameraBtn");
   const visionBtn = document.getElementById("visionBtn");
   const killBtn = document.getElementById("killBtn");
-  const cameraStatusEl = document.getElementById("cameraStatus");
-  const cameraPreviewText = document.getElementById("cameraPreviewText");
-  const cameraPreviewEl = document.getElementById("cameraPreview");
-  const latestObsEl = document.getElementById("latestObs");
+  const waveformEl = document.getElementById("waveform");
+  const waveformLabel = document.getElementById("waveformLabel");
+  const logEl = document.getElementById("log");
+  const logToggle = document.getElementById("logToggle");
+  const personaSel = document.getElementById("persona");
+  const modelSel = document.getElementById("model");
+  const remoteAudio = document.getElementById("remoteAudio");
 
+  // === State ===
   let pc = null;
   let micStream = null;
   let dataChannel = null;
   let active = false;
+  let micOn = true;
   let cameraOn = false;
   let visionOn = false;
   let visionPollTimer = null;
   let lastObservationTs = 0;
+  let startedAt = 0;
+  let timerInterval = null;
 
+  // Audio analysis
+  let audioCtx = null;
+  let analyser = null;
+  let waveformAnimFrame = null;
+  let waveformBars = [];
+
+  // Avatar talking detection (heuristic via remote audio level)
+  let remoteAnalyser = null;
+  let remoteAudioCtx = null;
+  let avatarStateAnimFrame = null;
+
+  // === Logging ===
   function log(msg) {
     const ts = new Date().toLocaleTimeString();
     logEl.textContent += "[" + ts + "] " + msg + "\n";
     logEl.scrollTop = logEl.scrollHeight;
   }
-  function setStatus(msg, cls) {
-    statusEl.textContent = msg;
-    statusEl.className = "status" + (cls ? " " + cls : "");
+  logToggle.addEventListener("click", () => {
+    logEl.classList.toggle("open");
+    logToggle.textContent = logEl.classList.contains("open")
+      ? "▴ 折疊開發者 log"
+      : "▾ 開發者 log（除錯用 · 預設折疊）";
+  });
+
+  // === Status helpers ===
+  function setSophieState(text, cls) {
+    sophieState.textContent = text;
+    if (cls === "speaking") {
+      sophieAvatar.classList.remove("idle", "sleep");
+      sophieAvatar.classList.add("speaking");
+    } else if (cls === "sleep") {
+      sophieAvatar.classList.remove("idle", "speaking");
+      sophieAvatar.classList.add("sleep");
+    } else {
+      sophieAvatar.classList.remove("speaking", "sleep");
+      sophieAvatar.classList.add("idle");
+    }
   }
-  function setCameraStatus(msg, cls) {
-    cameraStatusEl.textContent = msg;
-    cameraStatusEl.className = "status" + (cls ? " " + cls : "");
+  function setSpeech(text) {
+    if (!text) {
+      sophieSpeech.textContent = "蘇菲還沒講話、你先開口。";
+      sophieSpeech.classList.add("empty");
+    } else {
+      sophieSpeech.textContent = "「" + text + "」";
+      sophieSpeech.classList.remove("empty");
+    }
+  }
+  function updateTimer() {
+    if (!startedAt) return;
+    const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+    const m = Math.floor(elapsed / 60);
+    const s = String(elapsed % 60).padStart(2, "0");
+    topbarMeta.textContent = m + ":" + s;
   }
 
+  // === Waveform setup ===
+  function buildWaveformBars(n) {
+    waveformEl.innerHTML = "";
+    waveformBars = [];
+    for (let i = 0; i < n; i++) {
+      const bar = document.createElement("div");
+      bar.className = "waveform-bar";
+      bar.style.height = "4px";
+      waveformEl.appendChild(bar);
+      waveformBars.push(bar);
+    }
+  }
+  function updateWaveform() {
+    if (!analyser || !waveformBars.length) return;
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(data);
+    const step = Math.floor(data.length / waveformBars.length) || 1;
+    let total = 0;
+    for (let i = 0; i < waveformBars.length; i++) {
+      const slice = data.slice(i * step, (i + 1) * step);
+      let sum = 0;
+      for (const v of slice) sum += v;
+      const avg = sum / slice.length;
+      total += avg;
+      const h = Math.max(4, Math.min(36, (avg / 255) * 40 + 4));
+      waveformBars[i].style.height = h + "px";
+    }
+    // mic active hint
+    const overall = total / waveformBars.length;
+    if (overall > 20) {
+      waveformLabel.textContent = "收音 · 你在講話";
+      selfieTile.classList.add("talking");
+    } else {
+      waveformLabel.textContent = "收音 · 靜音中";
+      selfieTile.classList.remove("talking");
+    }
+    waveformAnimFrame = requestAnimationFrame(updateWaveform);
+  }
+  function startWaveform(stream) {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const source = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.6;
+    source.connect(analyser);
+    buildWaveformBars(40);
+    updateWaveform();
+  }
+  function stopWaveform() {
+    if (waveformAnimFrame) cancelAnimationFrame(waveformAnimFrame);
+    waveformAnimFrame = null;
+    waveformBars.forEach(b => b.style.height = "4px");
+    waveformLabel.textContent = "收音 · 待機";
+  }
+
+  // === Avatar talking detection (用遠端 audio level 偵測蘇菲在不在講話) ===
+  function startAvatarTalkingDetection(stream) {
+    try {
+      if (!remoteAudioCtx) remoteAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const src = remoteAudioCtx.createMediaStreamSource(stream);
+      remoteAnalyser = remoteAudioCtx.createAnalyser();
+      remoteAnalyser.fftSize = 256;
+      remoteAnalyser.smoothingTimeConstant = 0.4;
+      src.connect(remoteAnalyser);
+      detectAvatarSpeaking();
+    } catch (e) {
+      log("avatar talking detection setup fail: " + e.message);
+    }
+  }
+  function detectAvatarSpeaking() {
+    if (!remoteAnalyser) return;
+    const data = new Uint8Array(remoteAnalyser.frequencyBinCount);
+    remoteAnalyser.getByteFrequencyData(data);
+    let sum = 0;
+    for (const v of data) sum += v;
+    const avg = sum / data.length;
+    if (avg > 12) {
+      setSophieState("正在說...", "speaking");
+    } else if (active) {
+      setSophieState("在聽你說...", "idle");
+    }
+    avatarStateAnimFrame = requestAnimationFrame(detectAvatarSpeaking);
+  }
+  function stopAvatarTalkingDetection() {
+    if (avatarStateAnimFrame) cancelAnimationFrame(avatarStateAnimFrame);
+    avatarStateAnimFrame = null;
+  }
+
+  // === Mic toggle ===
+  function setMicEnabled(on) {
+    if (!micStream) return;
+    micStream.getAudioTracks().forEach(t => t.enabled = on);
+    micOn = on;
+    micBtn.classList.toggle("active", on);
+    micBtn.querySelector(".btn-label").textContent = on ? "麥克風 開" : "麥克風 關";
+    micBtn.querySelector(".tool-icon").textContent = on ? "🎙" : "🔇";
+    if (!on) {
+      waveformLabel.textContent = "收音 · 已靜音";
+      waveformBars.forEach(b => b.style.height = "4px");
+    }
+  }
+  micBtn.addEventListener("click", () => {
+    if (!micStream) return;
+    setMicEnabled(!micOn);
+  });
+
+  // === Selfie webcam (純前端 · 不送伺服器 · 卡西法 v0.3.1 規格的瀏覽器端) ===
+  let selfieStream = null;
+  async function startSelfie() {
+    try {
+      selfieStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 320, height: 240, facingMode: "user" },
+        audio: false
+      });
+      selfieVideo.srcObject = selfieStream;
+      selfieTile.style.display = "";
+      cameraOffPlaceholder.style.display = "none";
+      log("selfie 鏡頭啟動");
+    } catch (e) {
+      log("selfie 鏡頭拒絕：" + e.message);
+      selfieTile.style.display = "none";
+      cameraOffPlaceholder.style.display = "";
+      cameraOffPlaceholder.innerHTML = "鏡頭被拒絕<br /><span style='font-size:11px'>(" + e.name + ")</span>";
+    }
+  }
+  function stopSelfie() {
+    if (selfieStream) {
+      selfieStream.getTracks().forEach(t => t.stop());
+      selfieStream = null;
+    }
+    selfieVideo.srcObject = null;
+    selfieTile.style.display = "none";
+    cameraOffPlaceholder.style.display = "";
+    cameraOffPlaceholder.innerHTML = "按下方「📷 開鏡頭」<br />讓蘇菲看到你";
+  }
+  cameraBtn.addEventListener("click", async () => {
+    if (cameraOn) {
+      await cameraDisable();
+    } else {
+      await cameraEnable();
+    }
+  });
+
+  // === Camera (server-side · Phase 3 既有 backend) ===
+  async function cameraEnable() {
+    cameraBtn.disabled = true;
+    try {
+      // 先 browser selfie
+      await startSelfie();
+      // 再 backend camera (server-side MediaPipe / Claude vision)
+      const resp = await fetch("/camera/enable", { method: "POST" });
+      const data = await resp.json();
+      if (data.ok) {
+        cameraOn = true;
+        cameraBtn.classList.add("active");
+        cameraBtn.querySelector(".btn-label").textContent = "關鏡頭";
+        cameraBtn.disabled = false;
+        visionBtn.disabled = false;
+        killBtn.disabled = false;
+        log("camera (backend) enabled");
+      } else {
+        // Backend 失敗（Modal sandbox 沒實體鏡頭）但 selfie 可能還在
+        log("backend /camera/enable 503 (Modal 無 webcam · 預期)。selfie 仍 work、Phase 3 vision 不可用。");
+        cameraOn = true;
+        cameraBtn.classList.add("active");
+        cameraBtn.querySelector(".btn-label").textContent = "關鏡頭";
+        cameraBtn.disabled = false;
+        visionBtn.disabled = true; // Modal 沒 webcam 不能跑 server vision
+        killBtn.disabled = false;
+      }
+    } catch (e) {
+      log("camera enable err: " + e.message);
+      cameraBtn.disabled = false;
+    }
+  }
+  async function cameraDisable() {
+    cameraBtn.disabled = true;
+    stopSelfie();
+    try { await fetch("/camera/disable", { method: "POST" }); } catch (_) {}
+    cameraOn = false;
+    visionOn = false;
+    cameraBtn.classList.remove("active");
+    cameraBtn.querySelector(".btn-label").textContent = "開鏡頭";
+    cameraBtn.disabled = false;
+    visionBtn.disabled = true;
+    visionBtn.classList.remove("active");
+    visionBtn.querySelector(".btn-label").textContent = "開始蘇菲看";
+    killBtn.disabled = true;
+    if (visionPollTimer) { clearInterval(visionPollTimer); visionPollTimer = null; }
+    log("camera disabled");
+  }
+  async function cameraKill() {
+    killBtn.disabled = true;
+    stopSelfie();
+    try {
+      const t0 = performance.now();
+      const resp = await fetch("/camera/kill", { method: "POST" });
+      const elapsed = performance.now() - t0;
+      const data = await resp.json();
+      log("緊急關鏡頭 · " + Math.round(elapsed) + "ms (server " + data.elapsed_ms + "ms)");
+    } catch (_) {}
+    cameraOn = false;
+    visionOn = false;
+    cameraBtn.classList.remove("active");
+    cameraBtn.querySelector(".btn-label").textContent = "開鏡頭";
+    cameraBtn.disabled = false;
+    visionBtn.disabled = true;
+    visionBtn.classList.remove("active");
+    visionBtn.querySelector(".btn-label").textContent = "開始蘇菲看";
+    if (visionPollTimer) { clearInterval(visionPollTimer); visionPollTimer = null; }
+  }
+  killBtn.addEventListener("click", cameraKill);
+
+  // === Vision (server-side · Phase 3 既有) ===
+  visionBtn.addEventListener("click", async () => {
+    if (visionOn) {
+      await fetch("/vision/disable", { method: "POST" }).catch(()=>{});
+      visionOn = false;
+      visionBtn.classList.remove("active");
+      visionBtn.querySelector(".btn-label").textContent = "開始蘇菲看";
+      if (visionPollTimer) { clearInterval(visionPollTimer); visionPollTimer = null; }
+    } else {
+      try {
+        const resp = await fetch("/vision/enable", { method: "POST" });
+        const data = await resp.json();
+        if (data.ok) {
+          visionOn = true;
+          visionBtn.classList.add("active");
+          visionBtn.querySelector(".btn-label").textContent = "停止蘇菲看";
+          visionPollTimer = setInterval(pollVisionLatest, 1000);
+        }
+      } catch (e) { log("vision enable err: " + e.message); }
+    }
+  });
+  async function pollVisionLatest() {
+    if (!visionOn) return;
+    try {
+      const resp = await fetch("/vision/latest");
+      const data = await resp.json();
+      const text = data.text || "";
+      const ts = data.ts || 0;
+      if (text && ts > lastObservationTs) {
+        lastObservationTs = ts;
+        log("vision: " + text);
+        if (dataChannel && dataChannel.readyState === "open") {
+          dataChannel.send(JSON.stringify({
+            type: "session.update",
+            session: {
+              instructions: window.__pendingInstructions +
+                "\n\n--- 你剛看到 ---\n" + text + "\n值得講就主動講、講完馬上停。",
+            },
+          }));
+        }
+      }
+    } catch (_) {}
+  }
+
+  // === Main start / stop ===
   async function start() {
-    if (active) return stop();
+    if (active) return;
     startBtn.disabled = true;
-    setStatus("申請麥克風權限...", "");
+    setSophieState("申請麥克風...", "idle");
+
     try {
       micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      log("mic granted, " + micStream.getAudioTracks().length + " track(s)");
+      log("mic granted");
     } catch (e) {
-      setStatus("無法取得麥克風：" + e.message, "err");
+      setSophieState("無法取得麥克風：" + e.message, "sleep");
       startBtn.disabled = false;
       return;
     }
 
-    setStatus("建立 WebRTC PeerConnection...", "");
-    pc = new RTCPeerConnection();
+    // Layout swap idle → active
+    idleCTA.style.display = "none";
+    sophieZone.style.display = "flex";
+    rail.style.display = "flex";
+    bottomBar.style.display = "flex";
+    topbarWho.textContent = "蘇菲";
+    endBtn.disabled = false;
+    startedAt = Date.now();
+    timerInterval = setInterval(updateTimer, 1000);
 
+    // Start mic waveform
+    startWaveform(micStream);
+
+    // WebRTC
+    pc = new RTCPeerConnection();
     pc.ontrack = (ev) => {
       log("track received: " + ev.track.kind);
       if (ev.track.kind === "audio") {
         remoteAudio.srcObject = ev.streams[0];
+        startAvatarTalkingDetection(ev.streams[0]);
       }
     };
     pc.onconnectionstatechange = () => {
       log("pc state: " + pc.connectionState);
       if (pc.connectionState === "connected") {
-        setStatus("連線完成 · 你講話蘇菲就會回。", "ok");
-        startBtn.textContent = "結束對話";
-        startBtn.classList.add("stop");
-        startBtn.disabled = false;
+        setSophieState("在聽你說...", "idle");
         active = true;
       } else if (pc.connectionState === "failed" || pc.connectionState === "closed") {
-        setStatus("連線中斷。", "err");
+        setSophieState("連線中斷", "sleep");
         cleanup();
       }
     };
-    pc.oniceconnectionstatechange = () => log("ice: " + pc.iceConnectionState);
-
     micStream.getTracks().forEach((t) => pc.addTrack(t, micStream));
 
     dataChannel = pc.createDataChannel("oai-events");
     dataChannel.onmessage = (ev) => {
       try {
         const obj = JSON.parse(ev.data);
-        if (obj.type) log("evt: " + obj.type);
-      } catch (e) {
-        log("evt raw: " + ev.data.slice(0, 80));
-      }
+        if (obj.type === "response.audio_transcript.delta" && obj.delta) {
+          // Sophie 即時 transcript · 累積顯示
+          const cur = sophieSpeech.classList.contains("empty") ? "" : sophieSpeech.textContent.replace(/^「|」$/g, "");
+          setSpeech(cur + obj.delta);
+        } else if (obj.type === "response.audio_transcript.done" && obj.transcript) {
+          setSpeech(obj.transcript);
+        } else if (obj.type) {
+          log("evt: " + obj.type);
+        }
+      } catch (_) {}
     };
     dataChannel.onopen = () => {
-      log("data channel open, injecting persona instructions...");
+      log("data channel open, injecting persona...");
       if (window.__pendingInstructions) {
         const sessionUpdate = {
           type: "session.update",
@@ -340,15 +977,13 @@
           },
         };
         dataChannel.send(JSON.stringify(sessionUpdate));
-        log("session.update sent (" + window.__pendingInstructions.length + " chars instructions)");
+        log("session.update sent");
       }
     };
 
-    setStatus("建立 SDP offer...", "");
+    setSophieState("連線中...", "idle");
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-
-    setStatus("跟伺服器交換 SDP（Modal -> OpenAI）...", "");
     const persona = personaSel.value || "sophie";
     const model = modelSel.value || "";
     const url = "/sdp?persona=" + encodeURIComponent(persona) + (model ? "&model=" + encodeURIComponent(model) : "");
@@ -361,7 +996,7 @@
         body: offer.sdp,
       });
     } catch (e) {
-      setStatus("/sdp 連不到：" + e.message, "err");
+      setSophieState("連不到伺服器：" + e.message, "sleep");
       cleanup();
       return;
     }
@@ -369,7 +1004,8 @@
     if (!resp.ok) {
       let detail = "";
       try { detail = JSON.stringify(await resp.json()); } catch (_) { detail = await resp.text(); }
-      setStatus("伺服器 " + resp.status + "：" + detail.slice(0, 200), "err");
+      setSophieState("伺服器 " + resp.status, "sleep");
+      log("server " + resp.status + ": " + detail.slice(0, 200));
       cleanup();
       return;
     }
@@ -382,257 +1018,59 @@
     if (instrB64) {
       try {
         window.__pendingInstructions = decodeURIComponent(escape(atob(instrB64)));
-        log("instructions loaded (" + window.__pendingInstructions.length + " chars)");
-      } catch (e) {
-        log("failed to decode instructions: " + e.message);
-      }
+      } catch (e) { log("decode instructions fail: " + e.message); }
     }
     window.__pendingVoice = usedVoice;
-    log("answer received, model=" + usedModel + " voice=" + usedVoice);
-    if (warning) {
-      log("WARNING: " + warning + " (fallback from " + (resp.headers.get("x-realtime-fallback-from") || "?") + ")");
-      setStatus("注意：gpt-realtime-2 不可用、自動降回 " + usedModel, "warn");
-    }
+    log("answer · model=" + usedModel + " voice=" + usedVoice);
+    if (warning) log("WARNING: " + warning);
 
     try {
       await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
-      log("remote description set, waiting for ICE...");
     } catch (e) {
-      setStatus("SDP setRemoteDescription failed: " + e.message, "err");
+      setSophieState("連線失敗：" + e.message, "sleep");
       cleanup();
     }
   }
 
-  function stop() {
-    log("user stop");
-    cleanup();
-    setStatus("已結束。再按一次重新對話。", "");
-  }
-
   function cleanup() {
     active = false;
-    startBtn.textContent = "開始對話";
-    startBtn.classList.remove("stop");
     startBtn.disabled = false;
+    endBtn.disabled = true;
+    topbarWho.textContent = "蘇菲 · 待命中";
+    topbarMeta.textContent = "";
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    startedAt = 0;
+
+    stopWaveform();
+    stopAvatarTalkingDetection();
     if (dataChannel) { try { dataChannel.close(); } catch (_) {} dataChannel = null; }
     if (pc) { try { pc.close(); } catch (_) {} pc = null; }
     if (micStream) {
       micStream.getTracks().forEach((t) => t.stop());
       micStream = null;
     }
+    stopSelfie();
     remoteAudio.srcObject = null;
+
+    // Layout swap active → idle
+    idleCTA.style.display = "flex";
+    sophieZone.style.display = "none";
+    rail.style.display = "none";
+    bottomBar.style.display = "none";
+    setSpeech("");
   }
-
-  // ---------- Camera + Vision (Phase 3) ----------
-
-  async function toggleCamera() {
-    if (cameraOn) {
-      await cameraDisable();
-    } else {
-      await cameraEnable();
-    }
-  }
-
-  async function cameraEnable() {
-    cameraBtn.disabled = true;
-    setCameraStatus("開鏡頭中...", "");
-    try {
-      const resp = await fetch("/camera/enable", { method: "POST" });
-      const data = await resp.json();
-      if (data.ok) {
-        cameraOn = true;
-        cameraBtn.textContent = "關鏡頭";
-        cameraBtn.classList.add("stop");
-        cameraBtn.disabled = false;
-        visionBtn.disabled = false;
-        killBtn.disabled = false;
-        setCameraStatus("鏡頭啟動 · index=" + data.camera_index + " fps=" + data.fps + " mediapipe=" + data.mediapipe_available, "ok");
-        log("camera enabled");
-        // Start snapshot preview poll (debug mode only)
-        startPreviewPoll();
-      } else {
-        setCameraStatus("開鏡頭失敗：" + (data.detail || data.error), "err");
-        cameraBtn.disabled = false;
-      }
-    } catch (e) {
-      setCameraStatus("/camera/enable 連不到：" + e.message, "err");
-      cameraBtn.disabled = false;
-    }
-  }
-
-  async function cameraDisable() {
-    cameraBtn.disabled = true;
-    try {
-      const resp = await fetch("/camera/disable", { method: "POST" });
-      const data = await resp.json();
-      cameraOn = false;
-      visionOn = false;
-      cameraBtn.textContent = "開鏡頭";
-      cameraBtn.classList.remove("stop");
-      cameraBtn.disabled = false;
-      visionBtn.textContent = "開始蘇菲看畫面";
-      visionBtn.classList.remove("stop");
-      visionBtn.disabled = true;
-      killBtn.disabled = true;
-      stopPreviewPoll();
-      stopVisionPoll();
-      setCameraStatus("鏡頭已關。最後 frame_count=" + (data.stat && data.stat.frame_count), "");
-      cameraPreviewText.textContent = "（鏡頭未開）";
-      log("camera disabled");
-    } catch (e) {
-      setCameraStatus("/camera/disable 出錯：" + e.message, "err");
-      cameraBtn.disabled = false;
-    }
-  }
-
-  async function cameraKill() {
-    killBtn.disabled = true;
-    try {
-      const resp = await fetch("/camera/kill", { method: "POST" });
-      const data = await resp.json();
-      cameraOn = false;
-      visionOn = false;
-      cameraBtn.textContent = "開鏡頭";
-      cameraBtn.classList.remove("stop");
-      cameraBtn.disabled = false;
-      visionBtn.textContent = "開始蘇菲看畫面";
-      visionBtn.classList.remove("stop");
-      visionBtn.disabled = true;
-      stopPreviewPoll();
-      stopVisionPoll();
-      setCameraStatus("緊急關閉鏡頭完成（" + data.elapsed_ms + "ms / target " + data.target_ms + "ms）", "warn");
-      cameraPreviewText.textContent = "（鏡頭已緊急關閉）";
-      log("CAMERA KILL elapsed=" + data.elapsed_ms + "ms");
-    } catch (e) {
-      setCameraStatus("/camera/kill 出錯：" + e.message, "err");
-    }
-  }
-
-  async function toggleVision() {
-    if (visionOn) {
-      await visionDisable();
-    } else {
-      await visionEnable();
-    }
-  }
-
-  async function visionEnable() {
-    visionBtn.disabled = true;
-    setCameraStatus("啟動蘇菲看畫面...", "");
-    try {
-      const resp = await fetch("/vision/enable", { method: "POST" });
-      const data = await resp.json();
-      if (data.ok) {
-        visionOn = true;
-        visionBtn.textContent = "停止蘇菲看畫面";
-        visionBtn.classList.add("stop");
-        visionBtn.disabled = false;
-        setCameraStatus("蘇菲看畫面中 · interval=" + data.interval_s + "s model=" + data.model, "ok");
-        log("vision enabled, model=" + data.model);
-        startVisionPoll();
-      } else {
-        setCameraStatus("開 vision 失敗：" + (data.detail || data.error), "err");
-        visionBtn.disabled = false;
-      }
-    } catch (e) {
-      setCameraStatus("/vision/enable 連不到：" + e.message, "err");
-      visionBtn.disabled = false;
-    }
-  }
-
-  async function visionDisable() {
-    visionBtn.disabled = true;
-    try {
-      const resp = await fetch("/vision/disable", { method: "POST" });
-      await resp.json();
-      visionOn = false;
-      visionBtn.textContent = "開始蘇菲看畫面";
-      visionBtn.classList.remove("stop");
-      visionBtn.disabled = false;
-      stopVisionPoll();
-      setCameraStatus("蘇菲已停止看畫面。", "");
-      log("vision disabled");
-    } catch (e) {
-      setCameraStatus("/vision/disable 出錯：" + e.message, "err");
-      visionBtn.disabled = false;
-    }
-  }
-
-  // ---------- Polling helpers ----------
-
-  function startPreviewPoll() {
-    // Snapshot endpoint is debug-only (gated by env CAMERA_DEBUG=1).
-    // Prod: skip preview, just show text.
-    cameraPreviewText.textContent = "（鏡頭中 · prod 模式不顯示預覽）";
-  }
-
-  function stopPreviewPoll() {
-    // no-op for prod
-  }
-
-  function startVisionPoll() {
-    if (visionPollTimer) clearInterval(visionPollTimer);
-    visionPollTimer = setInterval(pollVisionLatest, 1000);
-  }
-
-  function stopVisionPoll() {
-    if (visionPollTimer) { clearInterval(visionPollTimer); visionPollTimer = null; }
-  }
-
-  async function pollVisionLatest() {
-    if (!visionOn) return;
-    try {
-      const resp = await fetch("/vision/latest");
-      const data = await resp.json();
-      const text = data.text || "";
-      const ts = data.ts || 0;
-      if (text && ts > lastObservationTs) {
-        lastObservationTs = ts;
-        latestObsEl.textContent = "「" + text + "」";
-        latestObsEl.classList.remove("empty");
-        log("vision obs: " + text);
-        // Relay to OpenAI realtime session via data channel
-        relayObservationToSophie(text);
-      }
-    } catch (e) {
-      // Silent fail (rate-limit poll, not critical)
-    }
-  }
-
-  function relayObservationToSophie(observationText) {
-    if (!dataChannel || dataChannel.readyState !== "open") {
-      log("dataChannel not open, skip relay");
-      return;
-    }
-    // Inject observation as additional system note via session.update
-    // Privacy 5.4: only the text observation flows, not the frame.
-    try {
-      const update = {
-        type: "session.update",
-        session: {
-          instructions: window.__pendingInstructions + "\n\n--- 你剛剛看到 ---\n" + observationText + "\n如果這個觀察值得講就主動講出來、講完馬上停。",
-        },
-      };
-      dataChannel.send(JSON.stringify(update));
-      log("relayed observation to sophie session: " + observationText);
-    } catch (e) {
-      log("relay error: " + e.message);
-    }
-  }
-
-  // ---------- Wire buttons ----------
-
+  endBtn.addEventListener("click", () => {
+    log("user end");
+    cleanup();
+  });
   startBtn.addEventListener("click", start);
-  cameraBtn.addEventListener("click", toggleCamera);
-  visionBtn.addEventListener("click", toggleVision);
-  killBtn.addEventListener("click", cameraKill);
   window.addEventListener("beforeunload", () => {
     cleanup();
-    if (cameraOn) {
-      // Best effort kill on tab close (Privacy 7.3)
-      navigator.sendBeacon("/camera/kill", "");
-    }
+    if (cameraOn) navigator.sendBeacon("/camera/kill", "");
   });
+
+  // Init
+  log("Voice Path v0.3.1 直播感版面 ready · ADR-008 暖琥珀 DNA · ADR-018 隱私守則");
 })();
 </script>
 </body>
