@@ -21,11 +21,16 @@ import os
 from pathlib import Path
 from urllib.parse import quote as urlquote
 
+import base64
+import json
+
 import httpx
 import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
+
+from castle.dispatch import build_realtime_tools
 
 PERSONAS_DIR = Path(__file__).resolve().parent.parent / "personas"
 OPENAI_REALTIME_URL = "https://api.openai.com/v1/realtime/calls"
@@ -152,13 +157,20 @@ def attach_realtime_routes(app):
                 return JSONResponse(status_code=status2, content={"error": "openai_sdp_exchange_failed_both", "primary_status": status, "primary_detail": (err_text or "")[:500], "fallback_status": status2, "fallback_detail": (err_text2 or "")[:500], "primary_model": req_model, "fallback_model": FALLBACK_MODEL})
         if answer is None:
             return JSONResponse(status_code=status, content={"error": "openai_sdp_exchange_failed", "status": status, "detail": (err_text or "")[:500], "model_tried": used_model})
-        import base64 as _b64
-        instr_b64 = _b64.b64encode(instructions.encode("utf-8")).decode("ascii")
+        instr_b64 = base64.b64encode(instructions.encode("utf-8")).decode("ascii")
+        # v0.3.0 Phase 2 後半段: tools schema 一起塞 header 給 browser
+        # browser 連線後從 header 拿 tools (or fallback fetch GET /dispatch/tools)
+        # 再用 data channel session.update 注入 OpenAI Realtime session
+        tools = build_realtime_tools()
+        tools_json = json.dumps(tools, ensure_ascii=False)
+        tools_b64 = base64.b64encode(tools_json.encode("utf-8")).decode("ascii")
         headers = {
             "x-realtime-model": used_model,
             "x-realtime-voice": voice,
             "x-realtime-persona": persona_name,
             "x-realtime-instructions-b64": instr_b64,
+            "x-realtime-tools-b64": tools_b64,
+            "x-realtime-tools-count": str(len(tools)),
         }
         if warning:
             headers["x-realtime-warning"] = warning
