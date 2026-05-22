@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>蘇菲語音 demo · castle-voice-engine v0.2.0</title>
+  <title>蘇菲語音 + 鏡頭 demo · castle-voice-engine v0.3.0</title>
   <style>
     :root {
       --bg: #FAF6F0;
@@ -30,7 +30,7 @@
       background: var(--panel);
       border-radius: 16px;
       padding: 32px 36px;
-      max-width: 540px;
+      max-width: 620px;
       width: 100%;
       box-shadow: 0 8px 24px rgba(43, 32, 24, 0.12);
     }
@@ -75,6 +75,9 @@
     button:disabled { background: #c4b8a4; cursor: not-allowed; }
     button.stop { background: var(--err); }
     button.stop:hover:not(:disabled) { background: #8a2a2a; }
+    button.secondary { background: #8a7a65; margin-top: 8px; }
+    button.secondary:hover:not(:disabled) { background: #6e5f4f; }
+    button.kill { background: var(--err); margin-top: 8px; }
     .status {
       margin-top: 20px;
       padding: 12px 16px;
@@ -110,12 +113,63 @@
     }
     .meta strong { color: var(--ink); }
     audio { display: none; }
+    .section {
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 2px solid #e4d4b8;
+    }
+    .section-title {
+      font-style: italic;
+      color: var(--amber-deep);
+      font-size: 18px;
+      margin-bottom: 12px;
+    }
+    .camera-preview {
+      margin-top: 12px;
+      width: 100%;
+      max-width: 320px;
+      height: 180px;
+      background: #2B2018;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #8a7a65;
+      font-size: 12px;
+      overflow: hidden;
+    }
+    .camera-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .latest-obs {
+      margin-top: 12px;
+      padding: 12px 16px;
+      background: var(--bg);
+      border-left: 3px solid var(--amber);
+      border-radius: 6px;
+      font-size: 14px;
+      min-height: 36px;
+      font-style: italic;
+    }
+    .latest-obs.empty { color: var(--muted); }
+    .privacy-note {
+      background: #fef4e8;
+      border: 1px solid #d4712a55;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--amber-deep);
+      margin-top: 12px;
+      line-height: 1.6;
+    }
   </style>
 </head>
 <body>
   <div class="card">
-    <h1>蘇菲語音 demo</h1>
-    <div class="subtitle">castle-voice-engine v0.2.0 · gpt-realtime-2 · WebRTC</div>
+    <h1>蘇菲語音 + 鏡頭 demo</h1>
+    <div class="subtitle">castle-voice-engine v0.3.0 · Phase 3 多模態 · gpt-realtime-2 + Claude vision</div>
 
     <div class="row">
       <label>persona</label>
@@ -137,17 +191,39 @@
 
     <div class="status" id="status">準備就緒。按上面的按鈕、開麥克風講中文。</div>
 
+    <div class="section">
+      <div class="section-title">鏡頭多模態（Phase 3）</div>
+      <div class="privacy-note">
+        <strong>隱私守則：</strong>鏡頭預設關閉。按「開鏡頭」才會啟動。
+        畫面不會存到磁碟、不會錄影。每 5 秒會送一張縮圖（< 200KB）給 Claude 看、讓蘇菲做即時觀察。
+        要立刻關按「緊急關閉」(≤ 200ms)。
+      </div>
+
+      <button id="cameraBtn" class="secondary">開鏡頭</button>
+      <button id="visionBtn" class="secondary" disabled>開始蘇菲看畫面</button>
+      <button id="killBtn" class="kill" disabled>緊急關閉鏡頭</button>
+
+      <div class="camera-preview" id="cameraPreview">
+        <span id="cameraPreviewText">（鏡頭未開）</span>
+      </div>
+
+      <div class="latest-obs empty" id="latestObs">蘇菲還沒看到什麼...</div>
+
+      <div class="status" id="cameraStatus" style="margin-top: 12px;">鏡頭未啟動。</div>
+    </div>
+
     <div class="meta">
       <strong>怎麼用：</strong><br />
-      1. 按「開始對話」、瀏覽器會問你要不要開麥克風 → 允許<br />
-      2. 等狀態變綠「連線完成、你講話蘇菲就會回」<br />
-      3. 直接講中文。蘇菲會即時聽 + 即時回。<br />
-      4. 想結束按「結束對話」。<br /><br />
+      1. 按「開始對話」、允許麥克風 → 等狀態變綠<br />
+      2. 直接講中文。蘇菲會即時聽 + 即時回。<br />
+      3. （選擇性）按「開鏡頭」→ 按「開始蘇菲看畫面」→ 蘇菲每 5 秒會講一句觀察<br />
+      4. 想關鏡頭按「緊急關閉鏡頭」<br />
+      5. 結束對話按「結束對話」<br /><br />
       <strong>注意：</strong><br />
-      • 建議用 Chrome / Edge / Firefox（Safari 也行但 WebRTC 有時不穩）<br />
-      • 第一次連 Modal cold start 可能 3-5 秒<br />
-      • 端到端延遲 500ms-1.5s（OpenAI Realtime spec）<br />
-      • 廠商 voice = marin（溫暖中性女聲、最新 OpenAI Realtime 2026 voice）
+      • 鏡頭只在這個瀏覽器標籤頁有效、關掉就停<br />
+      • Claude vision 每 5 秒一張、單次 < 200KB 縮圖<br />
+      • 觀察結果會送到 OpenAI session 讓蘇菲開口講<br />
+      • 廠商 voice = marin（溫暖中性女聲）
     </div>
 
     <div class="log" id="log"></div>
@@ -163,11 +239,22 @@
   const remoteAudio = document.getElementById("remoteAudio");
   const personaSel = document.getElementById("persona");
   const modelSel = document.getElementById("model");
+  const cameraBtn = document.getElementById("cameraBtn");
+  const visionBtn = document.getElementById("visionBtn");
+  const killBtn = document.getElementById("killBtn");
+  const cameraStatusEl = document.getElementById("cameraStatus");
+  const cameraPreviewText = document.getElementById("cameraPreviewText");
+  const cameraPreviewEl = document.getElementById("cameraPreview");
+  const latestObsEl = document.getElementById("latestObs");
 
   let pc = null;
   let micStream = null;
   let dataChannel = null;
   let active = false;
+  let cameraOn = false;
+  let visionOn = false;
+  let visionPollTimer = null;
+  let lastObservationTs = 0;
 
   function log(msg) {
     const ts = new Date().toLocaleTimeString();
@@ -178,11 +265,15 @@
     statusEl.textContent = msg;
     statusEl.className = "status" + (cls ? " " + cls : "");
   }
+  function setCameraStatus(msg, cls) {
+    cameraStatusEl.textContent = msg;
+    cameraStatusEl.className = "status" + (cls ? " " + cls : "");
+  }
 
   async function start() {
     if (active) return stop();
     startBtn.disabled = true;
-    setStatus("申請麥克風權限…", "");
+    setStatus("申請麥克風權限...", "");
     try {
       micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       log("mic granted, " + micStream.getAudioTracks().length + " track(s)");
@@ -192,7 +283,7 @@
       return;
     }
 
-    setStatus("建立 WebRTC PeerConnection…", "");
+    setStatus("建立 WebRTC PeerConnection...", "");
     pc = new RTCPeerConnection();
 
     pc.ontrack = (ev) => {
@@ -253,11 +344,11 @@
       }
     };
 
-    setStatus("建立 SDP offer…", "");
+    setStatus("建立 SDP offer...", "");
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    setStatus("跟伺服器交換 SDP（Modal -> OpenAI）…", "");
+    setStatus("跟伺服器交換 SDP（Modal -> OpenAI）...", "");
     const persona = personaSel.value || "sophie";
     const model = modelSel.value || "";
     const url = "/sdp?persona=" + encodeURIComponent(persona) + (model ? "&model=" + encodeURIComponent(model) : "");
@@ -287,8 +378,6 @@
     const usedModel = resp.headers.get("x-realtime-model") || "?";
     const usedVoice = resp.headers.get("x-realtime-voice") || "?";
     const warning = resp.headers.get("x-realtime-warning");
-    // v0.2.2: server returns base64-encoded instructions in header. Stash so
-    // dataChannel.onopen can push a session.update event with the persona prompt.
     const instrB64 = resp.headers.get("x-realtime-instructions-b64");
     if (instrB64) {
       try {
@@ -307,7 +396,7 @@
 
     try {
       await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
-      log("remote description set, waiting for ICE…");
+      log("remote description set, waiting for ICE...");
     } catch (e) {
       setStatus("SDP setRemoteDescription failed: " + e.message, "err");
       cleanup();
@@ -334,8 +423,216 @@
     remoteAudio.srcObject = null;
   }
 
+  // ---------- Camera + Vision (Phase 3) ----------
+
+  async function toggleCamera() {
+    if (cameraOn) {
+      await cameraDisable();
+    } else {
+      await cameraEnable();
+    }
+  }
+
+  async function cameraEnable() {
+    cameraBtn.disabled = true;
+    setCameraStatus("開鏡頭中...", "");
+    try {
+      const resp = await fetch("/camera/enable", { method: "POST" });
+      const data = await resp.json();
+      if (data.ok) {
+        cameraOn = true;
+        cameraBtn.textContent = "關鏡頭";
+        cameraBtn.classList.add("stop");
+        cameraBtn.disabled = false;
+        visionBtn.disabled = false;
+        killBtn.disabled = false;
+        setCameraStatus("鏡頭啟動 · index=" + data.camera_index + " fps=" + data.fps + " mediapipe=" + data.mediapipe_available, "ok");
+        log("camera enabled");
+        // Start snapshot preview poll (debug mode only)
+        startPreviewPoll();
+      } else {
+        setCameraStatus("開鏡頭失敗：" + (data.detail || data.error), "err");
+        cameraBtn.disabled = false;
+      }
+    } catch (e) {
+      setCameraStatus("/camera/enable 連不到：" + e.message, "err");
+      cameraBtn.disabled = false;
+    }
+  }
+
+  async function cameraDisable() {
+    cameraBtn.disabled = true;
+    try {
+      const resp = await fetch("/camera/disable", { method: "POST" });
+      const data = await resp.json();
+      cameraOn = false;
+      visionOn = false;
+      cameraBtn.textContent = "開鏡頭";
+      cameraBtn.classList.remove("stop");
+      cameraBtn.disabled = false;
+      visionBtn.textContent = "開始蘇菲看畫面";
+      visionBtn.classList.remove("stop");
+      visionBtn.disabled = true;
+      killBtn.disabled = true;
+      stopPreviewPoll();
+      stopVisionPoll();
+      setCameraStatus("鏡頭已關。最後 frame_count=" + (data.stat && data.stat.frame_count), "");
+      cameraPreviewText.textContent = "（鏡頭未開）";
+      log("camera disabled");
+    } catch (e) {
+      setCameraStatus("/camera/disable 出錯：" + e.message, "err");
+      cameraBtn.disabled = false;
+    }
+  }
+
+  async function cameraKill() {
+    killBtn.disabled = true;
+    try {
+      const resp = await fetch("/camera/kill", { method: "POST" });
+      const data = await resp.json();
+      cameraOn = false;
+      visionOn = false;
+      cameraBtn.textContent = "開鏡頭";
+      cameraBtn.classList.remove("stop");
+      cameraBtn.disabled = false;
+      visionBtn.textContent = "開始蘇菲看畫面";
+      visionBtn.classList.remove("stop");
+      visionBtn.disabled = true;
+      stopPreviewPoll();
+      stopVisionPoll();
+      setCameraStatus("緊急關閉鏡頭完成（" + data.elapsed_ms + "ms / target " + data.target_ms + "ms）", "warn");
+      cameraPreviewText.textContent = "（鏡頭已緊急關閉）";
+      log("CAMERA KILL elapsed=" + data.elapsed_ms + "ms");
+    } catch (e) {
+      setCameraStatus("/camera/kill 出錯：" + e.message, "err");
+    }
+  }
+
+  async function toggleVision() {
+    if (visionOn) {
+      await visionDisable();
+    } else {
+      await visionEnable();
+    }
+  }
+
+  async function visionEnable() {
+    visionBtn.disabled = true;
+    setCameraStatus("啟動蘇菲看畫面...", "");
+    try {
+      const resp = await fetch("/vision/enable", { method: "POST" });
+      const data = await resp.json();
+      if (data.ok) {
+        visionOn = true;
+        visionBtn.textContent = "停止蘇菲看畫面";
+        visionBtn.classList.add("stop");
+        visionBtn.disabled = false;
+        setCameraStatus("蘇菲看畫面中 · interval=" + data.interval_s + "s model=" + data.model, "ok");
+        log("vision enabled, model=" + data.model);
+        startVisionPoll();
+      } else {
+        setCameraStatus("開 vision 失敗：" + (data.detail || data.error), "err");
+        visionBtn.disabled = false;
+      }
+    } catch (e) {
+      setCameraStatus("/vision/enable 連不到：" + e.message, "err");
+      visionBtn.disabled = false;
+    }
+  }
+
+  async function visionDisable() {
+    visionBtn.disabled = true;
+    try {
+      const resp = await fetch("/vision/disable", { method: "POST" });
+      await resp.json();
+      visionOn = false;
+      visionBtn.textContent = "開始蘇菲看畫面";
+      visionBtn.classList.remove("stop");
+      visionBtn.disabled = false;
+      stopVisionPoll();
+      setCameraStatus("蘇菲已停止看畫面。", "");
+      log("vision disabled");
+    } catch (e) {
+      setCameraStatus("/vision/disable 出錯：" + e.message, "err");
+      visionBtn.disabled = false;
+    }
+  }
+
+  // ---------- Polling helpers ----------
+
+  function startPreviewPoll() {
+    // Snapshot endpoint is debug-only (gated by env CAMERA_DEBUG=1).
+    // Prod: skip preview, just show text.
+    cameraPreviewText.textContent = "（鏡頭中 · prod 模式不顯示預覽）";
+  }
+
+  function stopPreviewPoll() {
+    // no-op for prod
+  }
+
+  function startVisionPoll() {
+    if (visionPollTimer) clearInterval(visionPollTimer);
+    visionPollTimer = setInterval(pollVisionLatest, 1000);
+  }
+
+  function stopVisionPoll() {
+    if (visionPollTimer) { clearInterval(visionPollTimer); visionPollTimer = null; }
+  }
+
+  async function pollVisionLatest() {
+    if (!visionOn) return;
+    try {
+      const resp = await fetch("/vision/latest");
+      const data = await resp.json();
+      const text = data.text || "";
+      const ts = data.ts || 0;
+      if (text && ts > lastObservationTs) {
+        lastObservationTs = ts;
+        latestObsEl.textContent = "「" + text + "」";
+        latestObsEl.classList.remove("empty");
+        log("vision obs: " + text);
+        // Relay to OpenAI realtime session via data channel
+        relayObservationToSophie(text);
+      }
+    } catch (e) {
+      // Silent fail (rate-limit poll, not critical)
+    }
+  }
+
+  function relayObservationToSophie(observationText) {
+    if (!dataChannel || dataChannel.readyState !== "open") {
+      log("dataChannel not open, skip relay");
+      return;
+    }
+    // Inject observation as additional system note via session.update
+    // Privacy 5.4: only the text observation flows, not the frame.
+    try {
+      const update = {
+        type: "session.update",
+        session: {
+          instructions: window.__pendingInstructions + "\n\n--- 你剛剛看到 ---\n" + observationText + "\n如果這個觀察值得講就主動講出來、講完馬上停。",
+        },
+      };
+      dataChannel.send(JSON.stringify(update));
+      log("relayed observation to sophie session: " + observationText);
+    } catch (e) {
+      log("relay error: " + e.message);
+    }
+  }
+
+  // ---------- Wire buttons ----------
+
   startBtn.addEventListener("click", start);
-  window.addEventListener("beforeunload", cleanup);
+  cameraBtn.addEventListener("click", toggleCamera);
+  visionBtn.addEventListener("click", toggleVision);
+  killBtn.addEventListener("click", cameraKill);
+  window.addEventListener("beforeunload", () => {
+    cleanup();
+    if (cameraOn) {
+      // Best effort kill on tab close (Privacy 7.3)
+      navigator.sendBeacon("/camera/kill", "");
+    }
+  });
 })();
 </script>
 </body>
