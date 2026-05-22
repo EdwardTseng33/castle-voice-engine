@@ -1,10 +1,18 @@
-# castle-voice-engine - v0.2.1 GA Realtime API
+# castle-voice-engine - v0.2.3 GA Realtime API (calls endpoint)
 # (c) 2026 Edward / BeyondPath
 # castle/server/realtime_endpoints.py
 #
-# v0.2.0 -> v0.2.1 (2026-05-22 hotfix after deploy smoke):
+# v0.2.2 -> v0.2.3 (2026-05-22 hotfix #2 after Edward demo deprecation 400):
+#   - GA SDP exchange endpoint is /v1/realtime/calls (not /v1/realtime).
+#   - /v1/realtime is WebSocket-only; POSTing SDP there triggers OpenAI
+#     'Realtime Beta API no longer supported' 400 even though the URL itself
+#     pre-dates the GA cutover.
+#   - Single-line change: OPENAI_REALTIME_URL -> /v1/realtime/calls.
+#   - /session/token still 410 Gone (unchanged from v0.2.1).
+#
+# v0.2.0 -> v0.2.1 (2026-05-22 first hotfix):
 #   - OpenAI GA: Beta /v1/realtime/sessions deprecated 5/8.
-#   - /sdp now bypasses mint: forwards SDP straight to /v1/realtime.
+#   - /sdp bypasses ephemeral token mint, forwards SDP to OpenAI directly.
 #   - /session/token returns 410 Gone (deprecation notice).
 
 from __future__ import annotations
@@ -20,7 +28,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 
 PERSONAS_DIR = Path(__file__).resolve().parent.parent / "personas"
-OPENAI_REALTIME_URL = "https://api.openai.com/v1/realtime"
+OPENAI_REALTIME_URL = "https://api.openai.com/v1/realtime/calls"
 
 DEFAULT_MODEL = os.environ.get("OPENAI_REALTIME_MODEL", "gpt-realtime-2").strip() or "gpt-realtime-2"
 FALLBACK_MODEL = "gpt-realtime"
@@ -109,8 +117,8 @@ def attach_realtime_routes(app):
             status_code=410,
             content={
                 "error": "session_token_endpoint_removed",
-                "detail": "OpenAI Realtime Beta API (/v1/realtime/sessions) was deprecated on 2026-05-08. Use POST /sdp with a WebRTC SDP offer instead.",
-                "upgrade_path": "POST /sdp?persona=sophie&model=gpt-realtime-2 with body = WebRTC SDP offer (Content-Type: application/sdp)",
+                "detail": "OpenAI Realtime Beta API (/v1/realtime/sessions) was deprecated on 2026-05-08; GA SDP endpoint is /v1/realtime/calls. Use POST /sdp on this server with a WebRTC SDP offer.",
+                "upgrade_path": "POST /sdp?persona=sophie&model=gpt-realtime-2 with body = WebRTC SDP offer (Content-Type: application/sdp); this server forwards to OpenAI /v1/realtime/calls.",
             },
         )
 
