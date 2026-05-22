@@ -1,6 +1,7 @@
 # castle-voice-engine - Copyright (c) 2026 Edward / BeyondPath
 # app.py - Modal deploy entrypoint. `modal deploy app.py` to push runtime.
 #
+# v0.3.0 (2026-05-22 Phase 2 Path B): subagent dispatch + spaCy correction + UI STT
 # v0.2.3 (2026-05-22 hotfix #2): switch OpenAI SDP target to /v1/realtime/calls (GA)
 # v0.2.0 (2026-05-22): gpt-realtime-2 upgrade + browser demo at /
 #   - realtime_endpoints.py now defaults to gpt-realtime-2 (5/8 release) with
@@ -31,6 +32,7 @@ import modal
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install_from_requirements("requirements.txt")
+    .run_commands("python -m spacy download zh_core_web_sm")
     .add_local_dir("castle", remote_path="/root/castle")
 )
 
@@ -39,9 +41,9 @@ app = modal.App("castle-voice-engine")
 
 @app.function(
     image=image,
-    timeout=60,
+    timeout=120,
     scaledown_window=120,
-    secrets=[modal.Secret.from_name("openai")],
+    secrets=[modal.Secret.from_name("openai"), modal.Secret.from_name("anthropic-key")],
 )
 @modal.asgi_app()
 def fastapi_app():

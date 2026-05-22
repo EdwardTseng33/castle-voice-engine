@@ -3,174 +3,93 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>蘇菲語音 demo · castle-voice-engine v0.2.0</title>
+  <title>蘇菲語音 demo v0.3.0 Phase 2</title>
   <style>
-    :root {
-      --bg: #FAF6F0;
-      --panel: #F5EDE0;
-      --ink: #2B2018;
-      --amber: #D4712A;
-      --amber-deep: #A4571F;
-      --muted: #8A7A65;
-      --ok: #6B8E5A;
-      --warn: #B85C00;
-      --err: #B33A3A;
-    }
+    :root { --bg: #FAF6F0; --panel: #F5EDE0; --ink: #2B2018; --amber: #D4712A; --amber-deep: #A4571F; --muted: #8A7A65; --ok: #6B8E5A; --warn: #B85C00; --err: #B33A3A; --accent: #4B6B8C; }
     * { box-sizing: border-box; }
-    body {
-      margin: 0; padding: 0;
-      font-family: Georgia, "Source Han Serif TC", "Noto Serif TC", serif;
-      background: var(--bg);
-      color: var(--ink);
-      min-height: 100vh;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      padding: 24px;
-    }
-    .card {
-      background: var(--panel);
-      border-radius: 16px;
-      padding: 32px 36px;
-      max-width: 540px;
-      width: 100%;
-      box-shadow: 0 8px 24px rgba(43, 32, 24, 0.12);
-    }
-    h1 {
-      font-style: italic;
-      color: var(--amber-deep);
-      margin: 0 0 8px;
-      font-size: 28px;
-    }
-    .subtitle {
-      color: var(--muted);
-      font-size: 14px;
-      margin-bottom: 24px;
-    }
-    .row { display: flex; gap: 12px; align-items: center; margin: 12px 0; }
+    body { margin: 0; padding: 24px; font-family: Georgia, "Source Han Serif TC", serif; background: var(--bg); color: var(--ink); min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
+    .card { background: var(--panel); border-radius: 16px; padding: 32px 36px; max-width: 620px; width: 100%; box-shadow: 0 8px 24px rgba(43, 32, 24, 0.12); }
+    h1 { font-style: italic; color: var(--amber-deep); margin: 0 0 6px; font-size: 28px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 16px; }
+    .row { display: flex; gap: 12px; align-items: center; margin: 10px 0; }
     label { font-size: 13px; color: var(--muted); min-width: 64px; }
-    select, input {
-      flex: 1;
-      padding: 8px 12px;
-      border: 1px solid #d4c4a8;
-      border-radius: 8px;
-      background: var(--bg);
-      color: var(--ink);
-      font: inherit;
-      font-size: 14px;
-    }
-    button {
-      width: 100%;
-      padding: 14px 18px;
-      background: var(--amber);
-      color: white;
-      border: none;
-      border-radius: 10px;
-      font: inherit;
-      font-size: 16px;
-      font-weight: bold;
-      cursor: pointer;
-      margin-top: 16px;
-      transition: background 0.15s;
-    }
-    button:hover:not(:disabled) { background: var(--amber-deep); }
-    button:disabled { background: #c4b8a4; cursor: not-allowed; }
-    button.stop { background: var(--err); }
-    button.stop:hover:not(:disabled) { background: #8a2a2a; }
-    .status {
-      margin-top: 20px;
-      padding: 12px 16px;
-      border-radius: 8px;
-      background: var(--bg);
-      border-left: 3px solid var(--muted);
-      font-size: 13px;
-      min-height: 40px;
-      color: var(--ink);
-    }
+    select { flex: 1; padding: 8px 12px; border: 1px solid #d4c4a8; border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; font-size: 14px; }
+    button.main { width: 100%; padding: 14px 18px; background: var(--amber); color: white; border: none; border-radius: 10px; font: inherit; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 12px; }
+    button.main:hover:not(:disabled) { background: var(--amber-deep); }
+    button.main:disabled { background: #c4b8a4; cursor: not-allowed; }
+    button.main.stop { background: var(--err); }
+    button.mini { padding: 6px 12px; background: var(--accent); color: white; border: none; border-radius: 6px; font: inherit; font-size: 12px; cursor: pointer; }
+    button.mini:hover:not(:disabled) { background: #3a5a7a; }
+    button.mini:disabled { background: #c4b8a4; cursor: not-allowed; }
+    .status { margin-top: 16px; padding: 10px 14px; border-radius: 8px; background: var(--bg); border-left: 3px solid var(--muted); font-size: 13px; min-height: 36px; color: var(--ink); }
     .status.ok { border-left-color: var(--ok); }
     .status.err { border-left-color: var(--err); color: var(--err); }
     .status.warn { border-left-color: var(--warn); color: var(--warn); }
-    .log {
-      margin-top: 12px;
-      padding: 10px 14px;
-      background: #2B2018;
-      color: #d4c4a8;
-      font-family: ui-monospace, "Cascadia Code", monospace;
-      font-size: 11px;
-      border-radius: 6px;
-      max-height: 160px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-    }
-    .meta {
-      margin-top: 16px;
-      padding-top: 16px;
-      border-top: 1px dashed #d4c4a8;
-      font-size: 12px;
-      color: var(--muted);
-      line-height: 1.6;
-    }
+    .transcript-panel { margin-top: 14px; padding: 12px 14px; background: var(--bg); border-left: 3px solid var(--accent); border-radius: 8px; font-size: 14px; line-height: 1.6; min-height: 60px; max-height: 220px; overflow-y: auto; }
+    .transcript-panel .turn { margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed #d4c4a8; }
+    .transcript-panel .turn:last-child { border-bottom: none; }
+    .transcript-panel .who { color: var(--accent); font-weight: bold; font-size: 12px; }
+    .transcript-panel .who.user { color: var(--amber-deep); }
+    .transcript-panel .text { color: var(--ink); }
+    .transcript-panel .text.corrected { color: var(--ok); font-style: italic; }
+    .transcript-panel .change { display: inline-block; padding: 1px 5px; background: #e5d4b8; border-radius: 3px; font-size: 11px; margin: 0 2px; color: var(--ink); }
+    .transcript-panel .actions { margin-top: 4px; }
+    .subagent-panel { margin-top: 12px; padding: 10px 14px; background: #2B2018; color: #d4c4a8; border-radius: 6px; font-size: 12px; max-height: 120px; overflow-y: auto; }
+    .subagent-panel .call { color: var(--amber); }
+    .subagent-panel .resp { color: #6B8E5A; }
+    .subagent-panel .err { color: var(--err); }
+    .log { margin-top: 12px; padding: 10px 14px; background: #2B2018; color: #8a7a65; font-family: ui-monospace, monospace; font-size: 11px; border-radius: 6px; max-height: 140px; overflow-y: auto; white-space: pre-wrap; }
+    .meta { margin-top: 16px; padding-top: 14px; border-top: 1px dashed #d4c4a8; font-size: 12px; color: var(--muted); line-height: 1.6; }
     .meta strong { color: var(--ink); }
+    .health-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .health-pill { padding: 3px 8px; border-radius: 10px; font-size: 11px; background: #e5d4b8; color: var(--ink); }
+    .health-pill.ok { background: #c4dbb4; }
+    .health-pill.fail { background: #f0c4c4; color: var(--err); }
     audio { display: none; }
   </style>
 </head>
 <body>
   <div class="card">
     <h1>蘇菲語音 demo</h1>
-    <div class="subtitle">castle-voice-engine v0.2.0 · gpt-realtime-2 · WebRTC</div>
-
-    <div class="row">
-      <label>persona</label>
-      <select id="persona">
-        <option value="sophie" selected>sophie（中文 · marin 聲音）</option>
-        <option value="lily">lily（English · alloy）</option>
-      </select>
-    </div>
-    <div class="row">
-      <label>model</label>
-      <select id="model">
-        <option value="" selected>(server 預設 · gpt-realtime-2)</option>
-        <option value="gpt-realtime-2">gpt-realtime-2</option>
-        <option value="gpt-realtime">gpt-realtime（fallback）</option>
-      </select>
-    </div>
-
-    <button id="startBtn">開始對話</button>
-
-    <div class="status" id="status">準備就緒。按上面的按鈕、開麥克風講中文。</div>
-
+    <div class="subtitle">castle-voice-engine v0.3.0 Phase 2 - gpt-realtime-2 + Claude function calling + spaCy STT 校正</div>
+    <div class="row"><label>persona</label><select id="persona"><option value="sophie" selected>sophie (zh marin)</option><option value="lily">lily (en alloy)</option></select></div>
+    <div class="row"><label>model</label><select id="model"><option value="" selected>(server 預設 gpt-realtime-2)</option><option value="gpt-realtime-2">gpt-realtime-2</option><option value="gpt-realtime">gpt-realtime (fallback)</option></select></div>
+    <button class="main" id="startBtn">開始對話</button>
+    <div class="status" id="status">準備就緒。按按鈕開麥克風講中文。</div>
+    <div class="health-row" id="healthRow"></div>
+    <div class="transcript-panel" id="transcriptPanel"><div class="turn"><span class="who">系統</span> <span class="text">講話後逐字稿會出現在這裡、可以一鍵套用校正。</span></div></div>
+    <div class="subagent-panel" id="subagentPanel"></div>
     <div class="meta">
       <strong>怎麼用：</strong><br />
-      1. 按「開始對話」、瀏覽器會問你要不要開麥克風 → 允許<br />
-      2. 等狀態變綠「連線完成、你講話蘇菲就會回」<br />
-      3. 直接講中文。蘇菲會即時聽 + 即時回。<br />
-      4. 想結束按「結束對話」。<br /><br />
-      <strong>注意：</strong><br />
-      • 建議用 Chrome / Edge / Firefox（Safari 也行但 WebRTC 有時不穩）<br />
-      • 第一次連 Modal cold start 可能 3-5 秒<br />
-      • 端到端延遲 500ms-1.5s（OpenAI Realtime spec）<br />
-      • 廠商 voice = marin（溫暖中性女聲、最新 OpenAI Realtime 2026 voice）
+      1. 按開始對話、允許麥克風<br />
+      2. 講中文 (例「卡西法估這 feature 多久」「蕪菁頭最近 retention」「霍爾我們該不該做 X」)<br />
+      3. 蘇菲會自己決定要不要派 subagent · Claude 回完她用語音講給你聽<br />
+      4. 上方逐字稿可一鍵套校正<br /><br />
+      <strong>v0.3.0 新增：</strong>三個 subagent function call (turnip calcifer howl) + STT 顯示 + 一鍵更正<br />
+      <strong>Phase 2 未補：</strong>Picovoice wake-word (等 AccessKey · 看 EDWARD-PICOVOICE-2-STEPS.md)
     </div>
-
     <div class="log" id="log"></div>
-
     <audio id="remoteAudio" autoplay></audio>
   </div>
-
 <script>
 (function () {
-  const startBtn = document.getElementById("startBtn");
-  const statusEl = document.getElementById("status");
-  const logEl = document.getElementById("log");
-  const remoteAudio = document.getElementById("remoteAudio");
-  const personaSel = document.getElementById("persona");
-  const modelSel = document.getElementById("model");
-
-  let pc = null;
-  let micStream = null;
-  let dataChannel = null;
-  let active = false;
+  var startBtn = document.getElementById("startBtn");
+  var statusEl = document.getElementById("status");
+  var logEl = document.getElementById("log");
+  var remoteAudio = document.getElementById("remoteAudio");
+  var personaSel = document.getElementById("persona");
+  var modelSel = document.getElementById("model");
+  var transcriptPanel = document.getElementById("transcriptPanel");
+  var subagentPanel = document.getElementById("subagentPanel");
+  var healthRow = document.getElementById("healthRow");
+  var pc = null;
+  var micStream = null;
+  var dataChannel = null;
+  var active = false;
+  var transcriptTurnCount = 0;
 
   function log(msg) {
-    const ts = new Date().toLocaleTimeString();
+    var ts = new Date().toLocaleTimeString();
     logEl.textContent += "[" + ts + "] " + msg + "\n";
     logEl.scrollTop = logEl.scrollHeight;
   }
@@ -178,30 +97,175 @@
     statusEl.textContent = msg;
     statusEl.className = "status" + (cls ? " " + cls : "");
   }
-
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function addTranscriptTurn(who, text, correctable) {
+    var turnId = "turn-" + (++transcriptTurnCount);
+    var div = document.createElement("div");
+    div.className = "turn";
+    div.id = turnId;
+    var whoCls = (who === "user") ? "who user" : "who";
+    var whoLabel = (who === "user") ? "你" : (who === "agent" ? "蘇菲" : who);
+    div.innerHTML = "<span class=\"" + whoCls + "\">" + whoLabel + "</span> <span class=\"text\">" + escapeHtml(text) + "</span>";
+    if (correctable) {
+      var actions = document.createElement("div");
+      actions.className = "actions";
+      var btn = document.createElement("button");
+      btn.className = "mini";
+      btn.textContent = "套用校正";
+      btn.onclick = function () { applyCorrection(turnId, text); btn.disabled = true; btn.textContent = "校正中..."; };
+      actions.appendChild(btn);
+      div.appendChild(actions);
+    }
+    transcriptPanel.appendChild(div);
+    transcriptPanel.scrollTop = transcriptPanel.scrollHeight;
+    return turnId;
+  }
+  async function applyCorrection(turnId, originalText) {
+    var divText = document.querySelector("#" + turnId + " .text");
+    try {
+      var resp = await fetch("/correct", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: originalText, use_spacy: true }),
+      });
+      var data = await resp.json();
+      if (!resp.ok) { log("correct failed: " + JSON.stringify(data).slice(0, 120)); return; }
+      var corrected = data.corrected || originalText;
+      var changes = data.changes || [];
+      var entities = data.entities || [];
+      var changesHtml = "";
+      if (changes.length > 0) {
+        changesHtml = " <span class=\"change\">改 " + changes.length + " 處: ";
+        for (var i = 0; i < Math.min(changes.length, 4); i++) {
+          changesHtml += changes[i]["from"] + "->" + changes[i]["to"];
+          if (i < Math.min(changes.length, 4) - 1) changesHtml += ", ";
+        }
+        if (changes.length > 4) changesHtml += " ...";
+        changesHtml += "</span>";
+      } else {
+        changesHtml = " <span class=\"change\">無錯字</span>";
+      }
+      var entHtml = "";
+      if (entities.length > 0) {
+        entHtml = " <span class=\"change\">NER: ";
+        for (var j = 0; j < Math.min(entities.length, 3); j++) {
+          entHtml += entities[j].text + "(" + entities[j].label + ")";
+          if (j < Math.min(entities.length, 3) - 1) entHtml += ", ";
+        }
+        entHtml += "</span>";
+      }
+      divText.innerHTML = escapeHtml(corrected) + changesHtml + entHtml;
+      divText.classList.add("corrected");
+      if (dataChannel && dataChannel.readyState === "open" && changes.length > 0) {
+        var contextMsg = {
+          type: "conversation.item.create",
+          item: {
+            type: "message",
+            role: "system",
+            content: [{
+              type: "input_text",
+              text: "STT 校正: 剛剛 user 講的「" + originalText + "」其實是「" + corrected + "」、之後請用校正版本回應。",
+            }],
+          },
+        };
+        dataChannel.send(JSON.stringify(contextMsg));
+        log("correction pushed to OpenAI (" + changes.length + " changes)");
+      }
+    } catch (e) {
+      log("apply correction error: " + e.message);
+    }
+  }
+  function logSubagent(line, cls) {
+    var div = document.createElement("div");
+    div.className = cls || "";
+    div.textContent = line;
+    subagentPanel.appendChild(div);
+    subagentPanel.scrollTop = subagentPanel.scrollHeight;
+  }
+  async function handleFunctionCall(callId, name, argsJson) {
+    var subagent = name.replace(/^call_/, "");
+    var args = {};
+    try { args = JSON.parse(argsJson || "{}"); } catch (e) { args = { question: argsJson }; }
+    var question = args.question || "(empty)";
+    var context = args.context || null;
+    logSubagent(">> 派 " + subagent + ": " + question.slice(0, 50) + (question.length > 50 ? "..." : ""), "call");
+    try {
+      var resp = await fetch("/dispatch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subagent: subagent, question: question, context: context }),
+      });
+      var data = await resp.json();
+      var output;
+      if (data.ok) {
+        output = data.text;
+        logSubagent("<< " + subagent + " (" + (data.model || "?") + "): " + data.text.slice(0, 100) + (data.text.length > 100 ? "..." : ""), "resp");
+      } else {
+        output = "subagent failed: " + (data.error || "unknown error");
+        logSubagent("XX " + subagent + " error: " + (data.error || "?"), "err");
+      }
+      if (dataChannel && dataChannel.readyState === "open") {
+        var resultMsg = {
+          type: "conversation.item.create",
+          item: {
+            type: "function_call_output",
+            call_id: callId,
+            output: output,
+          },
+        };
+        dataChannel.send(JSON.stringify(resultMsg));
+        dataChannel.send(JSON.stringify({ type: "response.create" }));
+        log("function_call_output sent (call_id=" + callId.slice(0, 12) + "...)");
+      }
+    } catch (e) {
+      logSubagent("XX " + subagent + " network error: " + e.message, "err");
+    }
+  }
+  async function loadHealthBadges() {
+    try {
+      var resp = await fetch("/health-extended");
+      if (!resp.ok) return;
+      var d = await resp.json();
+      healthRow.innerHTML = "";
+      var pills = [
+        { label: "OpenAI key", ok: d.openai_key && d.openai_key.prefix_ok },
+        { label: "Anthropic", ok: d.anthropic && d.anthropic.ok },
+        { label: "spaCy zh", ok: d.spacy_zh && d.spacy_zh.available },
+        { label: "subagents " + (d.subagents_loaded || 0), ok: (d.subagents_loaded || 0) >= 3 },
+        { label: "Picovoice", ok: d.picovoice && d.picovoice.ready },
+      ];
+      pills.forEach(function (p) {
+        var span = document.createElement("span");
+        span.className = "health-pill " + (p.ok ? "ok" : "fail");
+        span.textContent = (p.ok ? "OK " : "X ") + p.label;
+        healthRow.appendChild(span);
+      });
+    } catch (e) {
+      log("health-extended fetch error: " + e.message);
+    }
+  }
+  loadHealthBadges();
   async function start() {
     if (active) return stop();
     startBtn.disabled = true;
-    setStatus("申請麥克風權限…", "");
+    setStatus("申請麥克風權限...", "");
     try {
       micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       log("mic granted, " + micStream.getAudioTracks().length + " track(s)");
     } catch (e) {
-      setStatus("無法取得麥克風：" + e.message, "err");
+      setStatus("無法取得麥克風: " + e.message, "err");
       startBtn.disabled = false;
       return;
     }
-
-    setStatus("建立 WebRTC PeerConnection…", "");
+    setStatus("建立 WebRTC PeerConnection...", "");
     pc = new RTCPeerConnection();
-
-    pc.ontrack = (ev) => {
+    pc.ontrack = function (ev) {
       log("track received: " + ev.track.kind);
-      if (ev.track.kind === "audio") {
-        remoteAudio.srcObject = ev.streams[0];
-      }
+      if (ev.track.kind === "audio") { remoteAudio.srcObject = ev.streams[0]; }
     };
-    pc.onconnectionstatechange = () => {
+    pc.onconnectionstatechange = function () {
       log("pc state: " + pc.connectionState);
       if (pc.connectionState === "connected") {
         setStatus("連線完成 · 你講話蘇菲就會回。", "ok");
@@ -214,112 +278,106 @@
         cleanup();
       }
     };
-    pc.oniceconnectionstatechange = () => log("ice: " + pc.iceConnectionState);
-
-    micStream.getTracks().forEach((t) => pc.addTrack(t, micStream));
-
+    pc.oniceconnectionstatechange = function () { log("ice: " + pc.iceConnectionState); };
+    micStream.getTracks().forEach(function (t) { pc.addTrack(t, micStream); });
     dataChannel = pc.createDataChannel("oai-events");
-    dataChannel.onmessage = (ev) => {
+    dataChannel.onmessage = function (ev) {
       try {
-        const obj = JSON.parse(ev.data);
-        if (obj.type) log("evt: " + obj.type);
+        var obj = JSON.parse(ev.data);
+        var t = obj.type || "";
+        if (t === "conversation.item.input_audio_transcription.completed") {
+          var transcript = obj.transcript || "";
+          addTranscriptTurn("user", transcript, true);
+          log("user transcript: " + transcript.slice(0, 60));
+        } else if (t === "response.audio_transcript.done") {
+          var text = obj.transcript || "";
+          if (text) {
+            addTranscriptTurn("agent", text, false);
+            log("agent reply: " + text.slice(0, 60));
+          }
+        } else if (t === "response.function_call_arguments.done") {
+          var callId = obj.call_id;
+          var name = obj.name;
+          var argsJson = obj.arguments;
+          log("function_call from openai: " + name);
+          handleFunctionCall(callId, name, argsJson);
+        } else if (t === "error") {
+          log("openai error: " + (obj.error ? JSON.stringify(obj.error).slice(0, 120) : "?"));
+        } else {
+          if (t) log("evt: " + t);
+        }
       } catch (e) {
         log("evt raw: " + ev.data.slice(0, 80));
       }
     };
-    dataChannel.onopen = () => {
-      log("data channel open, injecting persona instructions...");
-      if (window.__pendingInstructions) {
-        const sessionUpdate = {
-          type: "session.update",
-          session: {
-            instructions: window.__pendingInstructions,
-            voice: window.__pendingVoice || "marin",
-            modalities: ["audio", "text"],
-            input_audio_transcription: { model: "gpt-4o-transcribe", language: "zh" },
-            turn_detection: {
-              type: "server_vad",
-              threshold: 0.8,
-              prefix_padding_ms: 300,
-              silence_duration_ms: 1000,
-              create_response: true,
-              interrupt_response: false,
-            },
-            temperature: 0.8,
-          },
-        };
-        dataChannel.send(JSON.stringify(sessionUpdate));
-        log("session.update sent (" + window.__pendingInstructions.length + " chars instructions)");
+    dataChannel.onopen = function () {
+      log("data channel open, injecting persona + tools...");
+      var sessionPayload = {
+        type: "session.update",
+        session: {
+          instructions: window.__pendingInstructions || "",
+          voice: window.__pendingVoice || "marin",
+          modalities: ["audio", "text"],
+          input_audio_transcription: { model: "gpt-4o-transcribe", language: "zh" },
+          turn_detection: { type: "server_vad", threshold: 0.8, prefix_padding_ms: 300, silence_duration_ms: 1000, create_response: true, interrupt_response: false },
+          temperature: 0.8,
+        },
+      };
+      if (window.__pendingTools && window.__pendingTools.length > 0) {
+        sessionPayload.session.tools = window.__pendingTools;
+        sessionPayload.session.tool_choice = "auto";
+        log("attached " + window.__pendingTools.length + " function tools to session");
       }
+      dataChannel.send(JSON.stringify(sessionPayload));
+      log("session.update sent (" + (window.__pendingInstructions ? window.__pendingInstructions.length : 0) + " chars instructions)");
     };
-
-    setStatus("建立 SDP offer…", "");
-    const offer = await pc.createOffer();
+    setStatus("建立 SDP offer...", "");
+    var offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-
-    setStatus("跟伺服器交換 SDP（Modal -> OpenAI）…", "");
-    const persona = personaSel.value || "sophie";
-    const model = modelSel.value || "";
-    const url = "/sdp?persona=" + encodeURIComponent(persona) + (model ? "&model=" + encodeURIComponent(model) : "");
-
-    let resp;
+    setStatus("跟伺服器交換 SDP (Modal -> OpenAI)...", "");
+    var persona = personaSel.value || "sophie";
+    var model = modelSel.value || "";
+    var url = "/sdp?persona=" + encodeURIComponent(persona) + (model ? "&model=" + encodeURIComponent(model) : "");
+    var resp;
     try {
-      resp = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/sdp" },
-        body: offer.sdp,
-      });
+      resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/sdp" }, body: offer.sdp });
     } catch (e) {
-      setStatus("/sdp 連不到：" + e.message, "err");
+      setStatus("/sdp 連不到: " + e.message, "err");
       cleanup();
       return;
     }
-
     if (!resp.ok) {
-      let detail = "";
+      var detail = "";
       try { detail = JSON.stringify(await resp.json()); } catch (_) { detail = await resp.text(); }
-      setStatus("伺服器 " + resp.status + "：" + detail.slice(0, 200), "err");
+      setStatus("伺服器 " + resp.status + ": " + detail.slice(0, 200), "err");
       cleanup();
       return;
     }
-
-    const answerSdp = await resp.text();
-    const usedModel = resp.headers.get("x-realtime-model") || "?";
-    const usedVoice = resp.headers.get("x-realtime-voice") || "?";
-    const warning = resp.headers.get("x-realtime-warning");
-    // v0.2.2: server returns base64-encoded instructions in header. Stash so
-    // dataChannel.onopen can push a session.update event with the persona prompt.
-    const instrB64 = resp.headers.get("x-realtime-instructions-b64");
+    var answerSdp = await resp.text();
+    var usedModel = resp.headers.get("x-realtime-model") || "?";
+    var usedVoice = resp.headers.get("x-realtime-voice") || "?";
+    var warning = resp.headers.get("x-realtime-warning");
+    var instrB64 = resp.headers.get("x-realtime-instructions-b64");
     if (instrB64) {
-      try {
-        window.__pendingInstructions = decodeURIComponent(escape(atob(instrB64)));
-        log("instructions loaded (" + window.__pendingInstructions.length + " chars)");
-      } catch (e) {
-        log("failed to decode instructions: " + e.message);
-      }
+      try { window.__pendingInstructions = decodeURIComponent(escape(atob(instrB64))); log("instructions loaded (" + window.__pendingInstructions.length + " chars)"); }
+      catch (e) { log("failed to decode instructions: " + e.message); }
+    }
+    var toolsB64 = resp.headers.get("x-realtime-tools-b64");
+    var toolsCount = resp.headers.get("x-realtime-tools-count") || "0";
+    if (toolsB64) {
+      try { var toolsJson = decodeURIComponent(escape(atob(toolsB64))); window.__pendingTools = JSON.parse(toolsJson); log("tools loaded (" + window.__pendingTools.length + " function tools, header count=" + toolsCount + ")"); }
+      catch (e) { log("failed to decode tools: " + e.message); }
     }
     window.__pendingVoice = usedVoice;
     log("answer received, model=" + usedModel + " voice=" + usedVoice);
     if (warning) {
       log("WARNING: " + warning + " (fallback from " + (resp.headers.get("x-realtime-fallback-from") || "?") + ")");
-      setStatus("注意：gpt-realtime-2 不可用、自動降回 " + usedModel, "warn");
+      setStatus("注意: gpt-realtime-2 不可用、自動降回 " + usedModel, "warn");
     }
-
-    try {
-      await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
-      log("remote description set, waiting for ICE…");
-    } catch (e) {
-      setStatus("SDP setRemoteDescription failed: " + e.message, "err");
-      cleanup();
-    }
+    try { await pc.setRemoteDescription({ type: "answer", sdp: answerSdp }); log("remote description set, waiting for ICE..."); }
+    catch (e) { setStatus("SDP setRemoteDescription failed: " + e.message, "err"); cleanup(); }
   }
-
-  function stop() {
-    log("user stop");
-    cleanup();
-    setStatus("已結束。再按一次重新對話。", "");
-  }
-
+  function stop() { log("user stop"); cleanup(); setStatus("已結束。再按一次重新對話。", ""); }
   function cleanup() {
     active = false;
     startBtn.textContent = "開始對話";
@@ -327,13 +385,9 @@
     startBtn.disabled = false;
     if (dataChannel) { try { dataChannel.close(); } catch (_) {} dataChannel = null; }
     if (pc) { try { pc.close(); } catch (_) {} pc = null; }
-    if (micStream) {
-      micStream.getTracks().forEach((t) => t.stop());
-      micStream = null;
-    }
+    if (micStream) { micStream.getTracks().forEach(function (t) { t.stop(); }); micStream = null; }
     remoteAudio.srcObject = null;
   }
-
   startBtn.addEventListener("click", start);
   window.addEventListener("beforeunload", cleanup);
 })();

@@ -26,3 +26,7 @@ openai>=1.40,<2.0
 
 # --- Modal deploy ---
 modal>=0.65,<1.0
+
+# --- v0.3.0 Phase 2 Path B (Anthropic Claude subagent dispatch + spaCy STT correction) ---
+anthropic>=0.40,<0.80
+spacy>=3.7,<3.9
