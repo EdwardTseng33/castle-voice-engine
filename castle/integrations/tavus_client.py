@@ -168,17 +168,22 @@ async def create_conversation(
     replica_id: Optional[str] = None,
     persona_id: Optional[str] = None,
     conversation_name: str = "Castle Sophie",
+    participant_name: str = "Edward",  # 預設 · 跳過 Daily prejoin "Enter your name" friction
     conversational_context: Optional[str] = None,
     custom_greeting: Optional[str] = None,
     audio_only: bool = False,
     callback_url: str = "",
+    properties: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     if not replica_id and not persona_id:
         raise TavusAPIError(
             status=0,
             hint="create_conversation requires replica_id or persona_id (per Tavus docs)",
         )
-    body: dict[str, Any] = {"conversation_name": conversation_name}
+    body: dict[str, Any] = {
+        "conversation_name": conversation_name,
+        "participant_name": participant_name,  # 跳過 prejoin
+    }
     if replica_id:
         body["replica_id"] = replica_id
     if persona_id:
@@ -191,6 +196,9 @@ async def create_conversation(
         body["audio_only"] = True
     if callback_url:
         body["callback_url"] = callback_url
+    # properties: 額外 Daily.co iframe 控制 (enable_recording / language / etc)
+    if properties:
+        body["properties"] = properties
     return await _post("/conversations", body)
 
 
