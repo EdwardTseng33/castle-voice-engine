@@ -83,11 +83,17 @@ image = (
         "einops==0.8.0",
         "omegaconf==2.3.0",
     )
-    # flash_attn requires CUDA toolkit + ninja for build · use prebuilt wheel if available
-    # A10G is Ampere (SM86) · flash_attn 2.5+ supports Ampere
+    # flash_attn · use prebuilt wheel from Dao-AILab GitHub releases
+    # (compile from source needs CUDA toolkit + ninja · too heavy for Modal builder)
+    # PyTorch 2.7.1 cu126 wheel uses cxx11abi=TRUE · 必選 TRUE 版本
     .pip_install(
-        "flash-attn==2.8.0.post2",
-        extra_options="--no-build-isolation",
+        "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.0.post2/flash_attn-2.8.0.post2+cu12torch2.7cxx11abiTRUE-cp311-cp311-linux_x86_64.whl",
+    )
+    # Stage 5: SoulX-FlashHead specific requirements (xfuser distributed framework + xformers)
+    # 從 official requirements.txt 補回來、之前 4-stage split 漏的
+    .pip_install(
+        "xfuser>=0.4.3",
+        "xformers>=0.0.27",  # don't pin 0.0.31 · 跟 PyTorch 2.7 看哪版 wheel 有
     )
     # Clone SoulX-FlashHead inference code
     .run_commands(
