@@ -197,6 +197,14 @@ def fastapi_app():
     runner = MuseTalkRunner()
     expected_token = os.environ.get("MUSETALK_AUTH_TOKEN", "")
 
+    # Server-side defense-in-depth for Sally hard rule (Gate 4 WARN-1 補強).
+    # Client (castle/integrations/musetalk_client.py) already enforces subject_guard;
+    # this inline set is the last line of defense in case any caller bypasses the client.
+    # Keep in sync with castle/safety/subject_guard.py _DENIED_SUBJECTS.
+    _SERVER_DENIED_SUBJECTS = frozenset({
+        "sally", "minor", "child", "stranger", "visitor",
+    })
+
     def _check_auth(authorization: str | None) -> None:
         if not expected_token:
             return  # dev mode
@@ -216,10 +224,14 @@ def fastapi_app():
         authorization: str | None = None,
     ):
         _check_auth(authorization)
-        # Subject guard runs on the client side (musetalk_client.py).
-        # Server-side defense-in-depth: re-check by re-importing rules.
-        # (Skipped here to avoid pulling castle.safety into Modal image.
-        #  Trust client + audit log on the server level.)
+        # Server-side Sally hard rule defense-in-depth (Gate 4 WARN-1).
+        # Client already passed subject_guard; this catches any bypass.
+        subj_lower = (subject or "").strip().lower()
+        if subj_lower in _SERVER_DENIED_SUBJECTS or not subj_lower:
+            raise HTTPException(
+                status_code=403,
+                detail=f"subject={subj_lower!r} blocked by server-side hard rule",
+            )
         contents = await image.read()
         # Persist into the weights volume so MuseTalkRunner can pick it up next cold start
         out_path = f"/weights/assets/{subject}.png"

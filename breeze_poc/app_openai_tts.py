@@ -3,6 +3,12 @@
 # 2026-05-22 calcifer · Edward compare OpenAI vs ElevenLabs · ship OpenAI first
 # (c) 2026 Edward / BeyondPath. Apache-2.0 wrapper.
 #
+# NOTE: this file is NOT part of v0.7 (MuseTalk talking-head) scope.
+# It was created during 2026-05-22 TTS comparison research and carried into
+# this branch's first commit by accident. Kept for research reference.
+# v0.7 main pipeline uses OpenAI gpt-realtime-2 (castle/server/realtime_endpoints.py)
+# for the "speak" layer, not this preset TTS app.
+#
 # Model: openai gpt-4o-mini-tts (released 2026-05-08)
 # - 13 preset voices · NO voice clone (preset only)
 # - Chinese particularly strong per OpenAI docs
