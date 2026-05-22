@@ -25,6 +25,10 @@ build/
 .DS_Store
 Thumbs.db
 
+# Phase 2 dispatch jsonl logs (跨 session 派工紀錄、含 Edward 講話內容、PRIVACY CRITICAL)
+# 2026-05-22 蘇菲新增 · Phase 2 後半段 dispatch_handler runtime artifact
+events/
+
 # editor
 .vscode/
 .idea/
