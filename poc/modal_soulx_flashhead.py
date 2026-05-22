@@ -39,14 +39,21 @@ import modal
 
 # === Image: Python 3.11 + CUDA 12.4 PyTorch + SoulX deps ===
 image = (
-    modal.Image.debian_slim(python_version="3.11")
+    # ⚠ v9 · Plan A: 走 NVIDIA CUDA devel image (含 nvcc 編譯器) + 從源碼編譯 flash-attn
+    # debian_slim 不含 CUDA toolkit · flash-attn 預編譯 wheel 對不齊 PyTorch 2.7.1 = 撞牆
+    # 改 nvidia/cuda:12.8 devel image · 對齊 Soul-AILab 官方 README + Dao-AILab 編譯路徑
+    modal.Image.from_registry(
+        "nvidia/cuda:12.8.0-devel-ubuntu22.04",
+        add_python="3.10",
+    )
+    .env({"BUILD_CACHE_VERSION": "v9-cuda-devel-image-source-compile-flash-attn"})
     .apt_install("git", "ffmpeg", "libgl1", "libglib2.0-0", "libsm6", "libxext6")
-    # PyTorch CUDA 12.6 (cu124 only goes up to 2.6.0 · 2.7.1 needs cu126)
+    # PyTorch CUDA 12.8 · 對齊 nvidia/cuda 12.8 image
     .pip_install(
         "torch==2.7.1",
         "torchvision==0.22.1",
         "torchaudio==2.7.1",
-        index_url="https://download.pytorch.org/whl/cu126",
+        index_url="https://download.pytorch.org/whl/cu128",
     )
     # Stage 1: core ML stack (split to avoid pip resolution-too-deep)
     .pip_install(
@@ -83,11 +90,13 @@ image = (
         "einops==0.8.0",
         "omegaconf==2.3.0",
     )
-    # flash_attn · use prebuilt wheel from Dao-AILab GitHub releases
-    # (compile from source needs CUDA toolkit + ninja · too heavy for Modal builder)
-    # PyTorch 2.7.1 cu126 wheel uses cxx11abi=TRUE · 必選 TRUE 版本
+    # v9 · 從源碼編譯 flash-attn (對齊 Soul-AILab README step 4 推薦路徑)
+    # 預編譯 wheel 對 PyTorch 2.7.1 ABI 對不齊 (Demo #1-#5 撞同款 undefined symbol)
+    # 源碼編譯確保 ABI 跟當前 PyTorch 一致 · 需要 nvidia/cuda devel image 含 nvcc
+    .pip_install("ninja")  # 加速 flash-attn 編譯
     .pip_install(
-        "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.0.post2/flash_attn-2.8.0.post2+cu12torch2.7cxx11abiTRUE-cp311-cp311-linux_x86_64.whl",
+        "flash_attn==2.8.0.post2",
+        extra_options="--no-build-isolation",
     )
     # Stage 5: SoulX-FlashHead specific requirements (xfuser distributed framework + xformers)
     # 從 official requirements.txt 補回來、之前 4-stage split 漏的
