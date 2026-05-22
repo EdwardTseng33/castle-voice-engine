@@ -6,7 +6,8 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>蘇菲 · v0.4.2</title>
+  <title>蘇菲 · v0.5.0</title>
+  <script src="https://unpkg.com/@daily-co/daily-js"></script>
   <style>
     :root {
       --amber: #D4712A;
@@ -32,6 +33,7 @@
       display: flex;
       flex-direction: column;
     }
+    .shell.active { background: #000; }
 
     /* === Top overlay === */
     .top {
@@ -49,34 +51,20 @@
       pointer-events: auto;
       text-shadow: 0 1px 6px rgba(0,0,0,0.7);
     }
-    .name {
-      font-style: italic;
-      font-size: 18px;
-      color: rgba(255,255,255,0.95);
-      letter-spacing: 0.3px;
-    }
+    .name { font-style: italic; font-size: 18px; color: rgba(255,255,255,0.95); letter-spacing: 0.3px; }
     .info-dot {
-      width: 18px; height: 18px;
-      border-radius: 50%;
+      width: 18px; height: 18px; border-radius: 50%;
       border: 1px solid rgba(255,255,255,0.45);
       color: rgba(255,255,255,0.7);
-      font-size: 11px;
-      font-family: Georgia, serif;
-      font-style: normal;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      cursor: help;
+      font-size: 11px; font-family: Georgia, serif; font-style: normal;
+      display: inline-flex; align-items: center; justify-content: center; cursor: help;
     }
     .top-right { display: flex; gap: 10px; pointer-events: auto; }
     .settings-btn {
-      width: 38px; height: 38px;
-      border-radius: 50%;
+      width: 38px; height: 38px; border-radius: 50%;
       border: 1px solid rgba(255,255,255,0.18);
       background: rgba(255,255,255,0.06);
-      color: rgba(255,255,255,0.85);
-      font-size: 18px;
-      cursor: pointer;
+      color: rgba(255,255,255,0.85); font-size: 18px; cursor: pointer;
       transition: background 0.15s;
     }
     .settings-btn:hover { background: rgba(255,255,255,0.16); }
@@ -84,21 +72,30 @@
     /* === Center === */
     .center {
       flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    /* Idle: orb + greeting + green start button */
+    .idle-block {
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      gap: 28px;
-      padding: 80px 24px;
+      gap: 22px;
+      padding: 0 24px;
       text-align: center;
     }
+    .shell.active .idle-block { display: none; }
+
     @keyframes orb-pulse {
       0%, 100% { transform: scale(1); opacity: 0.92; box-shadow: 0 0 60px rgba(212,113,42,0.35); }
       50%      { transform: scale(1.06); opacity: 1;    box-shadow: 0 0 90px rgba(212,113,42,0.55); }
     }
     .orb {
-      width: 180px; height: 180px;
-      border-radius: 50%;
+      width: 180px; height: 180px; border-radius: 50%;
       background: radial-gradient(circle at 32% 32%, var(--amber-bright), var(--amber) 55%, var(--amber-deep) 100%);
       animation: orb-pulse 2.8s ease-in-out infinite;
     }
@@ -144,49 +141,33 @@
       cursor: not-allowed;
       box-shadow: none;
     }
-    .shell.active .start-btn { display: none; }
 
-    /* === Active state · 對話進行中 === */
-    .active-block {
+    /* Loading overlay (while joining) */
+    .loading {
       display: none;
       flex-direction: column;
       align-items: center;
-      gap: 18px;
-    }
-    .shell.active .active-block { display: flex; }
-    .shell.active .greeting { font-size: 22px; }
-    .shell.active .orb { width: 140px; height: 140px; }
-    .active-status {
-      font-size: 14px;
-      color: var(--amber-bright);
-      letter-spacing: 0.5px;
-    }
-    .active-hint {
-      font-size: 12px;
-      color: rgba(255,255,255,0.55);
-      line-height: 1.6;
-      max-width: 480px;
-    }
-    .end-btn {
-      padding: 14px 32px;
-      border-radius: 999px;
-      border: 0;
-      background: var(--err);
-      color: white;
-      font-family: inherit;
+      gap: 14px;
+      color: rgba(255,255,255,0.78);
       font-size: 15px;
-      cursor: pointer;
-      box-shadow: 0 6px 22px rgba(227, 57, 43, 0.4);
-      transition: background 0.15s, transform 0.15s;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
+      font-style: italic;
     }
-    .end-btn:hover { background: #c12d22; transform: translateY(-1px); }
-    .end-btn:active { transform: scale(0.97); }
-    .end-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .loading.show { display: flex; }
+    .loading .orb { width: 100px; height: 100px; animation-duration: 1.6s; }
 
-    /* === Error === */
+    /* Active: video element fills center */
+    .tavus-video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background: #000;
+      display: none;
+    }
+    .shell.active .tavus-video { display: block; }
+
+    /* Error */
     .error {
       display: none;
       flex-direction: column;
@@ -197,18 +178,11 @@
       background: rgba(212,113,42,0.1);
       border: 1px solid rgba(212,113,42,0.35);
       border-radius: 10px;
+      margin-top: 16px;
     }
     .error.show { display: flex; }
-    .error-title {
-      font-style: italic;
-      font-size: 16px;
-      color: rgba(255,255,255,0.92);
-    }
-    .error-detail {
-      font-size: 12px;
-      color: rgba(255,180,112,0.85);
-      line-height: 1.55;
-    }
+    .error-title { font-style: italic; font-size: 16px; color: rgba(255,255,255,0.92); }
+    .error-detail { font-size: 12px; color: rgba(255,180,112,0.85); line-height: 1.55; text-align: center; }
 
     /* === Bottom overlay === */
     .bottom {
@@ -222,8 +196,8 @@
       pointer-events: none;
     }
     .timer {
-      color: rgba(255,255,255,0.85);
-      font-size: 14px;
+      color: rgba(255,255,255,0.88);
+      font-size: 15px;
       font-variant-numeric: tabular-nums;
       font-family: ui-monospace, "Cascadia Code", monospace;
       pointer-events: auto;
@@ -233,6 +207,39 @@
       transition: opacity 0.3s;
     }
     .shell.active .timer { opacity: 1; }
+
+    .actions {
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .icon-btn {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      border: 0;
+      background: rgba(255,255,255,0.12);
+      color: white;
+      font-size: 20px;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, transform 0.15s;
+      backdrop-filter: blur(8px);
+    }
+    .shell.active .icon-btn { display: inline-flex; }
+    .icon-btn:hover { background: rgba(255,255,255,0.22); }
+    .icon-btn:active { transform: scale(0.95); }
+    .icon-btn.on { background: var(--amber); }
+    .icon-btn.muted { background: rgba(227,57,43,0.32); }
+    .icon-btn.end {
+      background: var(--err);
+      box-shadow: 0 4px 18px rgba(227,57,43,0.45);
+    }
+    .icon-btn.end:hover { background: #c12d22; }
+    .icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
     .watermark {
       color: rgba(255,255,255,0.32);
       font-size: 11px;
@@ -242,7 +249,6 @@
       text-align: right;
       text-shadow: 0 1px 6px rgba(0,0,0,0.7);
     }
-    .bottom-spacer { min-width: 60px; }
 
     /* === Settings panel === */
     .panel {
@@ -315,11 +321,11 @@
 
     @media (max-width: 767px) {
       .orb { width: 140px; height: 140px; }
-      .shell.active .orb { width: 110px; height: 110px; }
       .greeting { font-size: 22px; }
       .top, .bottom { padding: 16px 18px; }
-      .panel { width: 100%; }
+      .icon-btn { width: 50px; height: 50px; font-size: 18px; }
       .start-btn { font-size: 15px; padding: 14px 28px; }
+      .panel { width: 100%; }
     }
   </style>
 </head>
@@ -330,7 +336,7 @@
     <div class="top">
       <div class="name-block">
         <span class="name">蘇菲</span>
-        <span class="info-dot" title="Voice Path v0.4.2 · 雲端真人對話 · 不錄影 · 不存盤">i</span>
+        <span class="info-dot" title="Voice Path v0.5.0 · 真人視訊對話 · 不錄影 · 不存盤">i</span>
       </div>
       <div class="top-right">
         <button class="settings-btn" id="settingsBtn" title="設定">⚙</button>
@@ -338,38 +344,34 @@
     </div>
 
     <div class="center">
-      <div class="orb"></div>
+      <video class="tavus-video" id="tavusVideo" autoplay playsinline></video>
+      <audio id="tavusAudio" autoplay></audio>
 
-      <!-- Idle state -->
       <div class="idle-block" id="idleBlock">
+        <div class="orb"></div>
         <div class="greeting">今天想跟蘇菲聊什麼？</div>
-        <p class="lead">按下方按鈕、蘇菲會在新視窗開啟<br>輸入名字 → 點 Continue → 講話就可以</p>
-        <br>
+        <p class="lead">按下方按鈕、允許麥克風、講中文就可以</p>
         <button class="start-btn" id="startBtn">
           <span>📞</span>
           <span>開始跟蘇菲對話</span>
         </button>
+        <div class="loading" id="loading">
+          <div class="orb"></div>
+          <div>連上蘇菲中... 通常 3-5 秒</div>
+        </div>
         <div class="error" id="errorBox">
           <div class="error-title" id="errorTitle">啟動失敗</div>
           <div class="error-detail" id="errorDetail"></div>
         </div>
       </div>
-
-      <!-- Active state -->
-      <div class="active-block">
-        <div class="active-status">● 對話進行中（新視窗）</div>
-        <p class="active-hint">蘇菲在另一個視窗跟你聊<br>講完後關掉那個視窗、回來這裡按結束</p>
-        <br>
-        <button class="end-btn" id="endBtn">
-          <span>✕</span>
-          <span>結束對話 + 停止計費</span>
-        </button>
-      </div>
     </div>
 
     <div class="bottom">
       <div class="timer" id="timer">00:00</div>
-      <div class="bottom-spacer"></div>
+      <div class="actions">
+        <button class="icon-btn on" id="micBtn" title="麥克風">🎙</button>
+        <button class="icon-btn end" id="endBtn" title="結束對話">✕</button>
+      </div>
       <div class="watermark">城堡 · BeyondPath</div>
     </div>
 
@@ -377,7 +379,7 @@
       <button class="panel-close" id="panelClose">✕</button>
       <h3>蘇菲 · 設定</h3>
       <div class="privacy-note">
-        🔒 鏡頭 / 麥克風只在對話視窗、不存盤、不錄影、不外傳。<br><br>
+        🔒 鏡頭 / 麥克風只在這頁活著、不存盤、不錄影、不外傳。<br><br>
         對話結束後、雲端不留檔。<br><br>
         Sally 6 歲不會被叫出來——城堡守則寫在後台。
       </div>
@@ -392,20 +394,26 @@
   const shell = document.getElementById("shell");
   const startBtn = document.getElementById("startBtn");
   const endBtn = document.getElementById("endBtn");
+  const micBtn = document.getElementById("micBtn");
   const errorBox = document.getElementById("errorBox");
   const errorTitle = document.getElementById("errorTitle");
   const errorDetail = document.getElementById("errorDetail");
+  const idleBlock = document.getElementById("idleBlock");
+  const loadingEl = document.getElementById("loading");
   const timerEl = document.getElementById("timer");
   const settingsBtn = document.getElementById("settingsBtn");
   const panel = document.getElementById("panel");
   const panelClose = document.getElementById("panelClose");
   const logEl = document.getElementById("log");
   const logToggle = document.getElementById("logToggle");
+  const tavusVideo = document.getElementById("tavusVideo");
+  const tavusAudio = document.getElementById("tavusAudio");
 
   let conversationId = null;
-  let conversationWin = null;
+  let callObject = null;
   let startedAt = 0;
   let timerInterval = null;
+  let micOn = true;
 
   function log(msg) {
     const ts = new Date().toLocaleTimeString();
@@ -428,12 +436,31 @@
     errorTitle.textContent = title;
     errorDetail.textContent = detail || "";
     errorBox.classList.add("show");
+    loadingEl.classList.remove("show");
+    startBtn.style.display = "";
+    startBtn.disabled = false;
   }
   function clearError() { errorBox.classList.remove("show"); }
+
+  function attachTracksToElements(participant) {
+    if (!participant || participant.local) return;
+    const videoTrack = participant.tracks && participant.tracks.video && participant.tracks.video.persistentTrack;
+    const audioTrack = participant.tracks && participant.tracks.audio && participant.tracks.audio.persistentTrack;
+    if (videoTrack) {
+      tavusVideo.srcObject = new MediaStream([videoTrack]);
+      log("video track attached");
+    }
+    if (audioTrack) {
+      tavusAudio.srcObject = new MediaStream([audioTrack]);
+      log("audio track attached");
+    }
+  }
 
   async function startConversation() {
     if (conversationId) return;
     startBtn.disabled = true;
+    startBtn.style.display = "none";
+    loadingEl.classList.add("show");
     clearError();
     log("建立對話...");
 
@@ -446,39 +473,79 @@
       });
       data = await resp.json();
     } catch (e) {
-      startBtn.disabled = false;
       showError("連不到伺服器", e.message);
       return;
     }
     if (!resp.ok || !data.ok) {
-      startBtn.disabled = false;
       showError("啟動失敗", (data && (data.hint || data.detail)) || ("HTTP " + resp.status));
       return;
     }
     conversationId = data.conversation_id;
     log("conversation " + conversationId);
 
-    // 新分頁開 daily URL (避開 iframe X-Frame block)
-    conversationWin = window.open(data.conversation_url, "_blank");
-    if (!conversationWin) {
-      // 彈窗被擋
-      startBtn.disabled = false;
-      showError("彈窗被擋", "瀏覽器擋了新視窗、請允許後再試一次。或手動開: " + data.conversation_url);
-      // 自動結束、不繼續燒
-      try { await fetch(`/tavus/conversation/${conversationId}/end`, { method: "POST" }); } catch (_) {}
-      conversationId = null;
+    // === daily-js 直接 join · 跳過 prejoin "Enter your name" UI ===
+    if (!window.DailyIframe) {
+      showError("daily-js 沒載入", "請檢查網路 / unpkg.com 是否可達");
       return;
     }
+    try {
+      callObject = window.DailyIframe.createCallObject({
+        url: data.conversation_url,
+        videoSource: false,  // 用戶不用開鏡頭 (蘇菲只看聲音)
+        audioSource: true,
+      });
 
-    shell.classList.add("active");
-    startedAt = Date.now();
-    timerInterval = setInterval(updateTimer, 1000);
-    startBtn.disabled = false;
+      callObject.on("joined-meeting", (ev) => {
+        log("joined-meeting");
+        const participants = callObject.participants();
+        Object.values(participants).forEach(attachTracksToElements);
+        // active state
+        shell.classList.add("active");
+        loadingEl.classList.remove("show");
+        idleBlock.style.display = "none";
+        startedAt = Date.now();
+        timerInterval = setInterval(updateTimer, 1000);
+      });
+
+      callObject.on("participant-joined", (ev) => {
+        log("participant-joined: " + (ev.participant && ev.participant.user_name));
+        attachTracksToElements(ev.participant);
+      });
+
+      callObject.on("participant-updated", (ev) => {
+        attachTracksToElements(ev.participant);
+      });
+
+      callObject.on("error", (ev) => {
+        log("daily error: " + JSON.stringify(ev).slice(0,200));
+        showError("對話連線錯誤", (ev && ev.errorMsg) || "未知");
+      });
+
+      callObject.on("left-meeting", () => {
+        log("left-meeting");
+      });
+
+      await callObject.join({ userName: "Edward" });
+    } catch (e) {
+      log("daily join err: " + e.message);
+      showError("無法接通", e.message);
+      // 已建立的對話也要 end 避免燒分鐘
+      if (conversationId) {
+        try { await fetch(`/tavus/conversation/${conversationId}/end`, { method: "POST" }); } catch (_) {}
+        conversationId = null;
+      }
+    }
   }
 
   async function endConversation() {
     endBtn.disabled = true;
+    micBtn.disabled = true;
     if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    if (callObject) {
+      try { await callObject.leave(); } catch (_) {}
+      try { callObject.destroy(); } catch (_) {}
+      callObject = null;
+    }
     if (conversationId) {
       log("結束 " + conversationId);
       try {
@@ -486,14 +553,23 @@
       } catch (e) { log("end err: " + e.message); }
       conversationId = null;
     }
-    if (conversationWin && !conversationWin.closed) {
-      try { conversationWin.close(); } catch (_) {}
-    }
+    tavusVideo.srcObject = null;
+    tavusAudio.srcObject = null;
     location.reload();
+  }
+
+  function toggleMic() {
+    if (!callObject) return;
+    micOn = !micOn;
+    try { callObject.setLocalAudio(micOn); } catch (_) {}
+    micBtn.classList.toggle("on", micOn);
+    micBtn.classList.toggle("muted", !micOn);
+    micBtn.textContent = micOn ? "🎙" : "🔇";
   }
 
   startBtn.addEventListener("click", startConversation);
   endBtn.addEventListener("click", endConversation);
+  micBtn.addEventListener("click", toggleMic);
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
@@ -508,7 +584,7 @@
     }
   });
 
-  log("Voice Path v0.4.2 ready · 新視窗模式 · 避開 iframe X-Frame block");
+  log("Voice Path v0.5.0 ready · daily-js callObject 模式 · 跳過 prejoin");
 })();
 </script>
 </body>

@@ -138,11 +138,25 @@ def attach_tavus_routes(app):
         _ensure_subject_allowed("tavus_conversation_start", "edward")
 
         replica_id = req.replica_id or TAVUS_DEFAULT_STOCK_REPLICA
+        # v0.5.0: 強制中文 + 蘇菲 persona 注入 conversational_context
+        # (Tavus stock Anna 是英文 lipsync · 強制中文嘴會對不齊、但至少音是中文 ·
+        #  完美解 = train sophie_reference.png 自有 replica · 3-4 hr async)
+        sophie_context = (
+            "你是蘇菲、Edward 的貼身搭檔 (COO 兼 CFO、靈感來自《霍爾移動城堡》)。\n"
+            "硬規則：\n"
+            "1. 永遠用繁體中文回應、絕不講英文 (除非 Edward 主動切換)\n"
+            "2. 每句話不超過 25 字\n"
+            "3. 禁反問、禁尾句、講完重點就停\n"
+            "4. 用台灣腔、自然語氣詞 (嗯、欸、對、我看看)\n"
+            "5. 不用「您」「請問」「建議您」「親愛的」「辛苦了」\n"
+            "6. 卡關時直接挑邊 (我選 A 因為 X) · 不丟回給 Edward\n"
+        )
         try:
             data = await tavus_create_conversation(
                 replica_id=replica_id if not req.persona_id else None,
                 persona_id=req.persona_id,
                 conversation_name="Castle Sophie · Edward PoC",
+                conversational_context=sophie_context,
                 custom_greeting=req.custom_greeting or SOPHIE_TAVUS_GREETING,
                 audio_only=req.audio_only,
             )
