@@ -556,7 +556,8 @@
       border-radius: 8px;
       overflow-y: auto;
       white-space: pre-wrap;
-      display: none;
+      /* v1.3.2 · 開 log 給 Edward 看實際 OAI 事件名 (debug) */
+      display: block;
       z-index: 25;
       pointer-events: auto;
     }
@@ -1663,6 +1664,42 @@
         dc.addEventListener("message", function (ev) {
           try {
             var data = JSON.parse(ev.data);
+            var t = data.type || "";
+            // v1.3.2 · log every event type once · Edward 通話完截圖給我看實際事件名
+            if (!window.__sophieEventTypes) window.__sophieEventTypes = {};
+            if (!window.__sophieEventTypes[t]) {
+              window.__sophieEventTypes[t] = 0;
+              log("[OAI evt FIRST SEEN] " + t);
+            }
+            window.__sophieEventTypes[t]++;
+
+            // v1.3.2 防呆暴力觸發 · 不管 OpenAI 改什麼事件名 · 只要含 audio + 不含 done/transcript/input → startSpeaking
+            var lt = t.toLowerCase();
+            var isAudioOutputDelta =
+              lt.indexOf("audio") !== -1 &&
+              lt.indexOf("done") === -1 &&
+              lt.indexOf("transcript") === -1 &&
+              lt.indexOf("input") === -1 &&
+              lt.indexOf("error") === -1;
+            if (isAudioOutputDelta && !window.__sophieSpeakingTriggered &&
+                animPool && typeof animPool.startSpeaking === "function") {
+              window.__sophieSpeakingTriggered = true;
+              animPool.startSpeaking();
+              log("[FORCE] " + t + " · 含 audio → startSpeaking · 切 sophie-speaking.mp4");
+            }
+            // 含 audio + done = stopSpeaking
+            var isAudioOutputDone =
+              lt.indexOf("audio") !== -1 &&
+              lt.indexOf("done") !== -1 &&
+              lt.indexOf("transcript") === -1 &&
+              lt.indexOf("input") === -1;
+            if (isAudioOutputDone && window.__sophieSpeakingTriggered &&
+                animPool && typeof animPool.stopSpeaking === "function") {
+              window.__sophieSpeakingTriggered = false;
+              animPool.stopSpeaking();
+              log("[FORCE] " + t + " · 含 done → stopSpeaking");
+            }
+
             if (data.type === "error") {
               log("OAI error: " + JSON.stringify(data.error || data).slice(0, 300));
               showError("OpenAI: " + (data.error && data.error.message ? data.error.message : "未知錯誤"));
