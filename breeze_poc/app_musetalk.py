@@ -54,6 +54,7 @@ musetalk_image = (
         "transformers==4.39.2",
         "huggingface_hub==0.30.2",
         "einops==0.8.1",
+        "librosa==0.11.0",  # Phase 6 (calcifer): MuseTalk audio_processor depends on librosa
         "gdown",
         "requests",
         "imageio[ffmpeg]",
@@ -116,55 +117,128 @@ class MuseTalkRunner:
         weights_ready = os.path.exists(sentinel)
 
         if not weights_ready:
-            print("[MuseTalk] weights sentinel missing, running download_weights.sh", flush=True)
+            # Phase 6 (2026-05-23 calcifer): Python-native huggingface_hub snapshot_download
+            # replaces broken download_weights.sh (silent-fail due to hf-mirror.com unreachable
+            # from Modal US datacenters + huggingface-cli exit 0 on partial fail).
+            # Reproduces every line of download_weights.sh in Python (6 HF repos + gdown + curl).
+            print("[MuseTalk] weights sentinel missing, downloading via huggingface_hub", flush=True)
             os.makedirs("/weights", exist_ok=True)
-            # MuseTalk's own download script · pulls from HF + gdown
+            for sub in ("musetalk", "musetalkV15", "syncnet", "dwpose",
+                        "face-parse-bisent", "sd-vae", "whisper"):
+                os.makedirs(f"/weights/{sub}", exist_ok=True)
+
+            from huggingface_hub import snapshot_download
+
+            # 1) MuseTalk v1.0 + v1.5 (same repo, allow_patterns scopes the download)
+            print("[MuseTalk] [1/6] TMElyralab/MuseTalk (musetalk/ + musetalkV15/)", flush=True)
+            snapshot_download(
+                repo_id="TMElyralab/MuseTalk",
+                local_dir="/weights",
+                allow_patterns=[
+                    "musetalk/musetalk.json", "musetalk/pytorch_model.bin",
+                    "musetalkV15/musetalk.json", "musetalkV15/unet.pth",
+                ],
+            )
+
+            # 2) SD-VAE-ft-mse (config.json + diffusion_pytorch_model.bin)
+            print("[MuseTalk] [2/6] stabilityai/sd-vae-ft-mse", flush=True)
+            snapshot_download(
+                repo_id="stabilityai/sd-vae-ft-mse",
+                local_dir="/weights/sd-vae",
+                allow_patterns=["config.json", "diffusion_pytorch_model.bin"],
+            )
+
+            # 3) Whisper-tiny (3 files for MuseTalk audio2feature path)
+            print("[MuseTalk] [3/6] openai/whisper-tiny", flush=True)
+            snapshot_download(
+                repo_id="openai/whisper-tiny",
+                local_dir="/weights/whisper",
+                allow_patterns=["config.json", "pytorch_model.bin", "preprocessor_config.json"],
+            )
+
+            # 4) DWPose
+            print("[MuseTalk] [4/6] yzd-v/DWPose", flush=True)
+            snapshot_download(
+                repo_id="yzd-v/DWPose",
+                local_dir="/weights/dwpose",
+                allow_patterns=["dw-ll_ucoco_384.pth"],
+            )
+
+            # 5) SyncNet (ByteDance/LatentSync)
+            print("[MuseTalk] [5/6] ByteDance/LatentSync (syncnet)", flush=True)
+            snapshot_download(
+                repo_id="ByteDance/LatentSync",
+                local_dir="/weights/syncnet",
+                allow_patterns=["latentsync_syncnet.pt"],
+            )
+
+            # 6) Face-parse-bisent (gdown + resnet18 curl) -- non-HF sources
             import subprocess
-            r = subprocess.run(
-                ["bash", "download_weights.sh"],
-                cwd="/root/MuseTalk",
-                capture_output=True,
-                text=True,
-                timeout=1500,  # 25 min stop loss inside download itself
-            )
-            print("[MuseTalk] download_weights.sh stdout (tail):", r.stdout[-1500:], flush=True)
-            if r.returncode != 0:
-                print("[MuseTalk] download_weights.sh stderr (tail):", r.stderr[-1500:], flush=True)
-                raise RuntimeError(f"download_weights.sh failed rc={r.returncode}")
+            face_parse_target = "/weights/face-parse-bisent/79999_iter.pth"
+            if not os.path.exists(face_parse_target):
+                print("[MuseTalk] [6a/6] face-parse-bisent via gdown", flush=True)
+                # gdown v5+ removed --id; use positional URL form (works both gdown v4 + v5)
+                gd = subprocess.run(
+                    ["gdown",
+                     "https://drive.google.com/uc?id=154JgKpzCPW82qINcVieuPH3fZ2e0P812",
+                     "-O", face_parse_target, "--no-cookies"],
+                    capture_output=True, text=True, timeout=600,
+                )
+                if gd.returncode != 0:
+                    print("[MuseTalk] gdown stderr:", gd.stderr[-800:], flush=True)
+                    print("[MuseTalk] gdown stdout:", gd.stdout[-800:], flush=True)
+                    raise RuntimeError(f"gdown face-parse-bisent failed rc={gd.returncode}")
+                # Verify gdown actually downloaded a non-trivial file (defense against silent fail)
+                if not os.path.exists(face_parse_target) or os.path.getsize(face_parse_target) < 10*1024*1024:
+                    actual = os.path.getsize(face_parse_target) if os.path.exists(face_parse_target) else 0
+                    print(f"[MuseTalk] gdown stdout:", gd.stdout[-800:], flush=True)
+                    raise RuntimeError(f"gdown produced suspicious file size {actual} bytes (expected ~50MB)")
+                print(f"[MuseTalk] gdown wrote {os.path.getsize(face_parse_target)/1024/1024:.1f} MB", flush=True)
 
-            # Copy MuseTalk-downloaded models dir contents into /weights volume
-            r2 = subprocess.run(
-                "cp -r /root/MuseTalk/models/. /weights/",
-                shell=True, capture_output=True, text=True,
-            )
-            print("[MuseTalk] cp models -> /weights rc:", r2.returncode, flush=True)
-            if r2.returncode != 0:
-                print("[MuseTalk] cp stderr:", r2.stderr[-500:], flush=True)
-                raise RuntimeError("cp models -> /weights failed")
+            resnet_target = "/weights/face-parse-bisent/resnet18-5c106cde.pth"
+            if not os.path.exists(resnet_target):
+                # urllib.request beats subprocess curl - no apt rebuild + native to image python
+                print("[MuseTalk] [6b/6] resnet18 via urllib from pytorch.org", flush=True)
+                import urllib.request
+                urllib.request.urlretrieve(
+                    "https://download.pytorch.org/models/resnet18-5c106cde.pth",
+                    resnet_target,
+                )
+                size_mb = os.path.getsize(resnet_target) / 1024 / 1024
+                print(f"[MuseTalk] resnet18 downloaded {size_mb:.1f} MB", flush=True)
 
-            # Diagnostic: list actual contents (download_weights.sh structure unknown)
-            for path in ["/root/MuseTalk/models", "/weights"]:
+            # Diagnostic: list actual contents post-download
+            for path in ["/weights"]:
                 ls = subprocess.run(["ls", "-la", path], capture_output=True, text=True)
-                print(f"[MuseTalk] DIAG ls {path}:\n{ls.stdout}", flush=True)
-                # Recurse 2 levels for full picture
+                print(f"[MuseTalk] DIAG ls {path}", flush=True)
+                print(ls.stdout, flush=True)
                 find = subprocess.run(
-                    ["find", path, "-maxdepth", "2", "-type", "f"],
+                    ["find", path, "-maxdepth", "3", "-type", "f", "-size", "+1k"],
                     capture_output=True, text=True,
                 )
-                print(f"[MuseTalk] DIAG files under {path}:\n{find.stdout}", flush=True)
+                print(f"[MuseTalk] DIAG files >1k under {path}", flush=True)
+                print(find.stdout, flush=True)
 
             # Verify critical model files exist before sealing sentinel
+            # (Phase 5 list + Phase 6 additions covering all 6 sources)
             critical = [
+                "/weights/musetalkV15/unet.pth",
+                "/weights/musetalkV15/musetalk.json",
                 "/weights/sd-vae/config.json",
                 "/weights/sd-vae/diffusion_pytorch_model.bin",
-                "/weights/musetalkV15/unet.pth",
+                "/weights/whisper/pytorch_model.bin",
+                "/weights/whisper/config.json",
+                "/weights/dwpose/dw-ll_ucoco_384.pth",
+                "/weights/syncnet/latentsync_syncnet.pt",
+                "/weights/face-parse-bisent/79999_iter.pth",
+                "/weights/face-parse-bisent/resnet18-5c106cde.pth",
             ]
             missing = [p for p in critical if not os.path.exists(p)]
             if missing:
                 raise RuntimeError(f"critical model files missing after download: {missing}")
 
             with open(sentinel, "w") as f:
-                f.write("v15 download complete · calcifer phase 5 · 2026-05-23\n")
+                f.write("v15 download complete - calcifer phase 6 HF native - 2026-05-23")
             MUSETALK_VOLUME.commit()
             print("[MuseTalk] sentinel written + volume committed", flush=True)
         else:
@@ -188,24 +262,37 @@ class MuseTalkRunner:
         weights_dir = "/weights/musetalkV15"
 
         # Lazy import after weights ready
+        # Phase 6 (2026-05-23): load_all_model returns 3 values (vae, unet, pe); audio_processor
+        # is a separate class loaded from local whisper-tiny dir to avoid HF hub network call
         from musetalk.utils.utils import load_all_model
+        from musetalk.utils.audio_processor import AudioProcessor
 
-        self.audio_processor, self.vae, self.unet, self.pe = load_all_model(
+        self.vae, self.unet, self.pe = load_all_model(
             unet_model_path=f"{weights_dir}/unet.pth",
             unet_config=f"{weights_dir}/musetalk.json",
             device="cuda",
         )
+        # AudioProcessor uses transformers AutoFeatureExtractor; point at local whisper dir
+        self.audio_processor = AudioProcessor(feature_extractor_path="/weights/whisper")
+        print("[MuseTalk] models loaded: vae + unet + pe + audio_processor", flush=True)
 
         # Pre-cache Sophie reference landmarks if available
+        # Phase 6 (calcifer): lazy-load to avoid mmpose dep at cold start (mmpose
+        # is huge + needs cuda; defer to first generate_video_chunk call).
+        # health endpoint can return ready without landmark cache.
         self.sophie_landmark = None
+        self.sophie_bbox = None
         sophie_path = "/weights/assets/sophie-portrait-original.png"
         if os.path.exists(sophie_path):
-            from musetalk.utils.preprocessing import get_landmark_and_bbox
-
-            self.sophie_landmark, self.sophie_bbox = get_landmark_and_bbox(
-                [sophie_path]
-            )
-            print("[MuseTalk] Sophie reference landmarks cached", flush=True)
+            try:
+                from musetalk.utils.preprocessing import get_landmark_and_bbox
+                self.sophie_landmark, self.sophie_bbox = get_landmark_and_bbox(
+                    [sophie_path]
+                )
+                print("[MuseTalk] Sophie reference landmarks cached", flush=True)
+            except ModuleNotFoundError as e:
+                print(f"[MuseTalk] Sophie landmark deferred (missing dep: {e})", flush=True)
+                # health endpoint will still report ready; first chunk inference will need mmpose
 
         elapsed = round(time.time() - t0, 1)
         print(f"[MuseTalk] ready in {elapsed}s", flush=True)
