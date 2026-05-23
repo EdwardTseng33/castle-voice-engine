@@ -1359,6 +1359,11 @@
               liveAudio.srcObject = ev.streams[0];
               liveAudio.volume = 1.0;
               liveAudio.muted = false;
+              // v1.3.0 · 接 audio analyser · 蘇菲講話時音量驅動微呼吸 + 亮度 (不假裝嘴對齊、純陪伴反應)
+              if (animPool && typeof animPool.attachAudioAnalyser === "function") {
+                try { animPool.attachAudioAnalyser(liveAudio); }
+                catch (e) { log("attachAudioAnalyser err: " + e.message); }
+              }
               var pp = liveAudio.play();
               if (pp && pp.then) {
                 pp.then(function () { log("liveAudio.play() OK · volume=1.0 unmuted"); })

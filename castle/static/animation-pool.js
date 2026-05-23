@@ -183,10 +183,93 @@
     this.speakingCtrl = new SpeakingController(this);
     this._endHandler = null;
     this._preloaders = {};
+    // v1.3.0 · 音量驅動微呼吸 + 手動 loop 避開 native loop 黑頻
+    this._audioCtx = null;
+    this._analyser = null;
+    this._breathRAF = null;
+    this._currentAmp = 0;
     this._initIdle();
+    this._installManualLoop();
     this._preloadCriticalActions();
     this._maybeFireGreeting();
   }
+
+  // v1.3.0 · 手動 loop · 在 video 快結束 (剩 0.15s) 時主動 currentTime=0 + play
+  // 避開 Chrome native video.loop 接縫黑 frame
+  AnimationPool.prototype._installManualLoop = function () {
+    var self = this;
+    var EPS = 0.18; // 提前 0.18s 重置 (大概 4 frame · 不會看到 loop 點)
+    this.video.addEventListener("timeupdate", function () {
+      var v = self.video;
+      if (!v.loop) return;
+      if (!isFinite(v.duration) || v.duration <= 0) return;
+      if (v.currentTime >= v.duration - EPS) {
+        try {
+          v.currentTime = 0;
+          var p = v.play();
+          if (p && p.then) p["catch"](function () {});
+        } catch (e) {}
+      }
+    });
+    this.video.addEventListener("ended", function () {
+      // 防呆 · 萬一 timeupdate 沒搶到 · ended 也接 (但 video.loop=true 通常不會 fire ended)
+      if (self.video.loop) {
+        try { self.video.currentTime = 0; self.video.play(); } catch (e) {}
+      }
+    });
+  };
+
+  // v1.3.0 · 接 OpenAI realtime audio stream · 抓即時音量驅動微呼吸 + 亮度浮動
+  AnimationPool.prototype.attachAudioAnalyser = function (audioEl) {
+    if (!audioEl || this._analyser) return; // 已 attach 過、不重複
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) { this._log("AudioContext unsupported · skip breath"); return; }
+      this._audioCtx = new AC();
+      var src = this._audioCtx.createMediaElementSource(audioEl);
+      this._analyser = this._audioCtx.createAnalyser();
+      this._analyser.fftSize = 256;
+      this._analyser.smoothingTimeConstant = 0.8;
+      src.connect(this._analyser);
+      this._analyser.connect(this._audioCtx.destination); // 連回 destination · 不然 audio 不出聲
+      this._startBreathLoop();
+      this._log("audio analyser attached · breath loop started");
+    } catch (e) {
+      this._log("attachAudioAnalyser fail: " + e.message);
+    }
+  };
+
+  AnimationPool.prototype._startBreathLoop = function () {
+    if (this._breathRAF) return;
+    var self = this;
+    var buf = new Uint8Array(this._analyser.frequencyBinCount);
+    var tick = function () {
+      self._breathRAF = requestAnimationFrame(tick);
+      if (!self._analyser) return;
+      self._analyser.getByteFrequencyData(buf);
+      // 抓 0-1khz 範圍 (人聲核心) 的平均能量
+      var sum = 0; var n = Math.min(20, buf.length);
+      for (var i = 0; i < n; i++) sum += buf[i];
+      var avg = sum / n / 255; // 0-1
+      // smooth + 限幅
+      self._currentAmp = self._currentAmp * 0.7 + avg * 0.3;
+      var amp = self._currentAmp;
+      // 套用到 video style
+      // - 講話中：scale 1.00~1.025 微縮放 (呼吸感) + brightness 1.00~1.06
+      // - 待機 (沒講話)：amp 接近 0 · scale 1.00 · brightness 1.00
+      var scale = 1 + amp * 0.025;
+      var bright = 1 + amp * 0.06;
+      self.video.style.transform = "scale(" + scale.toFixed(3) + ")";
+      self.video.style.filter = "brightness(" + bright.toFixed(3) + ")";
+    };
+    tick();
+  };
+
+  AnimationPool.prototype._stopBreathLoop = function () {
+    if (this._breathRAF) { cancelAnimationFrame(this._breathRAF); this._breathRAF = null; }
+    this.video.style.transform = "";
+    this.video.style.filter = "";
+  };
 
   AnimationPool.prototype._playRaw = function (state, loop) {
     var src = ANIMATION_POOL[state];
