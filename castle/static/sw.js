@@ -1,7 +1,7 @@
 // castle/static/sw.js
 // Voice Path v0.7 Service Worker
 // 待機 shell offline-first · realtime / breeze / musetalk 永遠 network-first 不 cache
-const CACHE_VERSION = 'v0.9.0';
+const CACHE_VERSION = 'v0.9.1';
 const CACHE_NAME = 'sophie-' + CACHE_VERSION;
 
 // 不 precache mp4 (5MB+ · 阻塞 install) · video element 自己 streaming load 即可
