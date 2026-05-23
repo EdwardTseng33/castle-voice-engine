@@ -173,9 +173,13 @@
   };
   SpeakingController.prototype.isActive = function () { return this._active; };
 
-  function AnimationPool(videoEl) {
+  function AnimationPool(videoEl, videoElB) {
     if (!videoEl) { console.warn("[animPool] no video element supplied"); return; }
-    this.video = videoEl;
+    // v1.2.0e · double video buffer · A/B 交替 crossfade · 解切換閃黑
+    this.videoA = videoEl;
+    this.videoB = videoElB || document.getElementById("liveVideoB") || null;
+    this.video = videoEl;  // 對外: current active = videoA initially (legacy refs 都指 videoA · 不破)
+    this._activeBuffer = "a";  // a | b
     this.currentState = "idle";
     this.frequencyGuard = new FrequencyGuard();
     this.idleRotator = new IdleRotator();
@@ -187,20 +191,86 @@
     this._maybeFireGreeting();
   }
 
+  // v1.2.0e · 取目前 active video element (要播的目標切到「inactive buffer」)
+  AnimationPool.prototype._getActive = function () {
+    return this._activeBuffer === "a" ? this.videoA : this.videoB;
+  };
+  AnimationPool.prototype._getInactive = function () {
+    return this._activeBuffer === "a" ? this.videoB : this.videoA;
+  };
+  AnimationPool.prototype._swapBuffers = function () {
+    var prev = this._getActive();
+    var next = this._getInactive();
+    if (!prev || !next) return;
+    next.classList.add("is-active");
+    next.classList.remove("is-fading");
+    prev.classList.remove("is-active");
+    prev.classList.add("is-fading");
+    this._activeBuffer = (this._activeBuffer === "a") ? "b" : "a";
+    this.video = this._getActive();  // legacy ref keeps pointing to active
+  };
+
   AnimationPool.prototype._playRaw = function (state, loop) {
     var src = ANIMATION_POOL[state];
     if (!src) { this._log("_playRaw missing: " + state); return; }
-    if (this._endHandler) {
-      this.video.removeEventListener("ended", this._endHandler);
+
+    // 沒 buffer B · fallback 老單 video 行為 (保險)
+    if (!this.videoB) {
+      if (this._endHandler) {
+        this.videoA.removeEventListener("ended", this._endHandler);
+        this._endHandler = null;
+      }
+      try { this.videoA.src = src; } catch (e) { this._log("_playRaw set src fail: " + e.message); return; }
+      this.videoA.loop = !!loop;
+      this.videoA.muted = true;
+      var pa = this.videoA.play();
+      if (pa && pa.then) { pa["catch"](function () {}); }
+      this.currentState = state;
+      return;
+    }
+
+    // v1.2.0e · double buffer crossfade
+    var inactive = this._getInactive();
+    var active = this._getActive();
+    var sameSrc = false;
+    try { sameSrc = (inactive.currentSrc && inactive.currentSrc.indexOf(src) !== -1); } catch (e) {}
+
+    // 清掉舊 ended handler (在 prev active 上)
+    if (this._endHandler && active) {
+      active.removeEventListener("ended", this._endHandler);
       this._endHandler = null;
     }
-    try { this.video.src = src; }
-    catch (e) { this._log("_playRaw set src fail: " + e.message); return; }
-    this.video.loop = !!loop;
-    this.video.muted = true;
-    var p = this.video.play();
-    if (p && p.then) { p["catch"](function () {}); }
-    this.currentState = state;
+
+    // 把 inactive buffer 設新 src (active 仍在播舊 frame · 沒黑)
+    if (!sameSrc) {
+      try { inactive.src = src; } catch (e) { this._log("_playRaw set src fail: " + e.message); return; }
+    }
+    inactive.loop = !!loop;
+    inactive.muted = true;
+
+    var self = this;
+    var doSwap = function () {
+      var p = inactive.play();
+      if (p && p.then) { p["catch"](function () {}); }
+      self._swapBuffers();
+      self.currentState = state;
+    };
+
+    // 若 inactive 已 ready · 直接 swap · 否則等 loadeddata
+    if (inactive.readyState >= 2) {
+      doSwap();
+    } else {
+      var onReady = function () {
+        inactive.removeEventListener("loadeddata", onReady);
+        doSwap();
+      };
+      inactive.addEventListener("loadeddata", onReady, { once: true });
+      // safety fallback · 600ms 後若仍未 ready · 強制 swap (避免永遠卡)
+      setTimeout(function () {
+        try { inactive.removeEventListener("loadeddata", onReady); } catch (e) {}
+        if (self.currentState !== state) doSwap();
+      }, 600);
+    }
   };
 
   AnimationPool.prototype._initIdle = function () {
@@ -251,46 +321,35 @@
       this._log("playAction throttled: " + state);
       return;
     }
-    var self = this;
-    var src = ANIMATION_POOL[state];
-    if (this._endHandler) {
-      this.video.removeEventListener("ended", this._endHandler);
-      this._endHandler = null;
-    }
-    try { this.video.src = src; }
-    catch (e) { this._log("set src fail: " + e.message); this._returnToIdle(); return; }
-    this.video.loop = false;
-    this.video.muted = true;
-    var p = this.video.play();
-    if (p && p.then) { p["catch"](function (err) { self._log("play fail: " + err.message); }); }
-    this.currentState = state;
+    // v1.2.0e · 走 _playRaw double buffer · 切完後接 ended handler 到新 active
+    this._playRaw(state, false);
     this._log("playAction -> " + state);
-    this._endHandler = function () { self._returnToIdle(); };
-    this.video.addEventListener("ended", this._endHandler, { once: true });
+    var self = this;
+    // 略微延遲掛 ended handler · 確保 _swapBuffers 完成 (active 已切到新 video)
+    setTimeout(function () {
+      var active = self._getActive ? self._getActive() : self.video;
+      if (!active) return;
+      self._endHandler = function () { self._returnToIdle(); };
+      active.addEventListener("ended", self._endHandler, { once: true });
+    }, 50);
   };
 
   AnimationPool.prototype._returnToIdle = function () {
     var nextIdle = this.idleRotator.pickNext();
-    var src = ANIMATION_POOL[nextIdle];
-    try { this.video.src = src; } catch (e) {}
-    // v1.2.0b · idle 4 變體 loop · 其他 rich action (stroke-hair / greeting / playful / intimate-* / acknowledgement / happy) 都 play once 接 idle
     var isLoop = (IDLE_VARIANTS.indexOf(nextIdle) !== -1);
-    this.video.loop = isLoop;
-    this.video.muted = true;
-    var p = this.video.play();
-    if (p && p.then) { p["catch"](function () {}); }
-    this.currentState = nextIdle;
-    if (this._endHandler) {
-      this.video.removeEventListener("ended", this._endHandler);
-      this._endHandler = null;
-    }
-    var self = this;
+    // v1.2.0e · 走 _playRaw double buffer crossfade
+    this._playRaw(nextIdle, isLoop);
     if (!isLoop) {
-      this._endHandler = function () {
-        var idle = self.idleRotator.pickIdleOnly();
-        self._playRaw(idle, true);
-      };
-      this.video.addEventListener("ended", this._endHandler, { once: true });
+      var self = this;
+      setTimeout(function () {
+        var active = self._getActive ? self._getActive() : self.video;
+        if (!active) return;
+        self._endHandler = function () {
+          var idle = self.idleRotator.pickIdleOnly();
+          self._playRaw(idle, true);
+        };
+        active.addEventListener("ended", self._endHandler, { once: true });
+      }, 50);
     }
     this._log("returnToIdle -> " + nextIdle);
   };

@@ -411,7 +411,16 @@
       object-fit: cover;
       background: var(--bg);
       opacity: 1;
+      transition: opacity 200ms ease-out;
     }
+    /* v1.2.0e · double video buffer 解切換閃黑 · A/B 交替 crossfade */
+    .live-video.buffer-b {
+      opacity: 0;
+      z-index: 1;
+    }
+    .live-video.buffer-a { z-index: 2; }
+    .live-video.is-active { opacity: 1; z-index: 3; }
+    .live-video.is-fading { opacity: 0; z-index: 2; }
     .bottom {
       position: absolute;
       bottom: 0; left: 0; right: 0;
@@ -644,7 +653,7 @@
 
     <main class="stage-canvas">
       <video
-        class="live-video"
+        class="live-video buffer-a is-active"
         id="liveVideo"
         autoplay
         playsinline
@@ -652,6 +661,16 @@
         loop
         preload="auto"
         src="/static/sophie-idle.mp4"
+      ></video>
+      <!-- v1.2.0e · double video buffer B (crossfade · 解切換閃黑) -->
+      <video
+        class="live-video buffer-b"
+        id="liveVideoB"
+        autoplay
+        playsinline
+        muted
+        loop
+        preload="auto"
       ></video>
       <audio class="live-audio" id="liveAudio" autoplay playsinline></audio>
 
@@ -1125,6 +1144,7 @@
     var endBtn     = document.getElementById("endBtn");
     var timerEl    = document.getElementById("timer");
     var liveVideo  = document.getElementById("liveVideo");
+    var liveVideoB = document.getElementById("liveVideoB");  // v1.2.0e · double buffer · A/B crossfade
     var liveAudio  = document.getElementById("liveAudio");
     var errBar     = document.getElementById("errBar");
     var logEl      = document.getElementById("log");
@@ -1135,7 +1155,7 @@
     var animPool = null;
     try {
       if (typeof AnimationPool === "function") {
-        animPool = new AnimationPool(liveVideo);
+        animPool = new AnimationPool(liveVideo, liveVideoB);
         window.animPool = animPool;
         // v1.2.0b · 未 Start 時自動輪播 rich pool (親親 / 撒嬌 / hello / acknowledgement / happy / playful)
         if (typeof animPool.startPreCallRotation === "function") {
