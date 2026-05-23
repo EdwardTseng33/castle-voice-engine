@@ -92,15 +92,20 @@ def fastapi_app():
         COOKIE_MAX_AGE,
     )
 
-    class AuthVerifyReq(BaseModel):
-        credential: str
-
     from castle.server.auth_middleware import verify_google_id_token_any, OWNER_CONTACT_EMAIL
 
     @fastapi_instance.post("/auth/verify")
-    async def _auth_verify(req: AuthVerifyReq):
+    async def _auth_verify(request: Request):
+        # v1.2.0a fix · 直接拿 raw Request body · 避開 BaseModel in closure 被 from __future__ annotations 卡 422
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"ok": False, "detail": "body 解析失敗"}, status_code=400)
+        credential = body.get("credential") if isinstance(body, dict) else None
+        if not credential or not isinstance(credential, str):
+            return JSONResponse({"ok": False, "detail": "credential 缺失"}, status_code=400)
         # v1.2.0 訪客模式 · 解析 token 但只在 allow list 才簽 cookie · 不在 allow list 也告知對方 email
-        email, allowed = verify_google_id_token_any(req.credential)
+        email, allowed = verify_google_id_token_any(credential)
         if not email:
             # token 假 / 簽名錯 / email_verified=False → 真假冒、不告訴 contact 細節
             return JSONResponse(
