@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>蘇菲 · 登入</title>
+  <link rel="preconnect" href="https://rsms.me/" />
+  <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    :root {
+      --bg: #000;
+      --fg: rgba(255, 255, 255, 0.95);
+      --fg-dim: rgba(255, 255, 255, 0.55);
+      --fg-fade: rgba(255, 255, 255, 0.28);
+      --red: #e3392b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "PingFang TC",
+                   "Noto Sans TC", sans-serif;
+      font-feature-settings: "ss01", "cv11";
+      letter-spacing: -0.01em;
+      -webkit-font-smoothing: antialiased;
+    }
+    .shell {
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .name {
+      font-family: "Georgia", "Source Han Serif TC", serif;
+      font-style: italic;
+      font-size: 56px;
+      font-weight: 400;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+      color: var(--fg);
+    }
+    .tagline {
+      color: var(--fg-dim);
+      font-size: 14px;
+      letter-spacing: 0.3px;
+      margin-bottom: 48px;
+      text-align: center;
+      max-width: 380px;
+      line-height: 1.5;
+    }
+    .login-card {
+      background: rgba(20, 20, 22, 0.78);
+      -webkit-backdrop-filter: blur(28px) saturate(140%);
+      backdrop-filter: blur(28px) saturate(140%);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 18px;
+      padding: 36px 40px;
+      box-shadow:
+        0 24px 64px rgba(0, 0, 0, 0.5),
+        0 8px 16px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      text-align: center;
+      min-width: 320px;
+    }
+    .login-hint {
+      color: var(--fg-fade);
+      font-size: 12px;
+      margin-top: 24px;
+      letter-spacing: 0.3px;
+    }
+    .err {
+      color: var(--red);
+      font-size: 13px;
+      margin-top: 18px;
+      min-height: 18px;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      text-align: center;
+      max-width: 340px;
+    }
+    .err.show { opacity: 1; }
+    .loading {
+      color: var(--fg-dim);
+      font-size: 13px;
+      margin-top: 14px;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .loading.show { opacity: 1; }
+    .footer {
+      position: fixed;
+      bottom: max(24px, env(safe-area-inset-bottom));
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      color: var(--fg-fade);
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="name">蘇菲</div>
+    <div class="tagline">個人 AI 陪伴 · 請以 Edward 的 Google 帳號登入</div>
+
+    <div class="login-card">
+      <div id="g_id_onload"
+           data-client_id="870408555328-dv80l5gs73os63r44e8ed79kndcoorbm.apps.googleusercontent.com"
+           data-callback="onSignIn"
+           data-auto_prompt="false"
+           data-context="signin">
+      </div>
+      <div class="g_id_signin"
+           data-type="standard"
+           data-shape="pill"
+           data-theme="filled_black"
+           data-text="signin_with"
+           data-size="large"
+           data-locale="zh_TW"
+           data-logo_alignment="left">
+      </div>
+      <div class="loading" id="loading">驗證中…</div>
+      <div class="login-hint">只有 Edward 個人 Google 帳號可進入</div>
+    </div>
+
+    <div class="err" id="err"></div>
+  </div>
+
+  <div class="footer">POWERED BY 城堡</div>
+
+  <script>
+    function onSignIn(response) {
+      var loading = document.getElementById("loading");
+      var err = document.getElementById("err");
+      err.classList.remove("show");
+      loading.classList.add("show");
+
+      fetch("/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credential: response.credential }),
+        credentials: "include",
+      })
+        .then(function (r) {
+          if (r.ok) {
+            return r.json().then(function () {
+              location.href = "/static/index.html";
+            });
+          } else {
+            return r.json().then(function (j) {
+              loading.classList.remove("show");
+              err.textContent =
+                j.detail ||
+                "登入失敗 · 此 Google 帳號未在允許清單";
+              err.classList.add("show");
+            });
+          }
+        })
+        .catch(function (e) {
+          loading.classList.remove("show");
+          err.textContent = "網路錯誤 · " + e.message;
+          err.classList.add("show");
+        });
+    }
+
+    // 已登入的話直接 redirect (cookie 認在 server 端、這邊只做 redirect hint)
+    document.addEventListener("DOMContentLoaded", function () {
+      if (document.cookie.indexOf("sophie_auth=") !== -1) {
+        // 試圖 redirect · 若 server 認 cookie 沒過就會 redirect 回來
+        fetch("/auth/whoami", { credentials: "include" })
+          .then(function (r) {
+            if (r.ok) location.href = "/static/index.html";
+          })
+          .catch(function () {});
+      }
+    });
+  </script>
+</body>
+</html>

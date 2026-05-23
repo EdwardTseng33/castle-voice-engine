@@ -76,6 +76,57 @@ def fastapi_app():
     attach_dispatch_routes(fastapi_instance)  # v0.3.0 Phase 2 後半段: castle dispatch + phase2/status
     attach_tavus_routes(fastapi_instance)  # v0.3.2 Phase 3.2: Tavus CVI 即時對話 video
 
+    # v0.9.6 Google OAuth 認證 (Edward 5/23 拍板)
+    from fastapi import Request
+    from fastapi.responses import JSONResponse, Response
+    from pydantic import BaseModel
+    from castle.server.auth_middleware import (
+        verify_google_id_token,
+        sign_email_cookie,
+        verify_signed_cookie,
+        is_public_path,
+        COOKIE_NAME,
+        COOKIE_MAX_AGE,
+    )
+
+    class AuthVerifyReq(BaseModel):
+        credential: str
+
+    @fastapi_instance.post("/auth/verify")
+    async def _auth_verify(req: AuthVerifyReq):
+        email = verify_google_id_token(req.credential)
+        if not email:
+            return JSONResponse(
+                {"ok": False, "detail": "此 Google 帳號未授權 · 只允許 Edward 本人"},
+                status_code=403,
+            )
+        signed = sign_email_cookie(email)
+        resp = JSONResponse({"ok": True, "email": email})
+        resp.set_cookie(
+            key=COOKIE_NAME,
+            value=signed,
+            max_age=COOKIE_MAX_AGE,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            path="/",
+        )
+        return resp
+
+    @fastapi_instance.get("/auth/whoami")
+    async def _auth_whoami(request: Request):
+        cookie = request.cookies.get(COOKIE_NAME)
+        email = verify_signed_cookie(cookie) if cookie else None
+        if email:
+            return {"ok": True, "email": email}
+        return JSONResponse({"ok": False}, status_code=401)
+
+    @fastapi_instance.post("/auth/logout")
+    async def _auth_logout():
+        resp = JSONResponse({"ok": True})
+        resp.delete_cookie(COOKIE_NAME, path="/")
+        return resp
+
     # Mount /static for demo HTML + add root redirect.
     # v0.4.2 fix: 強制不快取 (避免 Edward 瀏覽器 cache 舊版本 / 每次 push 都要 Ctrl+Shift+R)
     static_dir = Path("/root/castle/static")
@@ -83,14 +134,35 @@ def fastapi_app():
         fastapi_instance.mount("/static", StaticFiles(directory=str(static_dir), html=True), name="static")
 
         @fastapi_instance.get("/")
-        async def _root():
-            return RedirectResponse(url="/static/index.html")
+        async def _root(request: Request):
+            cookie = request.cookies.get(COOKIE_NAME)
+            email = verify_signed_cookie(cookie) if cookie else None
+            if email:
+                return RedirectResponse(url="/static/index.html")
+            return RedirectResponse(url="/static/auth.html")
 
         # v0.4.2 · 替 /static/* 加 no-cache header (確保 Edward 永遠拿最新版)
+        # v0.9.6 · 加 Google OAuth gate (除 /static/auth.html 外 · 都需 cookie 認)
         @fastapi_instance.middleware("http")
-        async def _no_cache_static(request, call_next):
+        async def _cache_and_auth_middleware(request, call_next):
+            path = request.url.path
+
+            # auth gate · skip public paths
+            if not is_public_path(path):
+                # /static/* (except auth.html 已在 PUBLIC_EXACT) · /camera/* · /vision/* · /dispatch/* · /tavus/* · /sdp · /personas etc
+                # /sdp 也守 · WebRTC handshake 必須認 · 防別人燒 OpenAI cost
+                cookie = request.cookies.get(COOKIE_NAME)
+                email = verify_signed_cookie(cookie) if cookie else None
+                if not email:
+                    # auth.html 自己 / 圖片 / mp4 / js / css 全擋 · 沒 cookie 啥都看不到
+                    if path.startswith("/static/"):
+                        # 把 user redirect 到 auth.html
+                        return RedirectResponse(url="/static/auth.html")
+                    # API endpoints (sdp / camera / vision / dispatch / tavus / session)
+                    return JSONResponse({"ok": False, "detail": "請先登入"}, status_code=401)
+
             resp = await call_next(request)
-            if request.url.path.startswith("/static/"):
+            if path.startswith("/static/"):
                 resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
                 resp.headers["Pragma"] = "no-cache"
                 resp.headers["Expires"] = "0"

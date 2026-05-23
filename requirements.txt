@@ -44,3 +44,9 @@ spacy>=3.7,<4.0
 
 # --- Modal deploy ---
 modal>=0.65,<1.0
+
+# --- v0.9.6 Google OAuth (Edward 5/23 拍板身分認證) ---
+# Google ID token JWT 驗證 · 純前端 OAuth flow (不必 client secret)
+google-auth>=2.30,<3.0
+# Cookie 簽名 (verified email 存 cookie · 防偽造)
+itsdangerous>=2.2,<3.0
