@@ -662,6 +662,7 @@
 
     <main class="stage-canvas">
       <!-- v1.9.2 · 雙層 video crossfade · 永不切 src · 講話跟 idle 無縫融合 -->
+      <!-- v1.9.4 · 拿掉 poster (sophie-portrait.png 是舊照片) · 載入空檔顯橘色主題色就好 -->
       <video
         class="live-video live-video-idle"
         id="liveVideo"
@@ -670,7 +671,6 @@
         muted
         loop
         preload="auto"
-        poster="/static/sophie-portrait.png"
         src="/static/sophie-idle.mp4"
       ></video>
       <video
@@ -745,7 +745,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.9.3</span>
+          <span class="vm-version">v1.9.4</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -754,6 +754,14 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.4</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>拿掉 poster 屬性 · Edward catch「最一開始顯示舊的蘇菲照片」</li>
+            <li>v1.9.1 加的 sophie-portrait.png 是舊版設計 · 不符當前風格</li>
+            <li>載入空檔顯橘色主題色就好 · 跟蘇菲影片背景一致</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.3</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>底層 idle 保活 · Chrome MCP 實測抓到瀏覽器會自動 pause 底層</li>
