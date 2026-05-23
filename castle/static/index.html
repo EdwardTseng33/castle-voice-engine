@@ -417,18 +417,8 @@
       object-fit: cover;
       background: transparent;
     }
-    /* v1.9.2 · 雙層 video crossfade · 底層 idle 永遠在 · 上層 speaking 用 opacity 切 */
-    .live-video-idle { z-index: 1; opacity: 1; }
-    .live-video-speaking {
-      z-index: 2;
-      opacity: 0;
-      /* 講話切入 200ms 平滑淡入 · 停止 400ms 慢慢淡出 (講完不要瞬間斷感 · 像呼吸銜接) */
-      transition: opacity 220ms ease-out;
-      pointer-events: none;
-    }
-    .live-video-speaking.is-active { opacity: 1; transition: opacity 200ms ease-in; }
-    /* legacy · v1.2.0g is-switching 保留兼容 · v1.9.2 後沒人在用 */
-    .live-video.is-switching { opacity: 0.85; transition: opacity 120ms ease-out; }
+    /* v1.9.7 · 砍雙層回單 · idle 永遠在 · 命中 lipsync 才切片 · 切片時 opacity 0.75 隱載入空檔 */
+    .live-video.is-switching { opacity: 0.75; transition: opacity 100ms ease-out; }
     .bottom {
       position: absolute;
       bottom: 0; left: 0; right: 0;
@@ -661,8 +651,8 @@
     </header>
 
     <main class="stage-canvas">
-      <!-- v1.9.2 · 雙層 video crossfade · 永不切 src · 講話跟 idle 無縫融合 -->
-      <!-- v1.9.4 · 拿掉 poster (sophie-portrait.png 是舊照片) · 載入空檔顯橘色主題色就好 -->
+      <!-- v1.9.7 · 砍雙層回單 video · Edward 5/24 catch「會像有雙影的重疊人出在跑」 -->
+      <!-- 平常 idle.mp4 loop · 命中 lipsync 100 句切片 · 沒命中 idle 自然繼續 · 沒雙影 -->
       <video
         class="live-video live-video-idle"
         id="liveVideo"
@@ -672,16 +662,6 @@
         loop
         preload="auto"
         src="/static/sophie-idle.mp4"
-      ></video>
-      <video
-        class="live-video live-video-speaking"
-        id="liveVideoSpeaking"
-        autoplay
-        playsinline
-        muted
-        loop
-        preload="auto"
-        src="/static/sophie-speaking.mp4"
       ></video>
       <audio class="live-audio" id="liveAudio" autoplay playsinline></audio>
 
@@ -745,7 +725,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.9.6</span>
+          <span class="vm-version">v1.9.7</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -754,6 +734,18 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.7</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>砍雙層回單 video · Edward catch「會像有雙影的重疊人出在跑」</li>
+            <li>Root cause: 兩支影片人物位置/姿勢/嘴形不同步 · 半透明疊一起 = 鬼影</li>
+            <li>新架構: 單 video · 平常 idle.mp4 loop · 命中 100 句 lipsync 才切片</li>
+            <li>沒命中 = idle 繼續 · 嘴沒對齊但人不會凍結 · 沒雙影</li>
+            <li>命中 = 切到對嘴 mp4 · 切片用 opacity 0.75 隱載入空檔</li>
+            <li>整段講完強制切回 idle · 解 Edward「怎麼讓他停止動嘴」</li>
+            <li>單 video 保活間隔 2s → 3s · 省 CPU 減延遲卡頓感</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.6</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>嘴對齊 100 句重接上 · Edward catch「沒對到生成的對嘴動態」</li>
@@ -2390,55 +2382,47 @@
               if (typeof data.delta === "string") {
                 sophieTextBuffer += data.delta;
               }
-              // v1.9.6 · 嘴對齊重新接上 · 走 speaking 上層 · 底層 idle 不動
-              // 蘇菲講話累積 5+ 字 · phrase-matcher 命中 · 把上層 speaking src 切到對應 lipsync mp4
+              // v1.9.7 · 砍雙層回單 · lipsync 命中時切主 video (idle layer) · 播完切回 idle
+              // 沒命中 = idle 繼續 loop · 嘴沒對齊但人不會凍結 · 沒雙影
               if (window.PhraseMatcher && !window.__sophiePhraseMatched && sophieTextBuffer.length >= 5) {
                 var match = window.PhraseMatcher.findMatching(sophieTextBuffer);
                 if (match) {
                   window.__sophiePhraseMatched = true;
                   try {
-                    var spLayer = document.getElementById('liveVideoSpeaking');
-                    if (spLayer) {
-                      // 切 src 前 opacity 稍降 100ms 隱 src 切換 1-2 幀
-                      spLayer.style.transition = "opacity 100ms ease-out";
-                      spLayer.style.opacity = "0.75";
-                      setTimeout(function () {
+                    var v = document.getElementById('liveVideo');
+                    if (v) {
+                      // 切 src 前 opacity 0.75 隱載入空檔 100ms
+                      v.classList.add("is-switching");
+                      v.src = match.phrase.mp4_url;
+                      v.loop = false;
+                      v.muted = true;
+                      var p = v.play();
+                      if (p && p["catch"]) p["catch"](function () {});
+                      var onReady = function () {
+                        v.removeEventListener("canplay", onReady);
+                        v.classList.remove("is-switching");
+                      };
+                      v.addEventListener("canplay", onReady, { once: true });
+                      setTimeout(function () { v.classList.remove("is-switching"); }, 600);
+                      // lipsync 播完 → 切回 idle.mp4 loop (蘇菲嘴恢復自然)
+                      v.onended = function () {
                         try {
-                          spLayer.src = match.phrase.mp4_url;
-                          spLayer.loop = false;
-                          spLayer.muted = true;
-                          var p = spLayer.play();
-                          if (p && p["catch"]) p["catch"](function () {});
-                          // canplay 後立刻 opacity 回 1
-                          var onReady = function () {
-                            spLayer.removeEventListener("canplay", onReady);
-                            spLayer.style.transition = "";
-                            spLayer.style.opacity = "";
+                          v.classList.add("is-switching");
+                          v.src = "/static/sophie-idle.mp4";
+                          v.loop = true;
+                          v.muted = true;
+                          var pp = v.play();
+                          if (pp && pp["catch"]) pp["catch"](function () {});
+                          var onReady2 = function () {
+                            v.removeEventListener("canplay", onReady2);
+                            v.classList.remove("is-switching");
                           };
-                          spLayer.addEventListener("canplay", onReady, { once: true });
-                          // 100ms 兜底
-                          setTimeout(function () {
-                            spLayer.style.transition = "";
-                            spLayer.style.opacity = "";
-                          }, 600);
-                          // 嘴對齊播完 → 切回通用 speaking.mp4 loop
-                          spLayer.onended = function () {
-                            try {
-                              spLayer.src = "/static/sophie-speaking.mp4";
-                              spLayer.loop = true;
-                              spLayer.muted = true;
-                              var pp = spLayer.play();
-                              if (pp && pp["catch"]) pp["catch"](function () {});
-                            } catch (e) {}
-                            spLayer.onended = null;
-                          };
-                          log("[LIPSYNC HIT] " + match.phrase.sentence + " (dist=" + match.distance + ")");
-                        } catch (innerE) {
-                          log("[LIPSYNC] inner switch fail: " + innerE.message);
-                          spLayer.style.transition = "";
-                          spLayer.style.opacity = "";
-                        }
-                      }, 100);
+                          v.addEventListener("canplay", onReady2, { once: true });
+                          setTimeout(function () { v.classList.remove("is-switching"); }, 600);
+                        } catch (e) {}
+                        v.onended = null;
+                      };
+                      log("[LIPSYNC HIT] " + match.phrase.sentence + " (dist=" + match.distance + ")");
                     }
                   } catch (e) {
                     log("[LIPSYNC] switch fail: " + e.message);
@@ -2867,28 +2851,19 @@
 
     log("Voice Path v1.9.3 ready - dual-layer crossfade + idle keep-alive - 2026-05-24");
 
-    // ===== v1.9.3 · 底層 idle 保活 + 上層 speaking 保活 =====
-    // 實測抓到: 上層顯示時瀏覽器會自動 pause 底層 (iOS Safari 尤其) · 上層 paused 也常見
-    // 兜底機制: 每 2 秒檢查兩個 video 是不是 paused · 若 paused 強制 .play()
+    // ===== v1.9.7 · 單 video 保活 (砍雙層、只剩底層 idle) =====
     (function setupVideoKeepAlive() {
       function keepAlive() {
         try {
-          var idle = document.getElementById("liveVideo");
-          var sp = document.getElementById("liveVideoSpeaking");
-          if (idle && idle.paused) {
-            var p = idle.play();
+          var v = document.getElementById("liveVideo");
+          if (v && v.paused && !v.ended) {
+            var p = v.play();
             if (p && p.catch) p.catch(function () {});
-          }
-          if (sp && sp.paused) {
-            var p2 = sp.play();
-            if (p2 && p2.catch) p2.catch(function () {});
           }
         } catch (e) {}
       }
-      // 立刻檢查 + 每 2s 巡一次
       setTimeout(keepAlive, 500);
-      setInterval(keepAlive, 2000);
-      // 視窗回到前景時立刻檢查 (iOS Safari 切回 PWA 必跑)
+      setInterval(keepAlive, 3000);  // v1.9.7 · 2s → 3s 省 CPU
       document.addEventListener("visibilitychange", function () {
         if (document.visibilityState === "visible") setTimeout(keepAlive, 100);
       });

@@ -134,29 +134,21 @@
     this._active = false;
     this._phase = 0;
   }
-  // v1.9.2 · 雙層 video crossfade · 完全砍 src 切換 · idle 永遠在底層 loop · speaking 上層 opacity 切
-  // Edward 5/24 catch「跟他講話他回覆時就會閃黑頻」· 根本問題 = 單 video 切 src 必然有空檔
-  // 解 = 兩個 video 元素永遠不切 src、用 opacity crossfade
+  // v1.9.7 · 砍雙層回單 video · Edward 5/24 catch「會像有雙影的重疊人出在跑」
+  // 平常 idle.mp4 loop · 命中 lipsync 才切片 · 沒命中 idle 自然繼續 · 沒雙影
+  // SpeakingController 在新架構只負責「邏輯標記」· 不切影片 (避免雙影)
+  // 真正切影片 = lipsync 命中時、由 index.html 那邊邏輯切 + 切回
   SpeakingController.prototype.start = function () {
     if (this._idleDelay) { clearTimeout(this._idleDelay); this._idleDelay = null; }
     if (this._active) {
-      this.pool._log("speaking continue (already active · opacity 維持)");
+      this.pool._log("speaking continue (already active)");
       return;
     }
     this._stopTimers();
     this._active = true;
     this._phase = 2;
-    // v1.9.2 · 不切 src · 改 opacity crossfade
-    try {
-      var sp = document.getElementById("liveVideoSpeaking");
-      if (sp) {
-        sp.classList.add("is-active");
-        // 確保 speaking layer 在播 (autoplay loop 已開、不應該停 · 但 iOS Safari 有時 stall)
-        if (sp.paused) { try { sp.play(); } catch (e) {} }
-      }
-    } catch (e) { this.pool._log("speaking start layer fail: " + e.message); }
     this.pool.currentState = "speaking";
-    this.pool._log("speaking start (crossfade in · 雙 video 不切 src)");
+    this.pool._log("speaking start (邏輯標記 · 不切影片 · 等 lipsync 命中才切)");
   };
   SpeakingController.prototype.stop = function () {
     if (!this._active && !this._idleDelay) return;
@@ -167,23 +159,24 @@
     this._idleDelay = setTimeout(function () {
       self._idleDelay = null;
       if (self._active) return;
+      // 講完了 · 確保 video 回到 idle.mp4 (若 lipsync 還在播、強制切回)
       try {
-        var sp = document.getElementById("liveVideoSpeaking");
-        if (sp) {
-          sp.classList.remove("is-active");
-          // v1.9.6 · 若 lipsync mid-play 被打斷、reset 回通用 speaking.mp4 loop
-          var currSrc = sp.currentSrc || sp.src || "";
+        var v = self.pool.video;
+        if (v) {
+          var currSrc = v.currentSrc || v.src || "";
+          // 若還在播 lipsync (整段都已講完、嘴卻還在動 = Edward catch 的問題) · 強制切回
           if (currSrc.indexOf("/lipsync/") !== -1) {
-            sp.src = "/static/sophie-speaking.mp4";
-            sp.loop = true;
-            sp.muted = true;
-            var p = sp.play();
+            v.src = "/static/sophie-idle.mp4";
+            v.loop = true;
+            v.muted = true;
+            var p = v.play();
             if (p && p["catch"]) p["catch"](function () {});
+            self.pool._log("speaking stop · lipsync 中斷 · 強制切回 idle (嘴停動)");
           }
         }
       } catch (e) {}
       self.pool.currentState = "idle";
-      self.pool._log("speaking stop (crossfade out · 若 lipsync 中斷 reset 回通用)");
+      self.pool._log("speaking stop · 整段講完");
     }, 250);
   };
   SpeakingController.prototype._stopTimers = function () {
