@@ -76,12 +76,14 @@ def fastapi_app():
     from castle.server.dispatch_endpoints import attach_dispatch_routes
     from castle.server.tavus_endpoints import attach_tavus_routes
     from castle.server.memory_endpoints import attach_memory_routes  # v1.1.2 IndexedDB summary backend
+    from castle.server.brain_endpoints import attach_brain_routes  # v1.6.0 Claude 真大腦 + 派工接口
 
     attach_realtime_routes(fastapi_instance)
     attach_camera_routes(fastapi_instance)
     attach_dispatch_routes(fastapi_instance)  # v0.3.0 Phase 2 後半段: castle dispatch + phase2/status
     attach_tavus_routes(fastapi_instance)  # v0.3.2 Phase 3.2: Tavus CVI 即時對話 video
     attach_memory_routes(fastapi_instance)  # v1.1.2 Phase 3.3: 記憶連續性 (Claude Haiku 摘要 · 後端 stateless)
+    attach_brain_routes(fastapi_instance)  # v1.6.0 雙腦混合 · ask_claude / dispatch_howl / dispatch_code
 
     # v1.5.0 · 嘴對齊 100 句預生 mp4 serve · 從 modal.Volume sophie-lipsync-cache 讀
     import os as _os

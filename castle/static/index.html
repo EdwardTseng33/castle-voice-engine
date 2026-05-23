@@ -719,7 +719,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.5.0a</span>
+          <span class="vm-version">v1.6.0</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -728,12 +728,22 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
-          <header class="vm-entry-head"><span class="vm-entry-ver">v1.5.0a</span><span class="vm-entry-date">2026-05-23</span></header>
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.6.0</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>蘇菲腦升級 · 雙腦混合架構 (OpenAI 即時對話 + Claude 真大腦)</li>
+            <li>新接口 /brain/ask_claude · Claude Sonnet 4.5 深度問答</li>
+            <li>新接口 /brain/dispatch_howl · 派霍爾 (Codex · Hub agent) 跑技術任務</li>
+            <li>新接口 /brain/dispatch_code · 派 Claude Code 蘇菲跑文案 / 設計</li>
+            <li>OpenAI 變 router · 短話自己快答 · 深度任務派工到對應大腦</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.5.0a/b</span><span class="vm-entry-date">2026-05-23</span></header>
           <ul class="vm-list">
             <li>嘴對齊 100 句預錄整合 (sync/lipsync-2-pro studio grade · 餘額 $59 跑掉 $43)</li>
             <li>新接口 /lipsync/* 從雲端硬碟讀嘴對齊 mp4 · 訪客也能看</li>
             <li>phrase-matcher.js 模糊比對 · 蘇菲講常用句即時切到嘴對齊版</li>
-            <li>不命中常用句 → fallback 通用講話影片 (沒 break v1.3.x)</li>
+            <li>短句 (我懂 / 我來) 完全相等 path · 不命中常用句 fallback 通用</li>
           </ul>
         </article>
         <article class="vm-entry">
@@ -1638,6 +1648,25 @@
 
           var baseInstr = window.__sophieInstructions ||
             "You are Sophie, the warm Mandarin companion. Always respond in Traditional Chinese (zh-TW). Keep replies short and conversational.";
+          // v1.6.0 · 雙腦混合架構 · 你是 router · 真大腦在 Claude (ask_claude tool)
+          var brainDirective = "\n\n[v1.6 雙腦路由規則]\n" +
+            "你的角色是 router、不是百科。三個工具是你的能力：\n" +
+            "- ask_claude(question, context?) · 需要思考/規劃/創意/研究/判斷 → 必派 Claude · 不要自己腦補答\n" +
+            "- dispatch_howl(task, priority?) · 技術/code/環評 → 派霍爾 (Edward Hub 那邊的 Codex agent)\n" +
+            "- dispatch_code(task) · 文案/設計/跨產品任務 → 派 Claude Code 蘇菲\n" +
+            "\n" +
+            "判斷規則：\n" +
+            "1. 短問候 (你好/早安/晚安) · 寒暄 · 1 句能答的事實 → 自己答 (即時感)\n" +
+            "2. 需要思考超過 10 秒能答的 → 必派 ask_claude\n" +
+            "3. 程式碼/技術細節 → 必派 dispatch_howl\n" +
+            "4. 文案/設計/跨產品方向 → 必派 dispatch_code\n" +
+            "\n" +
+            "派工流程：\n" +
+            "1. 先口頭跟 Edward 說「好 · 讓我問問 Claude」/「我派霍爾看一下」/「我跟 Claude 蘇菲講」(讓 Edward 知道你在動)\n" +
+            "2. 立刻呼叫對應 function\n" +
+            "3. function 結果回來後、用蘇菲口吻把結果整理講給 Edward 聽 (不要讀稿、要轉述)\n" +
+            "\n" +
+            "你的腦袋是有限的 · 真大腦在 Claude 那邊 · 任何深度問題不要自己硬答、派出去。";
           var animDirective = "\n\n[Animation Cues v0.9] 根據對話情緒呼叫 emit_animation_state(state) 觸發蘇菲動畫：\n" +
             "- greeting: 你說『你好/早安/久不見』等問候語時\n" +
             "- task-received: 用戶剛講完、你說『好的/我聽到了/我想想』時\n" +
@@ -1651,7 +1680,7 @@
             "- intimate-farewell: 用戶說『掰掰/晚安/我要走了』深度告別\n" +
             "規則：每次回覆最多呼叫一個 state；speaking 動畫不必呼叫（系統自動處理）；自然判斷即可。";
           var greetingDirective = "\n\n[Opening Greeting] 連線一建立、你的第一句話必須是: 「" + greeting + "」(不可改寫、不可前後加字、自然語氣念出來。念完才開始正常對話。)";
-          var instructions = baseInstr + animDirective + greetingDirective;
+          var instructions = baseInstr + brainDirective + animDirective + greetingDirective;
           try {
             dc.send(JSON.stringify({
               type: "session.update",
@@ -1688,6 +1717,44 @@
                         }
                       },
                       required: ["state"]
+                    }
+                  },
+                  {
+                    type: "function",
+                    name: "ask_claude",
+                    description: "需要深度思考、規劃、創意、研究、複雜判斷時呼叫。Claude (Sonnet 4.5) 是蘇菲的真大腦。短問候 / 寒暄 / 1 句能答的不要呼叫。先口頭跟 Edward 說「讓我想想」再呼叫。",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        question: { type: "string", description: "Edward 的問題或要思考的內容" },
+                        context: { type: "string", description: "可選的補充上下文" }
+                      },
+                      required: ["question"]
+                    }
+                  },
+                  {
+                    type: "function",
+                    name: "dispatch_howl",
+                    description: "派霍爾 (Codex CLI · 城堡 CTO agent) 跑技術任務：code review / 環評 / 程式碼分析 / 技術研究。先口頭跟 Edward 說「我派霍爾」再呼叫。霍爾跑完結果之後會回報、不是即時。",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        task: { type: "string", description: "派給霍爾的任務描述" },
+                        priority: { type: "string", enum: ["low", "normal", "high"], description: "任務優先級" }
+                      },
+                      required: ["task"]
+                    }
+                  },
+                  {
+                    type: "function",
+                    name: "dispatch_code",
+                    description: "派 Claude Code 蘇菲 (Edward 端 Cowork session 內的主對話 Claude) 跑文案 / 設計 / 規劃 / 跨產品任務。先口頭跟 Edward 說「我跟主對話 Claude 講」再呼叫。",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        task: { type: "string", description: "派給 Claude Code 蘇菲的任務" }
+                      },
+                      required: ["task"]
                     }
                   }
                 ]
@@ -1861,18 +1928,71 @@
             } else if (data.type === "response.function_call_arguments.done") {
               try {
                 var fnName = data.name || "";
+                var callId = data.call_id || "";
+                var rawArgs = data.arguments || "{}";
                 if (fnName === "emit_animation_state") {
-                  var args = JSON.parse(data.arguments || "{}");
+                  var args = JSON.parse(rawArgs);
                   var state = args.state;
                   log("animation function call: " + state);
                   if (animPool && typeof animPool.playAction === "function") {
                     animPool.playAction(state);
                   }
-                  // v1.1.0 · 蘇菲主動「召喚」桌面通知 · 親密 / 結束場合
                   if (state === "intimate-greeting" || state === "task-handoff" || state === "intimate-farewell") {
                     var body = lastSophieText || sophieTextBuffer || "蘇菲找你";
                     notifyDesktop("蘇菲", body);
                   }
+                } else if (fnName === "ask_claude" || fnName === "dispatch_howl" || fnName === "dispatch_code") {
+                  // v1.6.0 · Brain layer · 派工到後端 Claude / Howl / Claude Code
+                  var brainArgs;
+                  try { brainArgs = JSON.parse(rawArgs); }
+                  catch (jErr) { brainArgs = {}; log("brain args parse fail: " + jErr.message); }
+                  var endpoint = "/brain/" + fnName;
+                  log("[BRAIN] " + fnName + " call · args=" + rawArgs.slice(0, 100));
+                  fetch(endpoint, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify(brainArgs)
+                  })
+                    .then(function (r) { return r.json(); })
+                    .then(function (result) {
+                      var output;
+                      if (fnName === "ask_claude") {
+                        output = (result && result.answer) || "我大腦現在沒答案";
+                      } else {
+                        output = (result && result.ack) || "派工完成";
+                      }
+                      log("[BRAIN] " + fnName + " result: " + String(output).slice(0, 80));
+                      // 把 function result 回傳給 OpenAI realtime · 蘇菲會接續講
+                      try {
+                        dc.send(JSON.stringify({
+                          type: "conversation.item.create",
+                          item: {
+                            type: "function_call_output",
+                            call_id: callId,
+                            output: String(output)
+                          }
+                        }));
+                        dc.send(JSON.stringify({ type: "response.create" }));
+                      } catch (sErr) {
+                        log("[BRAIN] dc.send result fail: " + sErr.message);
+                      }
+                    })
+                    ["catch"](function (bErr) {
+                      log("[BRAIN] " + fnName + " fetch fail: " + bErr.message);
+                      // 失敗也要把 error 回給 GPT、避免它卡住
+                      try {
+                        dc.send(JSON.stringify({
+                          type: "conversation.item.create",
+                          item: {
+                            type: "function_call_output",
+                            call_id: callId,
+                            output: "我大腦現在卡住、等下再試"
+                          }
+                        }));
+                        dc.send(JSON.stringify({ type: "response.create" }));
+                      } catch (e2) {}
+                    });
                 }
               } catch (fnErr) {
                 log("function_call parse fail: " + fnErr.message);
