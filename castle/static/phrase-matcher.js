@@ -85,19 +85,33 @@
     var bestDist = Infinity;
     var bestRatio = Infinity;
 
+    // v1.9.12 · 加 prefix match · 蘇菲 buffer 起手部分 vs phrase 整段
+    // 範例: 蘇菲講「早安 Edward 你今天看起來不錯」· buffer 前 14 字 vs phrase「早安 Edward 新的一天從這裡開始」normalize 14 字
     for (var i = 0; i < MANIFEST.phrases.length; i++) {
       var p = MANIFEST.phrases[i];
       var ns = p._normalized || _normalize(p.sentence);
-      // 快速 reject · 長度差距 > 40% 不算 match
+
+      // 1. 完整比 (原邏輯)
       var lenRatio = Math.abs(ns.length - nt.length) / Math.max(ns.length, nt.length);
-      if (lenRatio > 0.4) continue;
-      var d = _levenshtein(nt, ns);
-      var ratio = d / Math.max(nt.length, ns.length);
-      if (ratio < 0.30 && d < bestDist) {
-        best = p;
-        bestDist = d;
-        bestRatio = ratio;
+      if (lenRatio <= 0.4) {
+        var d = _levenshtein(nt, ns);
+        var ratio = d / Math.max(nt.length, ns.length);
+        if (ratio < 0.30 && d < bestDist) {
+          best = p; bestDist = d; bestRatio = ratio;
+        }
       }
+      // 2. v1.9.12 · prefix match (buffer 開頭 X 字 vs phrase 整段)
+      if (nt.length >= ns.length) {
+        var nt_prefix = nt.substring(0, ns.length);
+        var dp = _levenshtein(nt_prefix, ns);
+        var ratiop = dp / ns.length;
+        if (ratiop < 0.30 && dp < bestDist) {
+          best = p; bestDist = dp; bestRatio = ratiop;
+        }
+      }
+    }
+    if (best) {
+      try { console.log("[PhraseMatcher] HIT · " + best.sentence + " · ratio=" + bestRatio.toFixed(2) + " · buffer=" + nt.slice(0, 40)); } catch (e) {}
     }
     return best ? { phrase: best, distance: bestDist, ratio: bestRatio } : null;
   }

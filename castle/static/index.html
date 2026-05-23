@@ -725,7 +725,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.9.11</span>
+          <span class="vm-version">v1.9.12</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -734,6 +734,17 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.12</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>修 Edward catch 三件 · 雙聲音 / 進通話閃頻 / lipsync 命中率低</li>
+            <li>雙聲音 root cause: 工具呼叫完手動送 response.create + OpenAI 自己也 trigger</li>
+            <li>修法: 加 __sophieResponseActive flag · 已 active 不再送</li>
+            <li>進通話閃頻: 進 in-call 前強制切回 sophie-idle.mp4 (avoid 停在 stroke-hair / playful)</li>
+            <li>lipsync 命中率: 加 prefix match (蘇菲 buffer 前 X 字 vs phrase 整段)</li>
+            <li>加 log 顯示命中 phrase + ratio · 方便診斷</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.11</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>砍掉 v1.9.10 auto-reload · 影片載入被干擾全橘色</li>
@@ -1630,6 +1641,22 @@
       if (animPool && typeof animPool.stopPreCallRotation === "function") {
         try { animPool.stopPreCallRotation(); } catch (e) {}
       }
+      // v1.9.12 · 修進通話閃頻 · 強制切回 idle.mp4 (避免 stroke-hair / playful 等 pre-call 狀態進通話時切換)
+      try {
+        var v = document.getElementById('liveVideo');
+        if (v && v.currentSrc && v.currentSrc.indexOf('/sophie-idle.mp4') === -1) {
+          v.classList.add('is-switching');
+          v.src = '/static/sophie-idle.mp4';
+          v.loop = true;
+          v.muted = true;
+          var pp = v.play();
+          if (pp && pp.catch) pp.catch(function () {});
+          var onR = function () { v.removeEventListener('canplay', onR); v.classList.remove('is-switching'); };
+          v.addEventListener('canplay', onR, { once: true });
+          setTimeout(function () { v.classList.remove('is-switching'); }, 500);
+          log('[v1.9.12] 進通話強制切回 sophie-idle.mp4 · 避免閃頻');
+        }
+      } catch (e) {}
       try {
         try {
           localStream = await navigator.mediaDevices.getUserMedia({
@@ -2284,6 +2311,12 @@
                 window.__sophieSpeakingTriggered = false;
                 // v1.5.0 · reset phrase match flag · 每次新回應重新 fuzzy match
                 window.__sophiePhraseMatched = false;
+                // v1.9.12 · 標記 response in progress · 避免雙聲音
+                window.__sophieResponseActive = true;
+              }
+              if (data.type === "response.done") {
+                // v1.9.12 · response 結束 · 清標記
+                window.__sophieResponseActive = false;
               }
             } else if (data.type === "response.audio.delta" || data.type === "response.output_audio.delta") {
               // v1.3.1 CRITICAL FIX · OpenAI Realtime 不 emit *.start · 改聽第一個 audio delta trigger startSpeaking
@@ -2509,14 +2542,19 @@
                             output: String(output)
                           }
                         }));
-                        dc.send(JSON.stringify({ type: "response.create" }));
+                        // v1.9.12 · 修雙聲音 bug · 只在沒有 active response 時才 trigger 新的
+                        if (!window.__sophieResponseActive) {
+                          dc.send(JSON.stringify({ type: "response.create" }));
+                          log("[BRAIN] response.create sent (no active response)");
+                        } else {
+                          log("[BRAIN] skip response.create · response already active · 避免雙聲音");
+                        }
                       } catch (sErr) {
                         log("[BRAIN] dc.send result fail: " + sErr.message);
                       }
                     })
                     ["catch"](function (bErr) {
                       log("[BRAIN] " + fnName + " fetch fail: " + bErr.message);
-                      // 失敗也要把 error 回給 GPT、避免它卡住
                       try {
                         dc.send(JSON.stringify({
                           type: "conversation.item.create",
@@ -2526,7 +2564,9 @@
                             output: "我大腦現在卡住、等下再試"
                           }
                         }));
-                        dc.send(JSON.stringify({ type: "response.create" }));
+                        if (!window.__sophieResponseActive) {
+                          dc.send(JSON.stringify({ type: "response.create" }));
+                        }
                       } catch (e2) {}
                     });
                 }
