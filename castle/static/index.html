@@ -191,6 +191,25 @@
       text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
       pointer-events: auto;
     }
+    .demo-disclaimer {
+      position: absolute;
+      bottom: calc(var(--safe-bottom) + 68px);
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      color: var(--fg-fade);
+      font-style: italic;
+      letter-spacing: 0.3px;
+      text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
+      opacity: 0;
+      transition: opacity var(--motion-smooth) var(--easing);
+      pointer-events: none;
+      z-index: 25;
+      text-align: center;
+      max-width: 80%;
+    }
+    .shell[data-state="in-call"] .demo-disclaimer,
+    .shell[data-state="soft-prompt"] .demo-disclaimer { opacity: 0.55; }
     .actions {
       justify-self: center;
       display: flex;
@@ -309,12 +328,13 @@
 
     <main class="stage-canvas">
       <img class="portrait" id="portrait" src="/static/sophie-portrait.png" alt="" />
-      <video class="live-video" id="liveVideo" autoplay playsinline muted></video>
+      <video class="live-video" id="liveVideo" autoplay playsinline muted loop preload="auto" poster="/static/sophie-portrait.png"></video>
       <audio class="live-audio" id="liveAudio" autoplay></audio>
 
       <div class="waking-spinner" aria-hidden="true"></div>
       <div class="waking-label">準備中</div>
       <div class="soft-caption">我在這、有事再叫</div>
+      <div class="demo-disclaimer" id="demoDisclaimer">即時嘴對齊預覽 · 視覺示意（Phase 7c 待真實串流）· 音訊為 OpenAI Realtime 即時對話</div>
 
       <div class="err-bar" id="errBar" role="alert"></div>
       <div class="log" id="log" aria-hidden="true"></div>
@@ -372,7 +392,6 @@
 
     var peerConn = null;
     var localStream = null;
-    var musetalkWs = null;
     var startedAtMs = 0;
     var timerIntervalId = null;
     var micOn = true;
@@ -508,7 +527,7 @@
         await peerConn.setRemoteDescription({ type: "answer", sdp: answerSdp });
         log("SDP exchange OK");
 
-        connectMuseTalk();
+        startSophieVideoLoop();
 
         lifecycle.startCall();
         lifecycle.markVoice();
@@ -519,50 +538,48 @@
       }
     }
 
-    function connectMuseTalk() {
+    // Phase 7b downgrade demo: MuseTalk batch render ~10x realtime delay on A10G,
+    // true realtime streaming requires v1.0 + multi-GPU or v1.5 + A100 + bs=8
+    // (deferred to Phase 7c). Drop-in: play Phase 7a sophie-poc.mp4 (5s clip,
+    // lipsync self-score 3.75/5) on loop while OpenAI realtime handles actual audio
+    // conversation. Watermark discloses this in the UI.
+    function startSophieVideoLoop() {
       try {
-        var wsProto = (location.protocol === "https:") ? "wss:" : "ws:";
-        var wsUrl = wsProto + "//" + location.host + "/musetalk/stream";
-        musetalkWs = new WebSocket(wsUrl);
-        musetalkWs.binaryType = "arraybuffer";
-
-        musetalkWs.addEventListener("open", function () {
-          log("MuseTalk WS open");
-          musetalkWs.send(JSON.stringify({
-            type: "init",
-            fps: 25,
-            reference: "sophie-portrait-original"
-          }));
-        });
-
-        musetalkWs.addEventListener("message", function (ev) {
-          if (shell.getAttribute("data-stream-ready") !== "1") {
+        liveVideo.src = "/static/sophie-poc-loop.mp4";
+        liveVideo.muted = true;
+        liveVideo.loop = true;
+        liveVideo.playsInline = true;
+        var p = liveVideo.play();
+        if (p && p.catch) p.catch(function (err) { log("video play warn: " + err.message); });
+        if (liveVideo.readyState >= 2) {
+          shell.setAttribute("data-stream-ready", "1");
+          log("sophie loop ready (instant cached)");
+        } else {
+          liveVideo.addEventListener("loadeddata", function onReady() {
             shell.setAttribute("data-stream-ready", "1");
-            log("MuseTalk stream ready · portrait -> video");
-          }
-        });
-
-        musetalkWs.addEventListener("error", function (e) {
-          log("MuseTalk WS err · " + (e.message || "unknown"));
-        });
-
-        musetalkWs.addEventListener("close", function () {
-          log("MuseTalk WS closed");
-          shell.setAttribute("data-stream-ready", "0");
-        });
+            log("sophie loop ready (loadeddata)");
+            liveVideo.removeEventListener("loadeddata", onReady);
+          });
+        }
       } catch (e) {
-        log("MuseTalk WS create fail: " + e.message);
+        log("sophie loop fail: " + e.message);
       }
+    }
+
+    function stopSophieVideoLoop() {
+      try {
+        liveVideo.pause();
+        liveVideo.removeAttribute("src");
+        liveVideo.load();
+      } catch (e) {}
+      shell.setAttribute("data-stream-ready", "0");
     }
 
     endBtn.addEventListener("click", function () { endConversation(); });
 
     function endConversation() {
       log("end · cleanup");
-      if (musetalkWs) {
-        try { musetalkWs.close(); } catch (e) {}
-        musetalkWs = null;
-      }
+      stopSophieVideoLoop();
       if (peerConn) {
         try { peerConn.close(); } catch (e) {}
         peerConn = null;
@@ -626,7 +643,7 @@
     });
 
     window.addEventListener("beforeunload", function () {
-      if (peerConn || musetalkWs) {
+      if (peerConn) {
         try { endConversation(); } catch (e) {}
       }
     });
@@ -639,7 +656,7 @@
       });
     }
 
-    log("Voice Path v0.7 ready · 純黑 Duix · state machine 6 階段 · OpenAI realtime + MuseTalk WS");
+    log("Voice Path v0.7b ready · 純黑 Duix · OpenAI realtime audio + 蘇菲 PoC loop video (Phase 7b downgrade · realtime streaming deferred to 7c)");
 
     window.__sophie = {
       lifecycle: lifecycle,
