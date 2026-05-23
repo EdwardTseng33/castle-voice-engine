@@ -1,13 +1,13 @@
 // castle/static/sw.js
 // Voice Path v0.7 Service Worker
 // 待機 shell offline-first · realtime / breeze / musetalk 永遠 network-first 不 cache
-const CACHE_VERSION = 'v0.7.1c';
+const CACHE_VERSION = 'v0.8.0';
 const CACHE_NAME = 'sophie-' + CACHE_VERSION;
 
 const SHELL_ASSETS = [
   '/static/index.html',
-  '/static/voice-lifecycle.js',
-  '/static/sophie-portrait.png',
+  '/static/animation-pool.js',
+  '/static/sophie-idle.mp4',
   '/static/manifest.json'
 ];
 
