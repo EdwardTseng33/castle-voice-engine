@@ -58,13 +58,36 @@
     return true;
   };
 
-  function IdleRotator() {}
+  // v1.1.1 · 時段微調機率
+  // 深夜 22-5 點：手勢機率降到 6% (不活蹦)
+  // 早上 5-9 點：手勢機率拉到 18% (活力)
+  // 中午 12-14 點：playful 12% (午後輕鬆) · acknowledgement 5%
+  // 晚上工作時段 18-22：acknowledgement 5% (陪伴感) · 手勢預設 12%
+  // 其餘：手勢預設 12% (GESTURE_INSERT_PROB)
+  function _gestureProbForHour(h) {
+    if (h >= 22 || h < 5) return 0.06;
+    if (h >= 5 && h < 9)  return 0.18;
+    return GESTURE_INSERT_PROB;
+  }
+
+  function IdleRotator() {
+    this._paused = false;
+  }
   IdleRotator.prototype.pickNext = function () {
-    if (Math.random() < GESTURE_INSERT_PROB) return "stroke-hair";
+    var h = new Date().getHours();
+    var prob = _gestureProbForHour(h);
+    if (Math.random() < prob) return "stroke-hair";
     return IDLE_VARIANTS[Math.floor(Math.random() * IDLE_VARIANTS.length)];
   };
   IdleRotator.prototype.pickIdleOnly = function () {
     return IDLE_VARIANTS[Math.floor(Math.random() * IDLE_VARIANTS.length)];
+  };
+  IdleRotator.prototype.pause = function () { this._paused = true; };
+  IdleRotator.prototype.resume = function () { this._paused = false; };
+  IdleRotator.prototype.isPaused = function () { return !!this._paused; };
+  // 時段微調 hook (給外部 caller 查詢 · 不影響內部 pickNext)
+  IdleRotator.prototype.gestureProbForHour = function (h) {
+    return _gestureProbForHour(typeof h === "number" ? h : new Date().getHours());
   };
 
   function SpeakingController(pool) {

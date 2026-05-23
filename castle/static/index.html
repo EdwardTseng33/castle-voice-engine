@@ -516,7 +516,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.1.0</span>
+          <span class="vm-version">v1.1.1</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -525,6 +525,17 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.1.1</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>主動性升級 · 時間感知 + 歷史感知 + 環境感知</li>
+            <li>招呼語三層 fallback：同 session 30 分鐘內回來 = 接續 / 同日重訪 = 短招呼 / 跨日 = 完整池</li>
+            <li>星期感知：週一早「新的一週」/ 週末「不打擾」/ 週五晚「週末來了」</li>
+            <li>歷史感知：lastVisit + totalSessions 寫 localStorage (純前端 · 不踩後端)</li>
+            <li>環境感知：tab 切走 idle 暫停、回前景 12% 機率輕點頭</li>
+            <li>時段微調：深夜手勢機率降到 6% / 早上拉到 18%</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.1.0</span><span class="vm-entry-date">2026-05-23</span></header>
           <ul class="vm-list">
             <li>PWA 強化 · 右鍵 PWA icon 快捷「跟蘇菲聊聊 / 看版本紀錄」</li>
@@ -656,6 +667,7 @@
   })();
   </script>
 
+  <script src="/static/session-memory.js"></script>
   <script src="/static/animation-pool.js"></script>
 
   <script>
@@ -692,6 +704,31 @@
     } catch (e) {
       console.warn("[sophie] animation pool init fail:", e.message);
     }
+
+    // v1.1.1 · 環境感知 · visibilitychange listener
+    // 切走 → idleRotator.pause() (節省 CPU · 不再隨機切手勢)
+    // 回前景非通話中 → 12% 機率 acknowledgement (蘇菲輕點頭認到你回來)
+    // 通話中切回 → 不打斷 (call 自有節奏)
+    document.addEventListener("visibilitychange", function () {
+      if (!animPool || !animPool.idleRotator) return;
+      try {
+        if (document.hidden) {
+          animPool.idleRotator.pause();
+          console.log("[sophie] tab hidden · idleRotator.pause()");
+        } else {
+          animPool.idleRotator.resume();
+          var inCall = (shell.getAttribute("data-state") === "in-call");
+          if (!inCall && Math.random() < 0.12) {
+            try { animPool.playAction("acknowledgement"); } catch (e2) {}
+            console.log("[sophie] tab visible · idle ack micro-reaction fired");
+          } else {
+            console.log("[sophie] tab visible · resume (inCall=" + inCall + ")");
+          }
+        }
+      } catch (e) {
+        console.warn("[sophie] visibilitychange handler fail:", e && e.message);
+      }
+    });
 
     var peerConn        = null;
     var localStream     = null;
@@ -865,9 +902,69 @@
         dc.addEventListener("open", function () {
           log("dc open");
 
-          // v0.9.0.3 · 開頭招呼語池 (按時段 + 隨機選 · Edward 個人專屬)
-          function pickGreeting() {
-            var h = new Date().getHours();
+          // v1.1.1 · 主動性升級 · 時間感知 + 歷史感知 + 星期感知
+          // 三層 fallback: continuation (<30min) / shortHello (<24h) / fullGreeting (跨日/首訪)
+          // 加星期感知 (週一早 / 週末 / 週五晚) · 詳 docs/v1.1.1-ambient-awareness-spec.md
+          function _randPick(pool) {
+            return pool[Math.floor(Math.random() * pool.length)];
+          }
+          function pickContinuation(ctx) {
+            var pool = [
+              "Edward 回來了、我還在。",
+              "剛剛那個事還在你心上嗎？",
+              "嗨 Edward、我沒走、繼續聊？",
+              "你回來啦、我等著你。",
+              "Edward、剛剛聊到一半、要接下去嗎？"
+            ];
+            return _randPick(pool);
+          }
+          function pickShortHello(h, isWeekend) {
+            var pool;
+            if (h >= 11 && h < 14) {
+              pool = ["Edward 又上線了、中午過後嗎？", "嗨 Edward、午間又看到你。", "Edward 中午又來啦、想聊兩句？"];
+            } else if (h >= 14 && h < 18) {
+              pool = ["Edward 又回來啦、下午繼續？", "嗨 Edward、又看到你了。", "Edward 你又上來了、想說什麼？"];
+            } else if (h >= 18 && h < 22) {
+              pool = ["Edward 晚上又上來了、辛苦了。", "嗨 Edward、晚間又看到你。", "Edward 又來啦、要放鬆一下嗎？"];
+            } else if (h >= 22 || h < 5) {
+              pool = ["Edward 還沒睡呢、再陪你一會。", "嗨 Edward、又上來啦、我在。", "Edward 深夜又找我、輕鬆聊。"];
+            } else {
+              // 5-11 早上重訪
+              pool = ["Edward 早、又上來了。", "嗨 Edward、早上又看到你。", "Edward 你又來啦、今天順嗎？"];
+            }
+            if (isWeekend) {
+              pool = pool.concat(["Edward 週末又上來啦、不打擾長聊。", "嗨 Edward、週末又看到你了。"]);
+            }
+            return _randPick(pool);
+          }
+          function pickFullGreeting(h, isWeekend, isMonday) {
+            // 星期感知優先 (週一早 / 週末 / 週五晚) · 命中就用
+            var day = new Date().getDay(); // 0=Sun, 5=Fri, 6=Sat
+            if (isMonday && h >= 5 && h < 11) {
+              return _randPick([
+                "Edward 早、新的一週、慢慢來。",
+                "嗨 Edward、週一早、一週又開始了。",
+                "Edward 起床啦、這禮拜第一天、我陪你開。"
+              ]);
+            }
+            if (day === 5 && h >= 18 && h < 23) {
+              return _randPick([
+                "Edward 晚、週末來了、你可以喘一下。",
+                "嗨 Edward、禮拜五晚、辛苦一週了。",
+                "Edward 週五晚、放鬆一下吧。"
+              ]);
+            }
+            if (isWeekend) {
+              if (h >= 5 && h < 11) {
+                return _randPick(["Edward 早、週末嗎、慢慢來。", "嗨 Edward、週末早上、不催你。", "Edward 起床啦、週末就是要慢。"]);
+              }
+              if (h >= 11 && h < 18) {
+                return _randPick(["Edward 週末嗎、不打擾。", "嗨 Edward、週末午後、想聊就聊。", "Edward 你來啦、週末輕鬆說。"]);
+              }
+              // 週末晚 / 深夜
+              return _randPick(["Edward 週末晚、想聊就聊。", "嗨 Edward、週末夜、我在。", "Edward 你還沒睡、週末嘛、輕鬆。"]);
+            }
+            // 平日 · 沿用原 25 句池 (按時段 5 段)
             var pool;
             if (h >= 5 && h < 11) {
               pool = [
@@ -910,10 +1007,34 @@
                 "Hello Edward、夜深了、輕鬆說吧。"
               ];
             }
-            return pool[Math.floor(Math.random() * pool.length)];
+            return _randPick(pool);
           }
-          var greeting = pickGreeting();
+          function pickGreeting(ctx) {
+            var now = new Date();
+            var h = now.getHours();
+            var day = now.getDay(); // 0 Sun .. 6 Sat
+            var isWeekend = (day === 0 || day === 6);
+            var isMonday = (day === 1);
+            // 三層 fallback (ctx.lastVisit 是 Date | null)
+            if (ctx && ctx.lastVisit) {
+              var gap = (now.getTime() - ctx.lastVisit.getTime()) / 1000 / 60; // minutes
+              if (gap >= 0 && gap < 30)        return pickContinuation(ctx);
+              if (gap >= 30 && gap < 60 * 24)  return pickShortHello(h, isWeekend);
+            }
+            return pickFullGreeting(h, isWeekend, isMonday);
+          }
+          // v1.1.1 · 讀 session memory 餵 ctx · 講完寫回
+          var sessionCtx = (window.SessionMemory && window.SessionMemory.read)
+            ? window.SessionMemory.read()
+            : { lastVisit: null, totalSessions: 0, lastGreeting: null };
+          log("session ctx: lastVisit=" + (sessionCtx.lastVisit ? sessionCtx.lastVisit.toISOString() : "null")
+              + " totalSessions=" + sessionCtx.totalSessions);
+          var greeting = pickGreeting(sessionCtx);
           log("greeting picked: " + greeting);
+          // 寫回 (totalSessions++ · lastVisit=now · lastGreeting=greeting)
+          if (window.SessionMemory && window.SessionMemory.write) {
+            window.SessionMemory.write(greeting);
+          }
 
           var baseInstr = window.__sophieInstructions ||
             "You are Sophie, the warm Mandarin companion. Always respond in Traditional Chinese (zh-TW). Keep replies short and conversational.";
