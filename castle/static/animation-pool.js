@@ -1,5 +1,5 @@
 /*!
- * Voice Path v0.9.0 - 17-State Animation Pool
+ * Voice Path v1.1.3 - 17-State Animation Pool + absent-aware idle
  * Edward 2026-05-23 spec: docs/v0.9-animation-pool-design.md
  * ES5 only
  */
@@ -28,6 +28,10 @@
 
   var IDLE_VARIANTS = ["idle", "idle-2", "idle-3", "idle-4"];
   var GESTURE_INSERT_PROB = 0.12;
+  // v1.1.3 - absent-state idle slowdown + gesture bias
+  var ABSENT_IDLE_INTERVAL_MS = 20000;  // 20s rotator interval when Edward absent
+  var ABSENT_GESTURE_PROB = 0.12;       // 12% stroke-hair when absent (waiting feel)
+  var ABSENT_THRESHOLD_S = 10;          // absent >= 10s before slowdown kicks in
   var GREETED_KEY = "sophie_first_greeting_done";
   var GREETED_TTL_MS = 24 * 60 * 60 * 1000;
   var HIGH_PRIORITY = { "task-handoff": 1, "intimate-farewell": 1 };
@@ -72,10 +76,16 @@
 
   function IdleRotator() {
     this._paused = false;
+    this._absent = false;  // v1.1.3
   }
   IdleRotator.prototype.pickNext = function () {
     var h = new Date().getHours();
     var prob = _gestureProbForHour(h);
+    // v1.1.3 - absent state: use ABSENT_GESTURE_PROB (12% stroke-hair) and slow rotation handled externally
+    if (this._absent) {
+      if (Math.random() < ABSENT_GESTURE_PROB) return "stroke-hair";
+      return IDLE_VARIANTS[Math.floor(Math.random() * IDLE_VARIANTS.length)];
+    }
     if (Math.random() < prob) return "stroke-hair";
     return IDLE_VARIANTS[Math.floor(Math.random() * IDLE_VARIANTS.length)];
   };
@@ -85,6 +95,10 @@
   IdleRotator.prototype.pause = function () { this._paused = true; };
   IdleRotator.prototype.resume = function () { this._paused = false; };
   IdleRotator.prototype.isPaused = function () { return !!this._paused; };
+  // v1.1.3 absent-state hooks (Edward left frame ≥ 10s)
+  IdleRotator.prototype.setAbsent = function () { this._absent = true; };
+  IdleRotator.prototype.clearAbsent = function () { this._absent = false; };
+  IdleRotator.prototype.isAbsent = function () { return !!this._absent; };
   // 時段微調 hook (給外部 caller 查詢 · 不影響內部 pickNext)
   IdleRotator.prototype.gestureProbForHour = function (h) {
     return _gestureProbForHour(typeof h === "number" ? h : new Date().getHours());
@@ -262,6 +276,20 @@
       this.video.addEventListener("ended", this._endHandler, { once: true });
     }
     this._log("returnToIdle -> " + nextIdle);
+  };
+
+  // v1.1.3 - force greeting (used when Edward returns from absent); bypasses 600s greeting cooldown
+  AnimationPool.prototype.playGreetingNoThrottle = function () {
+    // Reset greeting last-trigger so playAction will fire it now.
+    if (this.frequencyGuard && this.frequencyGuard._lastTrigger) {
+      this.frequencyGuard._lastTrigger["greeting"] = 0;
+    }
+    // Clear absent flag (Edward returned)
+    if (this.idleRotator && this.idleRotator.clearAbsent) {
+      this.idleRotator.clearAbsent();
+    }
+    this.playAction("greeting");
+    this._log("playGreetingNoThrottle fired (edward returned)");
   };
 
   AnimationPool.prototype.startSpeaking = function () {

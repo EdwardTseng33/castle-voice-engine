@@ -10,6 +10,21 @@
 - Modal Secret env var 命名不對齊時優雅退到空摘要 · 蘇菲招呼語退到 v1.1.1 不阻塞通話
 - Edward 一次性設 Modal Secret env var 名後啟用蘇菲完整 v1.1.2 記憶能力
 
+## v1.1.3 · 2026-05-23
+- 視訊陪伴節律 · MediaPipe Pose + Hands 全本機真整合（補完 v0.3.0 半完成）
+- 揮手 / 撐臉 / 雙手舉 / 離開鏡頭 / 回鏡頭 5 種 body-language state
+- 揮手 → 點頭 acknowledgement · 撐臉 → acknowledgement · 雙手舉 → playful
+- 離開鏡頭 ≥ 10s → idle 慢節奏（20s 輪播 + 12% stroke-hair 等待感）
+- 回鏡頭 → 立刻 greeting 一次（bypass 600s cooldown · 蘇菲 micro-greet）
+- 新 castle/multimodal/pose_hands_dispatch.py（249 行 · PoseHandsDispatcher singleton）
+- 新 /vision/pose_hands_latest 1Hz client poll endpoint（consumed-on-read · 不污染 vision_analyzer）
+- camera.py 每 2nd frame（5 fps）跑 pose/hands dispatcher · 4s 同 state cooldown 去抖
+- 4-frame absent debounce 防 MediaPipe 邊緣抖動
+- client 直接 emit playAction · 不經 GPT function call（4-token roundtrip 太慢）
+- 隱私 · Pose/Hands inference 全本機 Modal A10G · 不送 cloud · ndarray 處理完即丟
+- /camera/disable killswitch ≤ 200ms 守則不破（v0.3.0 已驗）
+- SW CACHE bump v1.1.2 → v1.1.3
+
 ## v1.1.2 · 2026-05-23
 - 記憶連續性 · IndexedDB 7 天對話 raw / 30 天蘇菲視角摘要
 - 後端 /memory/summarize stateless · Claude Haiku 摘要對話成 {summary, mood, promises}

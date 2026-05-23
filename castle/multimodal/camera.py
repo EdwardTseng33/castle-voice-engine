@@ -58,6 +58,13 @@ try:
 except Exception as e:
     logger.warning("mediapipe not available: %s - landmark inference disabled", e)
 
+try:
+    from castle.multimodal.pose_hands_dispatch import get_pose_hands_dispatcher
+    POSE_HANDS_DISPATCH_AVAILABLE = True
+except Exception as e:
+    POSE_HANDS_DISPATCH_AVAILABLE = False
+    logger.warning("pose_hands_dispatch not available: %s", e)
+
 
 @dataclass
 class FrameStat:
@@ -97,6 +104,10 @@ class CameraManager:
         self._face_mesh = None
         self._pose = None
         self._hands = None
+        # v1.1.3 pose/hands dispatcher (transitions -> animation signals)
+        self._pose_hands = None
+        self._pose_hands_signal = None  # latest unread signal (consumed-on-read)
+        self._pose_hands_frame_skip = 0
         # Privacy 5.1: initial state fully OFF
         logger.info("CameraManager init - idx=%s fps=%s - DISABLED by default (Privacy 5.1)", camera_index, fps)
 
@@ -134,6 +145,15 @@ class CameraManager:
                 self._face_mesh = mp_face.FaceMesh(static_image_mode=False, max_num_faces=1, refine_landmarks=False, min_detection_confidence=0.5, min_tracking_confidence=0.5)
                 self._pose = mp_pose.Pose(static_image_mode=False, model_complexity=1, min_detection_confidence=0.5, min_tracking_confidence=0.5)
                 self._hands = mp_hands.Hands(static_image_mode=False, max_num_hands=2, min_detection_confidence=0.5, min_tracking_confidence=0.5)
+                # v1.1.3 pose/hands dispatcher (separate models, finer state machine)
+                if POSE_HANDS_DISPATCH_AVAILABLE:
+                    try:
+                        self._pose_hands = get_pose_hands_dispatcher()
+                        if self._pose_hands is not None:
+                            self._pose_hands.reset_state()
+                    except Exception as ph_e:
+                        logger.warning("pose_hands init failed: %s", ph_e)
+                        self._pose_hands = None
             except Exception as e:
                 logger.warning("MediaPipe init failed: %s - landmarks disabled this session", e)
                 self._face_mesh = None
@@ -190,6 +210,7 @@ class CameraManager:
             "camera_index": self.camera_index,
             "fps": self.fps,
             "stat": self._stat_dict(),
+            "pose_hands": self.pose_hands_status(),
         }
 
     def _capture_loop(self):
@@ -265,6 +286,23 @@ class CameraManager:
                         result.hand_landmarks.append([{"x": p.x, "y": p.y, "z": p.z} for p in hand.landmark])
         except Exception as e:
             logger.warning("MediaPipe inference error: %s", e)
+        # v1.1.3 - run PoseHands dispatcher every 2nd frame (5 fps if capture is 10 fps)
+        # ndarray ownership: we keep rgb local; dispatcher reads, drops ref on return
+        try:
+            if self._pose_hands is not None and self._pose_hands.is_available():
+                self._pose_hands_frame_skip = (self._pose_hands_frame_skip + 1) % 2
+                if self._pose_hands_frame_skip == 0:
+                    # Re-derive RGB if needed (rgb defined in try-block above; safe re-eval)
+                    try:
+                        rgb_for_ph = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        sig = self._pose_hands.process(rgb_for_ph)
+                        if sig is not None:
+                            with self._lock:
+                                self._pose_hands_signal = sig
+                    except Exception as ph_proc_e:
+                        logger.warning("pose_hands dispatch err: %s", ph_proc_e)
+        except Exception as ph_outer_e:
+            logger.warning("pose_hands outer err: %s", ph_outer_e)
         return result
 
     def _release_resources(self):
@@ -274,6 +312,14 @@ class CameraManager:
             except Exception:
                 pass
             self._cap = None
+        # v1.1.3 close pose/hands dispatcher cleanly
+        try:
+            if self._pose_hands is not None:
+                self._pose_hands.close()
+        except Exception:
+            pass
+        self._pose_hands = None
+        self._pose_hands_signal = None
         for attr in ("_face_mesh", "_pose", "_hands"):
             obj = getattr(self, attr, None)
             if obj is not None:
@@ -399,6 +445,23 @@ class CameraManager:
             return None
         self._last_emotion_emit[state] = now
         return {"state": state, "confidence": round(conf, 3), "ts": now}
+
+    def get_pose_hands_signal(self):
+        """Return latest pose/hands signal (and consume it). Returns dict or None."""
+        with self._lock:
+            sig = self._pose_hands_signal
+            self._pose_hands_signal = None
+            return sig
+
+    def pose_hands_status(self):
+        """Return pose/hands dispatcher stat dict (or unavailable marker)."""
+        if self._pose_hands is None:
+            return {"available": False}
+        try:
+            return self._pose_hands.stat_dict()
+        except Exception as e:
+            return {"available": False, "error": str(e)}
+
 
 _singleton = None
 _singleton_lock = threading.Lock()

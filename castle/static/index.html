@@ -516,7 +516,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.1.2.1</span>
+          <span class="vm-version">v1.1.3</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -525,6 +525,17 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.1.3</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>視訊陪伴節律 · MediaPipe Pose + Hands 全本機真整合</li>
+            <li>揮手 → 點頭 acknowledgement · 撐臉 → 安靜 acknowledgement · 雙手舉 → playful</li>
+            <li>離開鏡頭 ≥ 10s → idle 慢節奏（20s 輪播 + 12% 撥頭髮等待感）</li>
+            <li>回鏡頭 → 立刻 greeting 一次（bypass 600s cooldown）</li>
+            <li>新 /vision/pose_hands_latest 1Hz client poll · client 直接 emit 不經 GPT（4-token roundtrip 太慢）</li>
+            <li>隱私 · Pose/Hands inference 全本機 Modal A10G / 不送 cloud / ndarray 處理完即丟</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.1.2.1</span><span class="vm-entry-date">2026-05-23</span></header>
           <ul class="vm-list">
             <li>Anthropic 鑰匙 4 個命名 fallback · Modal Secret env var 不對齊時優雅退到空摘要不阻塞通話</li>
@@ -1290,6 +1301,7 @@
             log("/camera/enable -> " + (j && j.ok ? "ok" : JSON.stringify(j).slice(0, 80)));
           })["catch"](function (e) { log("/camera/enable fail: " + e.message); });
           startEmotionPoll();
+          startPoseHandsPoll();  // v1.1.3
         } catch (e) {
           log("emotion pipeline init fail: " + e.message);
         }
@@ -1329,11 +1341,65 @@
       }
     }
 
+    // ===== v1.1.3 pose/hands signal poll (1Hz · LOCAL inference · no GPT roundtrip) =====
+    // Polls /vision/pose_hands_latest at 1Hz. If signal present, emit animation directly
+    // via animationPool.playAction(). GPT realtime is NOT in the loop (4-token roundtrip
+    // is too slow for body-language micro-reactions).
+    var poseHandsPollTimer = null;
+    var lastAbsentState = false;
+    function startPoseHandsPoll() {
+      if (poseHandsPollTimer) return;
+      poseHandsPollTimer = setInterval(function () {
+        if (!camOn) return;
+        fetch("/vision/pose_hands_latest", { cache: "no-store" })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (!j) return;
+            try {
+              var nowAbsent = (j.current_state === "absent");
+              if (animPool && animPool.idleRotator) {
+                if (nowAbsent && !lastAbsentState && j.absent_seconds >= 10) {
+                  animPool.idleRotator.setAbsent();
+                  log("pose_hands · absent >= 10s · idle slowdown ON");
+                  lastAbsentState = true;
+                } else if (!nowAbsent && lastAbsentState) {
+                  animPool.idleRotator.clearAbsent();
+                  log("pose_hands · returned · idle slowdown OFF");
+                  lastAbsentState = false;
+                }
+              }
+            } catch (eAbsent) {}
+            if (!j.signal) return;
+            var sig = j.signal;
+            var anim = sig.animation;
+            log("pose_hands · " + (sig.from || "?") + " -> " + (sig.to || "?") + " · anim=" + anim + " · " + (sig.reason || ""));
+            if (!animPool || typeof animPool.playAction !== "function") return;
+            if (sig.reason === "edward_returned" && typeof animPool.playGreetingNoThrottle === "function") {
+              animPool.playGreetingNoThrottle();
+            } else {
+              animPool.playAction(anim);
+            }
+          })["catch"](function (e) {
+            // Silent · poll fails common during reconnect
+          });
+      }, 1000);
+      log("pose_hands poll started (1Hz)");
+    }
+    function stopPoseHandsPoll() {
+      if (poseHandsPollTimer) {
+        clearInterval(poseHandsPollTimer);
+        poseHandsPollTimer = null;
+        lastAbsentState = false;
+        log("pose_hands poll stopped");
+      }
+    }
+
     endBtn.addEventListener("click", function () { endConversation(); });
 
     function endConversation() {
       log("end cleanup");
       stopEmotionPoll();
+      stopPoseHandsPoll();  // v1.1.3
       try { fetch("/camera/disable", { method: "POST" })["catch"](function () {}); } catch (e) {}
       if (peerConn) {
         try { peerConn.close(); } catch (e) {}
@@ -1435,7 +1501,7 @@
       });
     }
 
-    log("Voice Path v1.1.0 ready - ambient companion (PWA + PIP + notification) - 2026-05-23");
+    log("Voice Path v1.1.3 ready - companion rhythm (pose/hands + absent-aware idle) - 2026-05-23");
 
     window.__sophie = {
       setState: setState,

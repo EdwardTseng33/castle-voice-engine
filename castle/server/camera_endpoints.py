@@ -206,4 +206,39 @@ def attach_camera_routes(app):
             logger.warning("[/vision/emotion_latest] err: %s", e)
             return {"state": None, "error": str(e)}
 
+    @app.get("/vision/pose_hands_latest")
+    async def vision_pose_hands_latest():
+        """v1.1.3 - Browser polls this at ~1Hz to drive sophie pose/hands animation.
+
+        Returns dict {signal: {...}, current_state, absent_seconds} if a new
+        transition fired (consumed-on-read), or {signal: null, current_state, absent_seconds}
+        otherwise. Pose+Hands inference is fully local (Modal A10G). No frame
+        data leaves the box.
+        """
+        try:
+            from castle.multimodal.camera import get_camera_manager
+        except Exception as e:
+            return {"signal": None, "error": str(e)}
+        mgr = get_camera_manager()
+        if not mgr.is_enabled():
+            return {"signal": None, "reason": "camera_disabled"}
+        try:
+            sig = mgr.get_pose_hands_signal()
+            current = "present"
+            absent_s = 0.0
+            try:
+                if mgr._pose_hands is not None:
+                    current = mgr._pose_hands.get_state()
+                    absent_s = mgr._pose_hands.get_absent_seconds()
+            except Exception:
+                pass
+            return {
+                "signal": sig,
+                "current_state": current,
+                "absent_seconds": round(absent_s, 2),
+            }
+        except Exception as e:
+            logger.warning("[/vision/pose_hands_latest] err: %s", e)
+            return {"signal": None, "error": str(e)}
+
     logger.info("camera_endpoints attached: /camera/* and /vision/*")
