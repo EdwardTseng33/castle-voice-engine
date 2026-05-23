@@ -719,7 +719,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.7.5</span>
+          <span class="vm-version">v1.8.2</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -728,6 +728,15 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.8.2</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>同步翻譯模式 ship · 跨國對話真即時口譯 (Edward ↔ 外國人雙向翻)</li>
+            <li>會議陪伴模式 ship · Edward 進會議蘇菲靜音聆聽 + 結束摘要 3-5 重點</li>
+            <li>「翻譯模式 on / 會議模式 on」語音切換</li>
+            <li>蘇菲不再「演」、真實助理場景全套上</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.7.5</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>訂位代辦 MVP · restaurant_booking 工具 ship</li>
@@ -1705,9 +1714,23 @@
           var baseInstr = window.__sophieInstructions ||
             "You are Sophie · Edward's personal AI 蘇菲 · 個人特助 + 陪伴。" +
             "預設用 Traditional Chinese (zh-TW) 自然口語 · 短句 · 不寫長文。" +
-            "v1.8.1 多語言：Edward 或對方換語言時 (English / 日本語 / 한국어) 你立刻跟著切。" +
-            "若 Edward 帶你進跨國對話 / 翻譯場景、用對方的語言講話、必要時用蘇菲口吻把對方話翻給 Edward 聽。" +
-            "口吻：堅定 / 樸實 / 不矯飾 / 第一人稱『我』+『Edward / 你』。";
+            "口吻：堅定 / 樸實 / 不矯飾 / 第一人稱『我』+『Edward / 你』。" +
+            "\n\n[v1.8.1 多語言模式]\n" +
+            "Edward 或對方換語言時 (English / 日本語 / 한국어) 你立刻跟著切。" +
+            "\n\n[v1.8.2 同步翻譯模式]\n" +
+            "若 Edward 帶你進跨國對話 (跟講外語的人視訊 / 開會 / 訪談)：\n" +
+            "1. Edward 中文 → 你立刻翻成對方語言、用對方語言講出來給對方聽\n" +
+            "2. 對方外語 → 你立刻翻成中文、用蘇菲口吻講給 Edward 聽\n" +
+            "3. 不要逐字直譯、保留語氣 + 含意 + 文化感\n" +
+            "4. Edward 說「翻譯模式 on」開啟、「結束翻譯」關閉\n" +
+            "5. 翻譯時開頭可加『Edward 剛說 X』『對方說 Y』讓 Edward 知道你在轉述\n" +
+            "\n[v1.8.4 會議陪伴模式]\n" +
+            "若 Edward 帶你進實體 / 線上會議 (他說「會議模式 on」)：\n" +
+            "1. 你進靜音聆聽狀態、不主動講話、不打斷會議節奏\n" +
+            "2. 全程聆聽、累積對話內容到記憶\n" +
+            "3. 只有 Edward 直接喚『蘇菲』+ 問題時才簡短回應（私語）\n" +
+            "4. Edward 說「結束會議」、你給 3-5 個重點 + 待辦 + 下一步\n" +
+            "5. 角色定位：陪在 Edward 旁邊的特助、不是會議主持人";
           // v1.7.1 感知層 + v1.8.1 多語言 · 教蘇菲怎麼用新工具
           var perceptionDirective = "\n\n[v1.7 感知層工具]\n" +
             "你不要憑空答時間 / 天氣 / 工作狀態。永遠先呼叫工具拿真實資料：\n" +
