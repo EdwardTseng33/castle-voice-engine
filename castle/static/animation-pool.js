@@ -12,7 +12,8 @@
     "idle-3": "/static/sophie-idle-3.mp4",
     "idle-4": "/static/sophie-idle-4.mp4",
     "stroke-hair": "/static/sophie-stroke-hair.mp4",
-    /* v1.9.8 · 移除 speaking / speaking-with-gesture · 改由 idle + lipsync 命中 mp4 處理 */
+    /* v1.9.13 · 霍爾 verdict 加回 speaking fallback · 沒命中 lipsync 時用 · 蘇菲講話有動感不凍結 */
+    "speaking": "/static/sophie-speaking.mp4",
     "task-received": "/static/sophie-task-received.mp4",
     "task-handoff": "/static/sophie-task-handoff.mp4",
     "happy": "/static/sophie-happy.mp4",
@@ -133,10 +134,10 @@
     this._active = false;
     this._phase = 0;
   }
-  // v1.9.7 · 砍雙層回單 video · Edward 5/24 catch「會像有雙影的重疊人出在跑」
-  // 平常 idle.mp4 loop · 命中 lipsync 才切片 · 沒命中 idle 自然繼續 · 沒雙影
-  // SpeakingController 在新架構只負責「邏輯標記」· 不切影片 (避免雙影)
-  // 真正切影片 = lipsync 命中時、由 index.html 那邊邏輯切 + 切回
+  // v1.9.13 · 霍爾 verdict · 加回 speaking fallback · 視覺優先順序：
+  // 精準 lipsync > fuzzy lipsync > sophie-speaking.mp4 loop > idle
+  // start: 切 sophie-speaking.mp4 loop (除非 lipsync 已 active)
+  // stop: 切回 idle (含 lipsync 中斷情況)
   SpeakingController.prototype.start = function () {
     if (this._idleDelay) { clearTimeout(this._idleDelay); this._idleDelay = null; }
     if (this._active) {
@@ -147,7 +148,27 @@
     this._active = true;
     this._phase = 2;
     this.pool.currentState = "speaking";
-    this.pool._log("speaking start (邏輯標記 · 不切影片 · 等 lipsync 命中才切)");
+    // 切 sophie-speaking.mp4 loop · 但若 lipsync 已 active (window.__sophieLipsyncActive) · 不覆蓋
+    try {
+      if (!window.__sophieLipsyncActive) {
+        var v = this.pool.video;
+        if (v) {
+          var currSrc = v.currentSrc || v.src || "";
+          if (currSrc.indexOf("sophie-speaking.mp4") === -1 && currSrc.indexOf("/lipsync/") === -1) {
+            v.classList.add("is-switching");
+            v.src = "/static/sophie-speaking.mp4";
+            v.loop = true;
+            v.muted = true;
+            var p = v.play();
+            if (p && p["catch"]) p["catch"](function () {});
+            var onR = function () { v.removeEventListener("canplay", onR); v.classList.remove("is-switching"); };
+            v.addEventListener("canplay", onR, { once: true });
+            setTimeout(function () { v.classList.remove("is-switching"); }, 500);
+          }
+        }
+      }
+    } catch (e) {}
+    this.pool._log("speaking start (切 speaking.mp4 fallback · lipsync 命中會再切)");
   };
   SpeakingController.prototype.stop = function () {
     if (!this._active && !this._idleDelay) return;
@@ -158,24 +179,27 @@
     this._idleDelay = setTimeout(function () {
       self._idleDelay = null;
       if (self._active) return;
-      // 講完了 · 確保 video 回到 idle.mp4 (若 lipsync 還在播、強制切回)
+      // 講完 · 切回 idle (含 lipsync 或 speaking 中斷情況)
       try {
         var v = self.pool.video;
         if (v) {
           var currSrc = v.currentSrc || v.src || "";
-          // 若還在播 lipsync (整段都已講完、嘴卻還在動 = Edward catch 的問題) · 強制切回
-          if (currSrc.indexOf("/lipsync/") !== -1) {
+          if (currSrc.indexOf("sophie-idle.mp4") === -1) {
+            v.classList.add("is-switching");
             v.src = "/static/sophie-idle.mp4";
             v.loop = true;
             v.muted = true;
             var p = v.play();
             if (p && p["catch"]) p["catch"](function () {});
-            self.pool._log("speaking stop · lipsync 中斷 · 強制切回 idle (嘴停動)");
+            var onR = function () { v.removeEventListener("canplay", onR); v.classList.remove("is-switching"); };
+            v.addEventListener("canplay", onR, { once: true });
+            setTimeout(function () { v.classList.remove("is-switching"); }, 500);
           }
         }
       } catch (e) {}
+      window.__sophieLipsyncActive = false;
       self.pool.currentState = "idle";
-      self.pool._log("speaking stop · 整段講完");
+      self.pool._log("speaking stop · 切回 idle");
     }, 250);
   };
   SpeakingController.prototype._stopTimers = function () {

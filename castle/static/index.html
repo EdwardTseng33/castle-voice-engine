@@ -725,7 +725,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.9.12</span>
+          <span class="vm-version">v1.9.13</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -734,6 +734,17 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.13</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>霍爾 (Codex) 排查 verdict 4 刀 · 解 lipsync 沒運作根本問題</li>
+            <li>刀 1: 加回 sophie-speaking.mp4 fallback · 沒命中 lipsync 時用 · 嘴有動感不凍結</li>
+            <li>刀 2: 砍 sophieTextBuffer ≥ 5 字 gate · 「我懂 / 我來」等短句現在能命中</li>
+            <li>刀 3: 記錄 audio 開始時間 · 命中 lipsync 時 video.currentTime 對齊 · 不晚半拍</li>
+            <li>刀 4: 視覺優先順序固定 · 精準 lipsync &gt; 模糊 lipsync &gt; speaking loop &gt; idle</li>
+            <li>lipsync 播完若 audio 還在 → 切 speaking fallback · audio 結束 → 切 idle</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.12</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>修 Edward catch 三件 · 雙聲音 / 進通話閃頻 / lipsync 命中率低</li>
@@ -2320,11 +2331,13 @@
               }
             } else if (data.type === "response.audio.delta" || data.type === "response.output_audio.delta") {
               // v1.3.1 CRITICAL FIX · OpenAI Realtime 不 emit *.start · 改聽第一個 audio delta trigger startSpeaking
-              // 前版聽 response.audio.start = 永不 fire = video 永遠停 idle = Edward 看到「嘴沒動」根本原因
               if (!window.__sophieSpeakingTriggered && animPool && typeof animPool.startSpeaking === "function") {
                 window.__sophieSpeakingTriggered = true;
+                // v1.9.13 · 霍爾刀 3 · 記錄 audio 開始時間 · lipsync 命中時對齊 currentTime
+                window.__sophieAudioStartTs = Date.now();
+                window.__sophieLipsyncActive = false;
                 animPool.startSpeaking();
-                log("audio.delta first chunk -> startSpeaking · video 切 sophie-speaking.mp4");
+                log("audio.delta first chunk -> startSpeaking · audio ts " + window.__sophieAudioStartTs);
               }
             } else if (data.type === "response.audio.done" || data.type === "response.output_audio.done" || data.type === "response.audio_transcript.done") {
               if (animPool && typeof animPool.stopSpeaking === "function") {
@@ -2349,20 +2362,31 @@
               if (typeof data.delta === "string") {
                 sophieTextBuffer += data.delta;
               }
-              // v1.9.7 · 砍雙層回單 · lipsync 命中時切主 video (idle layer) · 播完切回 idle
-              // 沒命中 = idle 繼續 loop · 嘴沒對齊但人不會凍結 · 沒雙影
-              if (window.PhraseMatcher && !window.__sophiePhraseMatched && sophieTextBuffer.length >= 5) {
+              // v1.9.13 · 霍爾刀 2+3 · 砍 5 字 gate (讓 PhraseMatcher 自管短長)
+              // + 命中時用 audio elapsed time 對齊 video.currentTime · 嘴不晚半拍
+              if (window.PhraseMatcher && !window.__sophiePhraseMatched && sophieTextBuffer.length >= 1) {
                 var match = window.PhraseMatcher.findMatching(sophieTextBuffer);
                 if (match) {
                   window.__sophiePhraseMatched = true;
+                  window.__sophieLipsyncActive = true;  // 阻止 speaking fallback 覆蓋
                   try {
                     var v = document.getElementById('liveVideo');
                     if (v) {
-                      // 切 src 前 opacity 0.75 隱載入空檔 100ms
                       v.classList.add("is-switching");
                       v.src = match.phrase.mp4_url;
                       v.loop = false;
                       v.muted = true;
+                      // 霍爾刀 3 · audio 已開始 N ms · lipsync clip 從 N/1000 秒開始 (避免晚半拍)
+                      var elapsedSec = window.__sophieAudioStartTs ? (Date.now() - window.__sophieAudioStartTs) / 1000 : 0;
+                      var onLoaded = function () {
+                        v.removeEventListener("loadedmetadata", onLoaded);
+                        try {
+                          if (elapsedSec > 0 && v.duration > 0) {
+                            v.currentTime = Math.min(elapsedSec, Math.max(0, v.duration - 0.3));
+                          }
+                        } catch (e) {}
+                      };
+                      v.addEventListener("loadedmetadata", onLoaded, { once: true });
                       var p = v.play();
                       if (p && p["catch"]) p["catch"](function () {});
                       var onReady = function () {
@@ -2371,11 +2395,15 @@
                       };
                       v.addEventListener("canplay", onReady, { once: true });
                       setTimeout(function () { v.classList.remove("is-switching"); }, 600);
-                      // lipsync 播完 → 切回 idle.mp4 loop (蘇菲嘴恢復自然)
+                      // lipsync 播完 → 若 audio 還在 → 切 speaking fallback · 否則 idle
                       v.onended = function () {
+                        window.__sophieLipsyncActive = false;
                         try {
+                          var nextSrc = window.__sophieResponseActive
+                            ? "/static/sophie-speaking.mp4"
+                            : "/static/sophie-idle.mp4";
                           v.classList.add("is-switching");
-                          v.src = "/static/sophie-idle.mp4";
+                          v.src = nextSrc;
                           v.loop = true;
                           v.muted = true;
                           var pp = v.play();
@@ -2389,7 +2417,7 @@
                         } catch (e) {}
                         v.onended = null;
                       };
-                      log("[LIPSYNC HIT] " + match.phrase.sentence + " (dist=" + match.distance + ")");
+                      log("[LIPSYNC HIT] " + match.phrase.sentence + " · elapsed " + elapsedSec.toFixed(2) + "s");
                     }
                   } catch (e) {
                     log("[LIPSYNC] switch fail: " + e.message);
