@@ -867,6 +867,109 @@ def attach_brain_routes(app):
         except Exception:
             return {"ok": True, "mode": "silent", "default": True}
 
+    # ===== v1.9 感知層 4 訊號 =====
+    # 訊號 1: 你在不在電腦前 (page visibility · 瀏覽器端 detect 推上來)
+    # 訊號 2: 你目前在哪個工作 app (走 dispatch_code 拉 Claude App 那邊 · 預備接口)
+    # 訊號 3: Slack / GitHub / Cowork 狀態 (同上 · 預備接口)
+    # 訊號 4: 你在通話 / 專注 (mic 被佔用 + 連續 N 分無語音 · 瀏覽器端 detect)
+
+    @app.post("/perception/update")
+    async def _perception_update(request: Request):
+        """瀏覽器端推感知訊號上來 · 蘇菲下次說話就有 context"""
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"ok": False, "detail": "body parse fail"}, status_code=400)
+
+        presence = (body.get("presence") or "unknown").lower()
+        last_voice_input_sec = body.get("last_voice_input_sec", 0)
+        mic_active = bool(body.get("mic_active", False))
+
+        active_app = body.get("active_app", "")
+        slack_unread = body.get("slack_unread")
+        github_pending_pr = body.get("github_pending_pr")
+        cowork_active_task = body.get("cowork_active_task", "")
+
+        data = {
+            "presence": presence,
+            "last_voice_input_sec": last_voice_input_sec,
+            "mic_active": mic_active,
+            "active_app": active_app,
+            "slack_unread": slack_unread,
+            "github_pending_pr": github_pending_pr,
+            "cowork_active_task": cowork_active_task,
+            "ts": time.time(),
+        }
+
+        try:
+            with open("/lipsync_cache/shared_perception.json", "w", encoding="utf-8") as f:
+                json.dump({"key": "perception", "value": data, "ts": time.time()}, f, ensure_ascii=False)
+            return {"ok": True}
+        except Exception as e:
+            return JSONResponse({"ok": False, "detail": str(e)[:200]}, status_code=500)
+
+    @app.post("/brain/get_perception")
+    async def _get_perception(request: Request):
+        """蘇菲查當前感知狀態 · 回 4 訊號整合 + 人話 brief"""
+        path = "/lipsync_cache/shared_perception.json"
+        if not os.path.exists(path):
+            return {"ok": True, "available": False, "brief": "我這邊還沒接到你的狀態訊號"}
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f).get("value", {})
+
+            age_sec = time.time() - data.get("ts", 0)
+            if age_sec > 600:
+                return {"ok": True, "available": False, "stale_age_sec": age_sec, "brief": "你的狀態訊號已經 10 分鐘沒更新"}
+
+            presence = data.get("presence", "unknown")
+            last_voice_sec = data.get("last_voice_input_sec", 0)
+            mic_active = data.get("mic_active", False)
+            active_app = data.get("active_app", "")
+            slack_unread = data.get("slack_unread")
+            github_pr = data.get("github_pending_pr")
+            cowork_task = data.get("cowork_active_task", "")
+
+            parts = []
+            if presence == "visible":
+                parts.append("你在電腦前")
+            elif presence == "hidden":
+                parts.append("你切到別的視窗去了")
+            elif presence == "idle":
+                parts.append(f"你已經 {int(last_voice_sec // 60)} 分鐘沒動")
+            elif presence == "on_call":
+                parts.append("你在通話")
+            elif presence == "focused":
+                parts.append(f"你在專注 (已 {int(last_voice_sec // 60)} 分鐘沒語音)")
+
+            if active_app:
+                parts.append(f"目前在 {active_app}")
+            if slack_unread is not None:
+                parts.append(f"Slack {slack_unread} 封未讀")
+            if github_pr is not None:
+                parts.append(f"GitHub {github_pr} 個 PR 等你")
+            if cowork_task:
+                parts.append(f"Cowork 那邊在跑「{cowork_task}」")
+
+            brief = " · ".join(parts) if parts else "我這邊看不出你的狀態"
+
+            return {
+                "ok": True,
+                "available": True,
+                "presence": presence,
+                "last_voice_input_sec": last_voice_sec,
+                "mic_active": mic_active,
+                "active_app": active_app,
+                "slack_unread": slack_unread,
+                "github_pending_pr": github_pr,
+                "cowork_active_task": cowork_task,
+                "age_sec": age_sec,
+                "brief": brief,
+            }
+        except Exception as e:
+            return JSONResponse({"ok": False, "detail": str(e)[:200]}, status_code=500)
+
     # ===== v1.8.7 需求訪談模式 =====
 
     @app.post("/brain/start_interview")

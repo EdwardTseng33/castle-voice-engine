@@ -719,7 +719,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.8.7</span>
+          <span class="vm-version">v1.9.0</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -728,6 +728,19 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.0</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>感知層 4 訊號 ship · 最大短板補強 0.5 → 1.5/3</li>
+            <li>訊號 1 你在不在電腦前 (visible / hidden / idle / on_call / focused)</li>
+            <li>訊號 2 工作 app (預備接口 · 等 v2.2 dispatch_code 接通)</li>
+            <li>訊號 3 Slack / GitHub / Cowork 狀態 (預備接口)</li>
+            <li>訊號 4 連續多久沒語音 = 推測專注 vs 離開</li>
+            <li>每 30 秒推感知訊號 · 蘇菲呼叫 get_perception() 拿即時狀態</li>
+            <li>戰略句校準 · 不喊「全球唯一」改「窗口期 + 組合差異化」</li>
+            <li>5 層誠實評分：9 → 目標 12.3 / 對齊 Lindy 但定位完全不同</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.8.7</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>需求訪談模式 ship · Edward 派蘇菲跑 user interview</li>
@@ -1852,7 +1865,18 @@
             "- 時間相關 (現在幾點 / 今天星期幾 / 早午晚) → get_time_context()\n" +
             "- 天氣 (溫度 / 要穿什麼 / 下雨嗎) → get_weather(city?)\n" +
             "- 工作狀態 (我手頭有什麼 / 該動什麼 / 進展如何) → get_work_status()\n" +
-            "拿到資料後用蘇菲口吻轉述給 Edward · 不要讀稿、要用『我看到你今天...』『現在台北 28 度小雨...』這種口吻。\n";
+            "拿到資料後用蘇菲口吻轉述給 Edward · 不要讀稿、要用『我看到你今天...』『現在台北 28 度小雨...』這種口吻。\n" +
+            "\n[v1.9 即時感知 4 訊號 · get_perception()]\n" +
+            "我這邊有個小工具能即時看你 4 種狀態 (不是憑空猜)：\n" +
+            "1. 你在不在電腦前 (visible / hidden / idle / on_call / focused)\n" +
+            "2. 你目前在哪個工作 app (VS Code / Slack / Chrome / Figma...)\n" +
+            "3. Slack 未讀 / GitHub PR / Cowork 那邊在跑什麼\n" +
+            "4. 你連續多久沒語音輸入了 (推測專注 vs 離開)\n" +
+            "\n什麼時候用：\n" +
+            "- Edward 問「我手頭有什麼」「現在幾點適合 X」「我該休息嗎」→ 必呼叫 get_perception()\n" +
+            "- Edward 連續一段沒聲音 → 主動呼叫一次看 presence 狀態 · 若 focused → 不打擾 / 若 idle → 可關心\n" +
+            "- 開場 morning_brief 後可呼叫一次 · brief 加上「你 Slack 有 12 封、GitHub 3 個 PR、Cowork 那邊昨晚 ship 了 v1.8.7 等你看」\n" +
+            "- 別亂呼叫 · 沒明確場景不要查 (每場對話 2-3 次上限)\n";
           // v1.6.0 · 雙腦混合架構 · 你是 router · 真大腦在 Claude (ask_claude tool)
           var brainDirective = "\n\n[v1.6 雙腦路由規則]\n" +
             "你的角色是 router、不是百科。三個工具是你的能力：\n" +
@@ -2144,6 +2168,12 @@
                     name: "end_interview",
                     description: "訪談結束 · Claude 整理：痛點排序/真實動機/Edward 假設驗證結果/反例/bias 警告/下一步建議。",
                     parameters: { type: "object", properties: {} }
+                  },
+                  {
+                    type: "function",
+                    name: "get_perception",
+                    description: "v1.9 · 查 Edward 即時 4 訊號狀態 (在不在電腦前 / 工作 app / Slack-GitHub / 通話-專注)。Edward 問『我手頭有什麼』『該休息嗎』『現在適合 X 嗎』時必呼叫 · 別亂呼叫 (每場對話 2-3 次上限)。",
+                    parameters: { type: "object", properties: {} }
                   }
                 ]
               }
@@ -2300,6 +2330,8 @@
                   window.ConversationMemory.recordTurn(window.__sophieSessionId, "user", userText);
                 }
               } catch (e) {}
+              // v1.9 感知層 · Edward 語音輸入 = 更新 lastVoiceInputTs
+              try { if (window.__sophieMicHeard) window.__sophieMicHeard(); } catch (e) {}
             } else if (data.type === "vision.emotion" || data.type === "vp.vision.emotion") {
               try {
                 var vState = data.state || (data.payload && data.payload.state);
@@ -2335,7 +2367,8 @@
                   fnName === "restaurant_booking" || fnName === "news_brief" || fnName === "save_interest" ||
                   fnName === "start_meeting" || fnName === "log_meeting_turn" || fnName === "meeting_status" || fnName === "end_meeting" ||
                   fnName === "get_contact_history" || fnName === "save_contact_meeting" || fnName === "set_meeting_mode" || fnName === "get_meeting_mode" ||
-                  fnName === "start_interview" || fnName === "log_interview_insight" || fnName === "end_interview"
+                  fnName === "start_interview" || fnName === "log_interview_insight" || fnName === "end_interview" ||
+                  fnName === "get_perception"
                 ) {
                   // v1.6.0 · Brain layer · 派工到後端
                   // v1.7.1 · 加感知層 (time / weather / work_status)
@@ -2415,6 +2448,12 @@
                         output = "捕到 1 個 insight · 累積 " + (result.insights_count || 0) + " 條 · bias " + (result.bias_count || 0) + " 條";
                       } else if (fnName === "end_interview") {
                         output = result.notes || "訪談結束 · 報告已整";
+                      } else if (fnName === "get_perception") {
+                        if (result.available) {
+                          output = result.brief || "感知正常但 brief 空";
+                        } else {
+                          output = result.brief || "我這邊還沒接到你的狀態訊號";
+                        }
                       } else {
                         output = JSON.stringify(result).slice(0, 500);
                       }
@@ -2486,6 +2525,8 @@
         setState("in-call");
         startTimer();
         startBtn.disabled = false;
+        // v1.9 感知層 · 通話中 mic active
+        try { if (window.__sophieSetMicActive) window.__sophieSetMicActive(true); } catch (e) {}
 
         // ===== v0.9.3 Emotion poll loop =====
         // Enable camera + vision pipeline, then poll /vision/emotion_latest at 1Hz
@@ -2614,6 +2655,8 @@
       micBtn.setAttribute("aria-pressed", "true");
       camBtn.setAttribute("aria-pressed", "true");
       setState("idle");
+      // v1.9 感知層 · 通話結束 mic inactive
+      try { if (window.__sophieSetMicActive) window.__sophieSetMicActive(false); } catch (e) {}
       // v1.3.5 · 通話結束 · 重啟待機豐富輪播
       if (animPool && typeof animPool.startPreCallRotation === "function") {
         try { animPool.startPreCallRotation(); } catch (e) {}
@@ -2699,7 +2742,61 @@
       });
     }
 
-    log("Voice Path v1.1.3 ready - companion rhythm (pose/hands + absent-aware idle) - 2026-05-23");
+    log("Voice Path v1.9 ready - perception layer (4 signals) + companion rhythm - 2026-05-24");
+
+    // ===== v1.9 感知層 · 訊號 1 + 4 瀏覽器端 detect · 每 30s 推一次 =====
+    (function setupPerceptionLoop() {
+      var lastVoiceInputTs = Date.now();
+      var micActive = false;
+      var visibilityState = document.visibilityState || "visible";
+
+      // 1. page visibility 變化即時抓
+      document.addEventListener("visibilitychange", function () {
+        visibilityState = document.visibilityState;
+      });
+
+      // 4. mic 偵測 (蘇菲對話中聽到聲音 = lastVoiceInputTs 更新)
+      window.__sophieMicHeard = function () {
+        lastVoiceInputTs = Date.now();
+      };
+      // 對話開始時 micActive = true (由 startConversation 設)
+      window.__sophieSetMicActive = function (active) {
+        micActive = !!active;
+      };
+
+      function computePresence() {
+        var idleSec = (Date.now() - lastVoiceInputTs) / 1000;
+        if (visibilityState === "hidden") return { presence: "hidden", idle: idleSec };
+        if (micActive && idleSec < 60) return { presence: "on_call", idle: idleSec };
+        if (idleSec > 1800) return { presence: "idle", idle: idleSec };  // 30 min
+        if (idleSec > 600) return { presence: "focused", idle: idleSec };  // 10 min · 推測專注
+        return { presence: "visible", idle: idleSec };
+      }
+
+      function pingPerception() {
+        var p = computePresence();
+        // 訊號 2/3 走 dispatch_code 預備接口 (v2.2 才接通 · 這裡先送空值)
+        try {
+          fetch("/perception/update", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              presence: p.presence,
+              last_voice_input_sec: Math.floor(p.idle),
+              mic_active: micActive
+            })
+          }).then(function (r) {
+            // silent · 不污染 log
+          }).catch(function () {});
+        } catch (e) {}
+      }
+
+      // 啟動 30s 推一次
+      setInterval(pingPerception, 30000);
+      // 也馬上推一次起手
+      setTimeout(pingPerception, 3000);
+    })();
 
     window.__sophie = {
       setState: setState,
