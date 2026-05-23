@@ -11,7 +11,9 @@
   <style>
     :root {
       --bg: #000;
+      --bg-soft: #0b0b0d;
       --fg: rgba(255, 255, 255, 0.95);
+      --fg-dim: rgba(255, 255, 255, 0.55);
       --fg-fade: rgba(255, 255, 255, 0.28);
       --red: #e3392b;
     }
@@ -25,52 +27,90 @@
       font-feature-settings: "ss01", "cv11";
       letter-spacing: -0.01em;
       -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+    }
+    /* 背景光暈 (微妙質感 · 不搶蘇菲名) */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 50% 30%, rgba(180, 170, 255, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 80%, rgba(255, 200, 160, 0.04) 0%, transparent 55%);
+      pointer-events: none;
+      z-index: 0;
     }
     .shell {
+      position: relative;
+      z-index: 1;
       min-height: 100dvh;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 40px;
-      padding: 24px;
+      padding: 32px 24px;
     }
     .name {
       font-family: "Georgia", "Source Han Serif TC", serif;
       font-style: italic;
-      font-size: 56px;
+      font-size: 72px;
       font-weight: 400;
-      letter-spacing: 0.5px;
+      letter-spacing: 1px;
+      line-height: 1;
       color: var(--fg);
+      margin-bottom: 64px;
+      text-shadow: 0 4px 24px rgba(255, 255, 255, 0.05);
     }
+    /* GIS button 包裝 · 留白 + 微浮陰影 */
+    .signin-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+    }
+    .g_id_signin {
+      filter: drop-shadow(0 6px 20px rgba(0, 0, 0, 0.4));
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .g_id_signin:hover { transform: translateY(-1px); }
     .err {
       color: var(--red);
       font-size: 13px;
+      letter-spacing: 0.2px;
       min-height: 18px;
       opacity: 0;
       transition: opacity 0.3s ease;
       text-align: center;
-      max-width: 340px;
+      max-width: 320px;
       white-space: pre-line;
       line-height: 1.55;
+      margin-top: 8px;
     }
     .err.show { opacity: 1; }
     .loading {
       color: var(--fg-fade);
-      font-size: 13px;
+      font-size: 12px;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
       opacity: 0;
       transition: opacity 0.3s ease;
+      margin-top: 4px;
     }
     .loading.show { opacity: 1; }
     .footer {
       position: fixed;
-      bottom: max(24px, env(safe-area-inset-bottom));
+      bottom: max(28px, env(safe-area-inset-bottom));
       left: 50%;
       transform: translateX(-50%);
       font-size: 10px;
       color: var(--fg-fade);
-      letter-spacing: 0.6px;
+      letter-spacing: 0.8px;
       text-transform: uppercase;
+      z-index: 2;
+    }
+    /* 響應式 · 小螢幕適度縮放 */
+    @media (max-width: 380px) {
+      .name { font-size: 56px; margin-bottom: 48px; }
     }
   </style>
 </head>
@@ -78,22 +118,24 @@
   <div class="shell">
     <div class="name">蘇菲</div>
 
-    <div id="g_id_onload"
-         data-client_id="870408555328-dv80l5gs73os63r44e8ed79kndcoorbm.apps.googleusercontent.com"
-         data-callback="onSignIn"
-         data-auto_prompt="false"
-         data-context="signin"></div>
-    <div class="g_id_signin"
-         data-type="standard"
-         data-shape="pill"
-         data-theme="filled_black"
-         data-text="signin_with"
-         data-size="large"
-         data-locale="zh_TW"
-         data-logo_alignment="left"></div>
+    <div class="signin-wrap">
+      <div id="g_id_onload"
+           data-client_id="870408555328-dv80l5gs73os63r44e8ed79kndcoorbm.apps.googleusercontent.com"
+           data-callback="onSignIn"
+           data-auto_prompt="false"
+           data-context="signin"></div>
+      <div class="g_id_signin"
+           data-type="standard"
+           data-shape="pill"
+           data-theme="filled_black"
+           data-text="signin_with"
+           data-size="large"
+           data-locale="zh_TW"
+           data-logo_alignment="left"></div>
 
-    <div class="loading" id="loading">驗證中…</div>
-    <div class="err" id="err"></div>
+      <div class="loading" id="loading">驗證中</div>
+      <div class="err" id="err"></div>
+    </div>
   </div>
 
   <div class="footer">POWERED BY 城堡</div>
@@ -134,14 +176,11 @@
           return r.json().then(function (j) {
             var detail = safeStr(j && j.detail) || "登入失敗";
             var contact = safeStr(j && j.contact);
-            var yourEmail = safeStr(j && j.your_email);
-            var msg = detail;
             if (contact) {
-              msg = detail + "\n\n" +
-                    (yourEmail ? "您的帳號 " + yourEmail + "\n" : "") +
-                    "請聯絡 " + contact + " 開放";
+              showErr(detail + "\n通知 " + contact + " 開放");
+            } else {
+              showErr(detail);
             }
-            showErr(msg);
           }).catch(function () {
             showErr("登入失敗 · 請重試");
           });

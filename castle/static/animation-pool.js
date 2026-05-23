@@ -135,6 +135,9 @@
     this._phase = 0;
   }
   SpeakingController.prototype.start = function () {
+    // v1.2.0c · Edward 5/23 catch「閃頻沒對上動態」· 砍 8s breath pause 中斷
+    // 改成：phase 1 speaking-with-gesture (5s 帶手勢) → phase 2 speaking loop 永遠 (講完才 stop)
+    // 不再中間切 idle 1.5s · 通話中視覺一致 · GPT stop 才回 idle
     this._stopTimers();
     this._active = true;
     this._phase = 1;
@@ -144,26 +147,8 @@
       if (!self._active) return;
       self._phase = 2;
       self.pool._playRaw("speaking", true);
-      self._t2 = setTimeout(function () {
-        if (!self._active) return;
-        self._phase = 3;
-        self._breathInterval = setInterval(function () {
-          if (!self._active) return;
-          self._breathePause();
-        }, 8000);
-      }, 10000);
     }, 5000);
-    this.pool._log("speaking start (phase 1: with-gesture)");
-  };
-  SpeakingController.prototype._breathePause = function () {
-    if (!this._active) return;
-    var idle = this.pool.idleRotator.pickIdleOnly();
-    this.pool._playRaw(idle, false);
-    var self = this;
-    setTimeout(function () {
-      if (!self._active) return;
-      self.pool._playRaw("speaking", true);
-    }, 1500);
+    this.pool._log("speaking start (phase 1: with-gesture · phase 2 永久 loop · 不 breath pause)");
   };
   SpeakingController.prototype.stop = function () {
     this._active = false;

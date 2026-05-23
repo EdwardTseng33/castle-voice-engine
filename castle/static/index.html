@@ -257,6 +257,34 @@
       padding: 12px 28px 28px;
       text-align: center;
     }
+    /* v1.2.0c · Signin modal · 極簡但有設計感 (Edward 5/23「重視美學體驗」) */
+    .signin-body {
+      padding: 24px 28px 36px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+    }
+    .signin-modal-panel {
+      max-width: 360px;
+    }
+    .signin-body .g_id_signin {
+      filter: drop-shadow(0 6px 20px rgba(0, 0, 0, 0.4));
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .signin-body .g_id_signin:hover { transform: translateY(-1px); }
+    .signin-header {
+      padding-bottom: 8px;
+    }
+    .signin-name-mark {
+      font-family: "Georgia", "Source Han Serif TC", serif;
+      font-style: italic;
+      font-size: 32px;
+      color: var(--fg);
+      text-align: center;
+      margin: 8px 0 6px;
+      letter-spacing: 0.5px;
+    }
     .invite-tagline {
       font-family: "Georgia", "Source Han Serif TC", serif;
       font-style: italic;
