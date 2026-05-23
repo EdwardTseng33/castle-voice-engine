@@ -316,6 +316,7 @@
     }
     .action-btn.pip .icon { width: 18px; height: 18px; }
     .action-btn.pip:hover { background: rgba(255, 255, 255, 0.18); }
+    .action-btn.pip.active { background: rgba(255, 215, 100, 0.28); box-shadow: 0 0 0 2px rgba(255, 215, 100, 0.45) inset; }
 
     .shell[data-state="in-call"] .action-btn.mic,
     .shell[data-state="in-call"] .action-btn.cam,
@@ -489,7 +490,7 @@
           </svg>
         </button>
 
-        <button class="action-btn pip" id="pipBtn" aria-label="浮窗模式" title="浮窗模式 (PIP)">
+        <button class="action-btn pip" id="pipBtn" aria-label="縮小到桌面浮窗" title="縮小到桌面浮窗 · 持續聽蘇菲講話">
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M21 11V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6"/>
             <rect x="13" y="13" width="8" height="6" rx="1"/>
@@ -1115,7 +1116,7 @@
 
     pipBtn.addEventListener("click", async function () {
       if (!document.pictureInPictureEnabled) {
-        showError("此瀏覽器不支援 PIP");
+        showError("此瀏覽器不支援 PIP (Safari iOS 用系統內建)");
         return;
       }
       try {
@@ -1128,7 +1129,16 @@
         showError("PIP 啟動失敗 · " + e.message);
       }
     });
-    liveVideo.addEventListener("leavepictureinpicture", function () { log("PIP closed"); });
+    liveVideo.addEventListener("enterpictureinpicture", function () {
+      pipBtn.classList.add("active");
+      pipBtn.setAttribute("aria-pressed", "true");
+      log("PIP open · 浮窗模式");
+    });
+    liveVideo.addEventListener("leavepictureinpicture", function () {
+      pipBtn.classList.remove("active");
+      pipBtn.setAttribute("aria-pressed", "false");
+      log("PIP closed · 回主視窗");
+    });
 
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") {
