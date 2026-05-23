@@ -12,22 +12,50 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="蘇菲" />
-  <link rel="apple-touch-icon" href="/static/sophie-portrait.png" />
+  <link rel="apple-touch-icon" href="/static/icon-192.png" />
+  <link rel="preconnect" href="https://rsms.me/" />
+  <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
   <style>
     :root {
       --bg: #000;
-      --fg: rgba(255, 255, 255, 0.95);
-      --fg-dim: rgba(255, 255, 255, 0.55);
-      --fg-fade: rgba(255, 255, 255, 0.22);
-      --line: rgba(255, 255, 255, 0.18);
+      --fg: rgba(255, 255, 255, 0.96);
+      --fg-dim: rgba(255, 255, 255, 0.62);
+      --fg-fade: rgba(255, 255, 255, 0.30);
+      --line: rgba(255, 255, 255, 0.20);
+
       --green: #1fa66e;
       --green-deep: #15875a;
+      --green-hi: #2bbf81;
       --red: #e3392b;
       --red-deep: #c12d22;
+      --red-hi: #ed4d40;
+      --ctrl-bg: rgba(255, 255, 255, 0.12);
+      --ctrl-bg-hi: rgba(255, 255, 255, 0.22);
+      --ctrl-bg-off: rgba(227, 57, 43, 0.34);
+
+      --shadow-glow-green:
+        0 6px 18px rgba(31, 166, 110, 0.32),
+        0 12px 38px rgba(31, 166, 110, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.18);
+      --shadow-glow-green-hi:
+        0 8px 24px rgba(31, 166, 110, 0.48),
+        0 16px 48px rgba(31, 166, 110, 0.26),
+        inset 0 1px 0 rgba(255, 255, 255, 0.24);
+      --shadow-glow-red:
+        0 6px 18px rgba(227, 57, 43, 0.38),
+        inset 0 1px 0 rgba(255, 255, 255, 0.16);
+      --shadow-glow-red-hi:
+        0 8px 24px rgba(227, 57, 43, 0.55),
+        inset 0 1px 0 rgba(255, 255, 255, 0.22);
+      --shadow-control:
+        0 4px 14px rgba(0, 0, 0, 0.32),
+        inset 0 1px 0 rgba(255, 255, 255, 0.10);
+
       --motion-fast: 120ms;
-      --motion-normal: 280ms;
-      --motion-smooth: 400ms;
+      --motion-normal: 220ms;
+      --motion-smooth: 360ms;
       --easing: cubic-bezier(0.4, 0, 0.2, 1);
+
       --safe-top: max(20px, env(safe-area-inset-top));
       --safe-bottom: max(20px, env(safe-area-inset-bottom));
       --safe-left: max(20px, env(safe-area-inset-left));
@@ -38,7 +66,11 @@
       height: 100%;
       overflow: hidden;
       background: var(--bg);
-      font-family: Georgia, "Source Han Serif TC", "Noto Serif TC", serif;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text",
+                   "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei",
+                   sans-serif;
+      font-feature-settings: "ss01", "cv11", "cv02";
+      letter-spacing: -0.01em;
       color: var(--fg);
       -webkit-font-smoothing: antialiased;
     }
@@ -70,8 +102,9 @@
       text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
     }
     .name {
+      font-family: "Georgia", "Source Han Serif TC", serif;
       font-style: italic;
-      font-size: 18px;
+      font-size: 19px;
       color: var(--fg);
       letter-spacing: 0.3px;
     }
@@ -86,7 +119,10 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      transition: border-color var(--motion-fast) var(--easing),
+                  color var(--motion-fast) var(--easing);
     }
+    .info-dot:hover { border-color: var(--fg-dim); color: var(--fg); }
     .stage-canvas {
       flex: 1;
       position: relative;
@@ -95,19 +131,6 @@
       justify-content: center;
       overflow: hidden;
     }
-    .portrait {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      object-position: center 30%;
-      opacity: 0;
-      transition: opacity var(--motion-smooth) var(--easing);
-    }
-    .shell[data-state="hibernate"] .portrait,
-    .shell[data-state="waking"] .portrait,
-    .shell[data-state="semi-idle"] .portrait { opacity: 1; }
     .live-video {
       position: absolute;
       inset: 0;
@@ -115,54 +138,8 @@
       height: 100%;
       object-fit: cover;
       background: var(--bg);
-      opacity: 0;
-      transition: opacity var(--motion-smooth) var(--easing);
+      opacity: 1;
     }
-    .shell[data-state="pre-call"] .live-video,
-    .shell[data-state="in-call"] .live-video,
-    .shell[data-state="soft-prompt"] .live-video { opacity: 1; }
-    .shell[data-state="pre-call"]:not([data-stream-ready="1"]) .portrait { opacity: 1; }
-    .shell[data-state="pre-call"]:not([data-stream-ready="1"]) .live-video { opacity: 0; }
-    .waking-spinner {
-      position: absolute;
-      width: 32px; height: 32px;
-      border: 2px solid var(--fg-fade);
-      border-top-color: var(--fg);
-      border-radius: 50%;
-      bottom: 25%;
-      left: 50%; transform: translateX(-50%);
-      opacity: 0;
-      animation: spin 0.9s linear infinite;
-      transition: opacity var(--motion-fast) var(--easing);
-    }
-    .shell[data-state="waking"] .waking-spinner { opacity: 1; }
-    @keyframes spin { to { transform: translateX(-50%) rotate(360deg); } }
-    .waking-label {
-      position: absolute;
-      bottom: calc(25% - 48px);
-      left: 50%; transform: translateX(-50%);
-      font-style: italic;
-      font-size: 14px;
-      color: var(--fg-dim);
-      letter-spacing: 0.5px;
-      opacity: 0;
-      transition: opacity var(--motion-fast) var(--easing);
-    }
-    .shell[data-state="waking"] .waking-label { opacity: 1; }
-    .soft-caption {
-      position: absolute;
-      bottom: 25%;
-      left: 50%; transform: translateX(-50%);
-      font-style: italic;
-      font-size: 16px;
-      color: var(--fg);
-      letter-spacing: 0.3px;
-      text-shadow: 0 2px 12px rgba(0, 0, 0, 0.85);
-      opacity: 0;
-      transition: opacity var(--motion-smooth) var(--easing);
-      pointer-events: none;
-    }
-    .shell[data-state="soft-prompt"] .soft-caption { opacity: 1; }
     .bottom {
       position: absolute;
       bottom: 0; left: 0; right: 0;
@@ -176,45 +153,51 @@
     .timer {
       justify-self: start;
       align-self: center;
-      font-family: ui-monospace, "Cascadia Code", monospace;
+      font-family: ui-monospace, "Cascadia Code", "JetBrains Mono", monospace;
       font-variant-numeric: tabular-nums;
       font-size: 15px;
       color: var(--fg);
-      text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
+      text-shadow: 0 1px 8px rgba(0, 0, 0, 0.78);
       opacity: 0;
       transition: opacity var(--motion-normal) var(--easing);
       pointer-events: auto;
     }
-    .shell[data-state="in-call"] .timer,
-    .shell[data-state="soft-prompt"] .timer { opacity: 1; }
+    .shell[data-state="in-call"] .timer { opacity: 1; }
     .watermark {
       justify-self: end;
       align-self: center;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       font-size: 11px;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.4px;
       color: var(--fg-fade);
-      text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
+      text-shadow: 0 1px 8px rgba(0, 0, 0, 0.78);
       pointer-events: auto;
+    }
+    .watermark-glyph {
+      color: var(--fg-dim);
+      font-size: 12px;
+      line-height: 1;
     }
     .demo-disclaimer {
       position: absolute;
-      bottom: calc(var(--safe-bottom) + 68px);
+      bottom: calc(var(--safe-bottom) + 72px);
       left: 50%;
       transform: translateX(-50%);
       font-size: 11px;
       color: var(--fg-fade);
       font-style: italic;
       letter-spacing: 0.3px;
-      text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
+      text-shadow: 0 1px 8px rgba(0, 0, 0, 0.78);
       opacity: 0;
       transition: opacity var(--motion-smooth) var(--easing);
       pointer-events: none;
       z-index: 25;
       text-align: center;
-      max-width: 80%;
+      max-width: 82%;
     }
-    .shell[data-state="in-call"] .demo-disclaimer,
-    .shell[data-state="soft-prompt"] .demo-disclaimer { opacity: 0.55; }
+    .shell[data-state="in-call"] .demo-disclaimer { opacity: 0.62; }
     .actions {
       justify-self: center;
       display: flex;
@@ -229,81 +212,148 @@
       cursor: pointer;
       font: inherit;
       color: var(--fg);
+      align-items: center;
+      justify-content: center;
       transition: background var(--motion-fast) var(--easing),
                   transform var(--motion-fast) var(--easing),
-                  box-shadow var(--motion-fast) var(--easing);
+                  box-shadow var(--motion-fast) var(--easing),
+                  border-color var(--motion-fast) var(--easing);
     }
-    .action-btn:active { transform: scale(0.94); }
-    .action-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .action-btn:hover { transform: translateY(-1px); }
+    .action-btn:active { transform: translateY(0) scale(0.97); }
+    .action-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+    .action-btn .icon {
+      width: 1em;
+      height: 1em;
+      display: inline-block;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.75;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex-shrink: 0;
+    }
+
     .action-btn.start {
-      background: var(--green);
-      padding: 14px 28px;
-      font-size: 16px;
+      background: linear-gradient(180deg, var(--green-hi) 0%, var(--green) 55%, var(--green-deep) 100%);
+      padding: 14px 26px;
+      font-size: 15px;
       font-weight: 600;
-      box-shadow: 0 8px 28px rgba(31, 166, 110, 0.45);
-      align-items: center;
+      letter-spacing: -0.005em;
+      box-shadow: var(--shadow-glow-green);
       gap: 10px;
     }
     .action-btn.start:hover {
-      background: var(--green-deep);
-      box-shadow: 0 10px 32px rgba(31, 166, 110, 0.55);
+      background: linear-gradient(180deg, #34cf90 0%, var(--green-hi) 55%, var(--green) 100%);
+      box-shadow: var(--shadow-glow-green-hi);
     }
-    .shell[data-state="pre-call"] .action-btn.start { display: inline-flex; }
+    .action-btn.start .icon { width: 18px; height: 18px; stroke-width: 2; }
+    .shell[data-state="idle"] .action-btn.start { display: inline-flex; }
+
     .action-btn.mic, .action-btn.cam, .action-btn.end {
       width: 56px; height: 56px;
-      background: rgba(255, 255, 255, 0.12);
-      font-size: 20px;
-      -webkit-backdrop-filter: blur(8px);
-      backdrop-filter: blur(8px);
-      align-items: center;
-      justify-content: center;
+      background: var(--ctrl-bg);
+      box-shadow: var(--shadow-control);
+      -webkit-backdrop-filter: blur(10px) saturate(140%);
+      backdrop-filter: blur(10px) saturate(140%);
     }
-    .action-btn.mic:hover, .action-btn.cam:hover { background: rgba(255, 255, 255, 0.22); }
-    .action-btn.mic.off, .action-btn.cam.off { background: rgba(227, 57, 43, 0.32); }
-    .action-btn.end { background: var(--red); box-shadow: 0 4px 18px rgba(227, 57, 43, 0.45); }
-    .action-btn.end:hover { background: var(--red-deep); }
+    .action-btn.mic .icon, .action-btn.cam .icon, .action-btn.end .icon { width: 22px; height: 22px; }
+    .action-btn.mic:hover, .action-btn.cam:hover { background: var(--ctrl-bg-hi); }
+    .action-btn.mic.off, .action-btn.cam.off { background: var(--ctrl-bg-off); }
+
+    .action-btn.end {
+      background: linear-gradient(180deg, var(--red-hi) 0%, var(--red) 55%, var(--red-deep) 100%);
+      box-shadow: var(--shadow-glow-red);
+    }
+    .action-btn.end:hover {
+      background: linear-gradient(180deg, #f25a4e 0%, var(--red-hi) 55%, var(--red) 100%);
+      box-shadow: var(--shadow-glow-red-hi);
+    }
+
+    .action-btn.pip {
+      width: 44px; height: 44px;
+      background: rgba(255, 255, 255, 0.10);
+      box-shadow: var(--shadow-control);
+    }
+    .action-btn.pip .icon { width: 18px; height: 18px; }
+    .action-btn.pip:hover { background: rgba(255, 255, 255, 0.18); }
+
     .shell[data-state="in-call"] .action-btn.mic,
     .shell[data-state="in-call"] .action-btn.cam,
     .shell[data-state="in-call"] .action-btn.end,
-    .shell[data-state="soft-prompt"] .action-btn.mic,
-    .shell[data-state="soft-prompt"] .action-btn.cam,
-    .shell[data-state="soft-prompt"] .action-btn.end { display: inline-flex; }
-    .action-btn.pip { width: 44px; height: 44px; background: rgba(255, 255, 255, 0.10); font-size: 16px; align-items: center; justify-content: center; }
     .shell[data-state="in-call"] .action-btn.pip { display: inline-flex; }
     @media (max-width: 767px) { .action-btn.pip { display: none !important; } }
-    .hint-text { font-style: italic; font-size: 14px; color: var(--fg-dim); letter-spacing: 0.3px; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7); animation: breath 4s ease-in-out infinite; display: none; }
-    .shell[data-state="hibernate"] .hint-text,
-    .shell[data-state="semi-idle"] .hint-text { display: inline; }
-    @keyframes breath { 0%, 100% { opacity: 0.45; } 50% { opacity: 0.85; } }
-    .err-bar { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); max-width: 80%; padding: 12px 18px; background: rgba(227, 57, 43, 0.85); color: white; font-size: 13px; border-radius: 8px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4); display: none; z-index: 30; pointer-events: auto; text-align: center; }
+    .err-bar {
+      position: absolute;
+      left: 50%; top: 18%;
+      transform: translateX(-50%);
+      max-width: 80%;
+      padding: 12px 18px;
+      background: rgba(227, 57, 43, 0.85);
+      color: white;
+      font-size: 13px;
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+      display: none;
+      z-index: 30;
+      pointer-events: auto;
+      text-align: center;
+    }
     .err-bar.show { display: block; }
-    .log { position: absolute; right: 12px; top: 64px; width: 260px; max-height: 240px; padding: 10px 12px; background: rgba(0, 0, 0, 0.85); color: rgba(255, 255, 255, 0.78); font-family: ui-monospace, monospace; font-size: 10px; border: 1px solid var(--line); border-radius: 6px; overflow-y: auto; white-space: pre-wrap; display: none; z-index: 25; pointer-events: auto; }
+
+    .log {
+      position: absolute;
+      right: 12px; top: 64px;
+      width: 260px; max-height: 240px;
+      padding: 10px 12px;
+      background: rgba(0, 0, 0, 0.85);
+      color: rgba(255, 255, 255, 0.78);
+      font-family: ui-monospace, monospace;
+      font-size: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      display: none;
+      z-index: 25;
+      pointer-events: auto;
+    }
     .log.open { display: block; }
-    .action-btn:focus-visible, .info-dot:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; }
+    .action-btn:focus-visible, .info-dot:focus-visible {
+      outline: 2px solid var(--fg);
+      outline-offset: 3px;
+    }
     @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
-      .hint-text { animation: none; opacity: 0.65; }
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
     }
     @media (min-width: 768px) and (max-width: 1023px) {
       .name { font-size: 20px; }
-      .action-btn.start { font-size: 17px; padding: 16px 32px; }
-      .action-btn.mic, .action-btn.cam, .action-btn.end { width: 60px; height: 60px; font-size: 22px; }
+      .action-btn.start { font-size: 16px; padding: 15px 30px; }
+      .action-btn.start .icon { width: 19px; height: 19px; }
+      .action-btn.mic, .action-btn.cam, .action-btn.end { width: 60px; height: 60px; }
+      .action-btn.mic .icon, .action-btn.cam .icon, .action-btn.end .icon { width: 24px; height: 24px; }
       .actions { gap: 20px; }
     }
     @media (min-width: 1024px) and (max-width: 1599px) {
-      .name { font-size: 18px; }
+      .name { font-size: 19px; }
       .actions { gap: 18px; }
     }
     @media (min-width: 1600px) {
       .name { font-size: 20px; }
       .top, .bottom { padding-inline: 40px; }
-      .action-btn.start { font-size: 18px; padding: 18px 40px; }
+      .action-btn.start { font-size: 16px; padding: 16px 36px; }
       .actions { gap: 24px; }
     }
     @media (max-width: 393px) and (orientation: portrait) {
       .name { font-size: 17px; }
-      .action-btn.start { padding: 12px 24px; font-size: 15px; }
-      .action-btn.mic, .action-btn.cam, .action-btn.end { width: 52px; height: 52px; font-size: 18px; }
+      .action-btn.start { padding: 12px 22px; font-size: 14px; }
+      .action-btn.start .icon { width: 17px; height: 17px; }
+      .action-btn.mic, .action-btn.cam, .action-btn.end { width: 52px; height: 52px; }
+      .action-btn.mic .icon, .action-btn.cam .icon, .action-btn.end .icon { width: 20px; height: 20px; }
       .actions { gap: 12px; }
     }
     @media (min-width: 394px) and (max-width: 440px) and (orientation: portrait) {
@@ -314,15 +364,16 @@
     }
     @media (orientation: landscape) and (max-height: 500px) {
       .name { font-size: 16px; }
-      .action-btn.start { padding: 10px 22px; font-size: 14px; }
-      .action-btn.mic, .action-btn.cam, .action-btn.end { width: 46px; height: 46px; font-size: 17px; }
+      .action-btn.start { padding: 10px 20px; font-size: 13px; }
+      .action-btn.start .icon { width: 16px; height: 16px; }
+      .action-btn.mic, .action-btn.cam, .action-btn.end { width: 46px; height: 46px; }
+      .action-btn.mic .icon, .action-btn.cam .icon, .action-btn.end .icon { width: 19px; height: 19px; }
       .top, .bottom { padding-block: 10px; }
     }
-    /* v0.7.1 hotfix: 9:16 mobile fullscreen Duix Lily 範式 */
     @media (orientation: portrait) and (max-width: 600px) {
       html, body { height: 100dvh; }
       .shell { width: 100vw; height: 100dvh; }
-      .portrait, .live-video {
+      .live-video {
         position: absolute;
         inset: 0;
         width: 100%;
@@ -342,24 +393,30 @@
 </head>
 <body>
 
-  <div class="shell" id="shell" data-state="hibernate" data-stream-ready="0">
+  <div class="shell" id="shell" data-state="idle">
 
     <header class="top">
       <div class="name-block">
         <span class="name">蘇菲</span>
-        <button class="info-dot" id="infoBtn" aria-label="關於蘇菲">i</button>
+        <button class="info-dot" id="infoBtn" aria-label="關於蘇菲" title="關於蘇菲">i</button>
       </div>
     </header>
 
     <main class="stage-canvas">
-      <img class="portrait" id="portrait" src="/static/sophie-portrait.png" alt="" />
-      <video class="live-video" id="liveVideo" autoplay playsinline muted loop preload="auto" poster="/static/sophie-portrait.png"></video>
+      <video
+        class="live-video"
+        id="liveVideo"
+        autoplay
+        playsinline
+        muted
+        loop
+        preload="auto"
+        src="/static/sophie-poc-loop.mp4"
+        poster="/static/sophie-portrait.png"
+      ></video>
       <audio class="live-audio" id="liveAudio" autoplay playsinline></audio>
 
-      <div class="waking-spinner" aria-hidden="true"></div>
-      <div class="waking-label">準備中</div>
-      <div class="soft-caption">我在這、有事再叫</div>
-      <div class="demo-disclaimer" id="demoDisclaimer">即時嘴對齊預覽 · 視覺示意（Phase 7c 待真實串流）· 音訊為 OpenAI Realtime 即時對話</div>
+      <div class="demo-disclaimer" id="demoDisclaimer">語音對話即時 · 視訊為預錄迎賓</div>
 
       <div class="err-bar" id="errBar" role="alert"></div>
       <div class="log" id="log" aria-hidden="true"></div>
@@ -369,64 +426,113 @@
       <span class="timer" id="timer">00:00</span>
 
       <div class="actions">
+
         <button class="action-btn start" id="startBtn" aria-label="開始視訊對話">
-          <span aria-hidden="true">📞</span>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+          </svg>
           <span>Start video chat</span>
         </button>
 
-        <button class="action-btn mic" id="micBtn" aria-label="麥克風" aria-pressed="true">🎙</button>
-        <button class="action-btn cam" id="camBtn" aria-label="鏡頭" aria-pressed="true">📷</button>
-        <button class="action-btn pip" id="pipBtn" aria-label="浮窗模式">⛶</button>
-        <button class="action-btn end" id="endBtn" aria-label="結束對話">●</button>
+        <button class="action-btn mic" id="micBtn" aria-label="麥克風" aria-pressed="true">
+          <svg class="icon" id="micIcon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="9" y="2" width="6" height="12" rx="3"/>
+            <path d="M19 11v1a7 7 0 0 1-14 0v-1"/>
+            <line x1="12" y1="19" x2="12" y2="22"/>
+            <line x1="8" y1="22" x2="16" y2="22"/>
+          </svg>
+        </button>
 
-        <span class="hint-text">叫我或對我看一眼就會醒</span>
+        <button class="action-btn cam" id="camBtn" aria-label="鏡頭" aria-pressed="true">
+          <svg class="icon" id="camIcon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M23 7l-7 5 7 5V7z"/>
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+          </svg>
+        </button>
+
+        <button class="action-btn pip" id="pipBtn" aria-label="浮窗模式" title="浮窗模式 (PIP)">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 11V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6"/>
+            <rect x="13" y="13" width="8" height="6" rx="1"/>
+          </svg>
+        </button>
+
+        <button class="action-btn end" id="endBtn" aria-label="結束對話" title="結束對話">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/>
+            <line x1="23" y1="1" x2="1" y2="23"/>
+          </svg>
+        </button>
+
       </div>
 
-      <span class="watermark">Powered by 城堡</span>
+      <span class="watermark">
+        <span class="watermark-glyph" aria-hidden="true">✦</span>
+        <span class="watermark-text">Sophie · AI Companion</span>
+      </span>
     </footer>
 
   </div>
 
-  <script src="/static/voice-lifecycle.js"></script>
   <script>
   (function () {
     "use strict";
 
-    var shell = document.getElementById("shell");
-    var infoBtn = document.getElementById("infoBtn");
-    var startBtn = document.getElementById("startBtn");
-    var micBtn = document.getElementById("micBtn");
-    var camBtn = document.getElementById("camBtn");
-    var pipBtn = document.getElementById("pipBtn");
-    var endBtn = document.getElementById("endBtn");
-    var timerEl = document.getElementById("timer");
-    var liveVideo = document.getElementById("liveVideo");
-    var liveAudio = document.getElementById("liveAudio");
-    var errBar = document.getElementById("errBar");
-    var logEl = document.getElementById("log");
+    // v0.7.2 · 2 state simplified · Edward 2026-05-23 spec
+    // state="idle" (load) <-> state="in-call" (start clicked) · no intermediate state · no timeout
+    // video loop always playing (autoplay loop muted) · no voice-lifecycle.js
 
-    var lifecycle = new window.VoiceLifecycle({
-      shell: shell,
-      onTransition: function (oldS, newS) {
-        log("state: " + oldS + " -> " + newS);
-        if (newS === "in-call") startTimer();
-        if (oldS === "in-call" || oldS === "soft-prompt") stopTimer();
-      }
-    });
-    lifecycle.start();
+    var shell      = document.getElementById("shell");
+    var infoBtn    = document.getElementById("infoBtn");
+    var startBtn   = document.getElementById("startBtn");
+    var micBtn     = document.getElementById("micBtn");
+    var camBtn     = document.getElementById("camBtn");
+    var pipBtn     = document.getElementById("pipBtn");
+    var endBtn     = document.getElementById("endBtn");
+    var timerEl    = document.getElementById("timer");
+    var liveVideo  = document.getElementById("liveVideo");
+    var liveAudio  = document.getElementById("liveAudio");
+    var errBar     = document.getElementById("errBar");
+    var logEl      = document.getElementById("log");
+    var micIcon    = document.getElementById("micIcon");
+    var camIcon    = document.getElementById("camIcon");
 
-    var peerConn = null;
-    var localStream = null;
-    var startedAtMs = 0;
+    var peerConn        = null;
+    var localStream     = null;
+    var startedAtMs     = 0;
     var timerIntervalId = null;
-    var micOn = true;
-    var camOn = true;
+    var micOn           = true;
+    var camOn           = true;
+
+    var ICON_MIC_ON =
+      '<rect x="9" y="2" width="6" height="12" rx="3"/>' +
+      '<path d="M19 11v1a7 7 0 0 1-14 0v-1"/>' +
+      '<line x1="12" y1="19" x2="12" y2="22"/>' +
+      '<line x1="8" y1="22" x2="16" y2="22"/>';
+    var ICON_MIC_OFF =
+      '<line x1="1" y1="1" x2="23" y2="23"/>' +
+      '<path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V5a3 3 0 0 0-5.94-.6"/>' +
+      '<path d="M17 16.95A7 7 0 0 1 5 12v-1m14 0v1a7 7 0 0 1-.11 1.23"/>' +
+      '<line x1="12" y1="19" x2="12" y2="22"/>' +
+      '<line x1="8" y1="22" x2="16" y2="22"/>';
+    var ICON_CAM_ON =
+      '<path d="M23 7l-7 5 7 5V7z"/>' +
+      '<rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>';
+    var ICON_CAM_OFF =
+      '<path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"/>' +
+      '<line x1="1" y1="1" x2="23" y2="23"/>';
+
+    function setState(stateVal) {
+      shell.setAttribute("data-state", stateVal);
+      log("state -> " + stateVal);
+    }
 
     function log(msg) {
       var ts = new Date().toLocaleTimeString();
       console.log("[sophie]", msg);
       if (logEl) {
-        logEl.textContent += "[" + ts + "] " + msg + "\n";
+        logEl.textContent += "[" + ts + "] " + msg + "
+";
         logEl.scrollTop = logEl.scrollHeight;
       }
     }
@@ -461,20 +567,6 @@
       logEl.classList.toggle("open");
     });
 
-    function tryWake() { lifecycle.wake(); }
-
-    shell.addEventListener("click", function (e) {
-      var s = lifecycle.state;
-      if (s === "hibernate" || s === "semi-idle") {
-        if (e.target.closest(".action-btn") || e.target === infoBtn) return;
-        tryWake();
-      }
-    });
-
-    window.__sophieMarkVoice = function () { lifecycle.markVoice(); };
-    window.__sophieMarkFace = function () { lifecycle.markFace(); };
-    window.__sophieWake = tryWake;
-
     startBtn.addEventListener("click", function () {
       startConversation().catch(function (err) {
         log("start err: " + (err && err.message));
@@ -483,7 +575,7 @@
     });
 
     async function startConversation() {
-      if (lifecycle.state !== "pre-call") return;
+      if (shell.getAttribute("data-state") !== "idle") return;
       startBtn.disabled = true;
       try {
         localStream = await navigator.mediaDevices.getUserMedia({
@@ -496,8 +588,6 @@
           iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
         });
 
-        // v0.7.1 hotfix: 顯式 audio transceiver sendrecv,
-        // 確保 OpenAI SDP answer 含 m=audio 並回傳 audio track
         peerConn.addTransceiver("audio", { direction: "sendrecv" });
 
         peerConn.ontrack = function (ev) {
@@ -505,15 +595,13 @@
           if (ev.track.kind === "audio") {
             try {
               liveAudio.srcObject = ev.streams[0];
-              // v0.7.1 hotfix: explicit play() 配合 user gesture
-              // (startBtn click 已是 user gesture)
               var pp = liveAudio.play();
               if (pp && pp.then) {
                 pp.then(function () { log("liveAudio.play() OK"); })
-                  .catch(function (err) { log("liveAudio.play() FAIL: " + err.message); showError("音訊播放被擋,請點畫面任意位置一次"); });
+                  .catch(function (err) { log("liveAudio.play() FAIL: " + err.message); showError("音訊播放被擋，請點畫面任意位置一次"); });
               }
               ev.track.onunmute = function () { log("audio track unmuted"); };
-              ev.track.onended = function () { log("audio track ended"); };
+              ev.track.onended  = function () { log("audio track ended"); };
             } catch (e) {
               log("ontrack attach err: " + e.message);
             }
@@ -533,17 +621,10 @@
 
         var dc = peerConn.createDataChannel("oai-events");
         dc.addEventListener("open", function () {
-          log("dc open · 注入 session.update (instructions + turn_detection)");
-          // v0.7.1 hotfix: 把 instructions 注入,否則蘇菲不知道要講中文
-          // (從 SDP response header x-realtime-instructions-b64 取)
+          log("dc open");
           var instructions = window.__sophieInstructions ||
-            "You are Sophie, Edward's warm Mandarin companion. Always respond in Traditional Chinese (zh-TW). Keep replies short and conversational.";
+            "You are Sophie, the warm Mandarin companion. Always respond in Traditional Chinese (zh-TW). Keep replies short and conversational.";
           try {
-            // v0.7.1 hotfix #3: OpenAI Realtime API GA v1 schema (verified 2026-05-23)
-            // - session.type="realtime" required
-            // - turn_detection moved to session.audio.input.turn_detection
-            // - voice moved to session.audio.output.voice
-            // - input_audio_transcription -> session.audio.input.transcription
             dc.send(JSON.stringify({
               type: "session.update",
               session: {
@@ -572,16 +653,11 @@
         dc.addEventListener("error", function (ev) {
           log("dc error: " + (ev.error ? ev.error.message : "unknown"));
         });
-        dc.addEventListener("close", function () {
-          log("dc closed");
-        });
+        dc.addEventListener("close", function () { log("dc closed"); });
         dc.addEventListener("message", function (ev) {
           try {
             var data = JSON.parse(ev.data);
-            if (data.type === "response.audio.delta" ||
-                data.type === "response.audio_transcript.delta") {
-              lifecycle.markVoice();
-            } else if (data.type === "error") {
+            if (data.type === "error") {
               log("OAI error: " + JSON.stringify(data.error || data).slice(0, 300));
               showError("OpenAI: " + (data.error && data.error.message ? data.error.message : "未知錯誤"));
             } else if (data.type === "session.created" || data.type === "session.updated" ||
@@ -604,8 +680,6 @@
           var errText = await resp.text();
           throw new Error("SDP backend " + resp.status + ": " + errText.slice(0, 200));
         }
-        // v0.7.1 hotfix: 從 SDP response header 取 instructions (base64),
-        // dc.open 時注入給 OpenAI
         var instrB64 = resp.headers.get("x-realtime-instructions-b64");
         if (instrB64) {
           try {
@@ -619,10 +693,8 @@
         await peerConn.setRemoteDescription({ type: "answer", sdp: answerSdp });
         log("SDP exchange OK (answer len=" + answerSdp.length + ")");
 
-        startSophieVideoLoop();
-
-        lifecycle.startCall();
-        lifecycle.markVoice();
+        setState("in-call");
+        startTimer();
         startBtn.disabled = false;
       } catch (e) {
         startBtn.disabled = false;
@@ -630,48 +702,10 @@
       }
     }
 
-    // Phase 7b downgrade demo: MuseTalk batch render ~10x realtime delay on A10G,
-    // true realtime streaming requires v1.0 + multi-GPU or v1.5 + A100 + bs=8
-    // (deferred to Phase 7c). Drop-in: play Phase 7a sophie-poc.mp4 (5s clip,
-    // lipsync self-score 3.75/5) on loop while OpenAI realtime handles actual audio
-    // conversation. Watermark discloses this in the UI.
-    function startSophieVideoLoop() {
-      try {
-        liveVideo.src = "/static/sophie-poc-loop.mp4";
-        liveVideo.muted = true;
-        liveVideo.loop = true;
-        liveVideo.playsInline = true;
-        var p = liveVideo.play();
-        if (p && p.catch) p.catch(function (err) { log("video play warn: " + err.message); });
-        if (liveVideo.readyState >= 2) {
-          shell.setAttribute("data-stream-ready", "1");
-          log("sophie loop ready (instant cached)");
-        } else {
-          liveVideo.addEventListener("loadeddata", function onReady() {
-            shell.setAttribute("data-stream-ready", "1");
-            log("sophie loop ready (loadeddata)");
-            liveVideo.removeEventListener("loadeddata", onReady);
-          });
-        }
-      } catch (e) {
-        log("sophie loop fail: " + e.message);
-      }
-    }
-
-    function stopSophieVideoLoop() {
-      try {
-        liveVideo.pause();
-        liveVideo.removeAttribute("src");
-        liveVideo.load();
-      } catch (e) {}
-      shell.setAttribute("data-stream-ready", "0");
-    }
-
     endBtn.addEventListener("click", function () { endConversation(); });
 
     function endConversation() {
-      log("end · cleanup");
-      stopSophieVideoLoop();
+      log("end cleanup");
       if (peerConn) {
         try { peerConn.close(); } catch (e) {}
         peerConn = null;
@@ -680,10 +714,17 @@
         localStream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
         localStream = null;
       }
-      liveVideo.srcObject = null;
       liveAudio.srcObject = null;
-      shell.setAttribute("data-stream-ready", "0");
-      lifecycle.endCall();
+      // liveVideo not touched - video loop always playing (v0.7.2 spec)
+      stopTimer();
+      micOn = true; camOn = true;
+      micBtn.classList.remove("off");
+      camBtn.classList.remove("off");
+      micIcon.innerHTML = ICON_MIC_ON;
+      camIcon.innerHTML = ICON_CAM_ON;
+      micBtn.setAttribute("aria-pressed", "true");
+      camBtn.setAttribute("aria-pressed", "true");
+      setState("idle");
     }
 
     micBtn.addEventListener("click", function () {
@@ -693,7 +734,7 @@
       }
       micBtn.classList.toggle("off", !micOn);
       micBtn.setAttribute("aria-pressed", String(micOn));
-      micBtn.textContent = micOn ? "🎙" : "🔇";
+      micIcon.innerHTML = micOn ? ICON_MIC_ON : ICON_MIC_OFF;
       log("mic " + (micOn ? "on" : "off"));
     });
 
@@ -704,7 +745,7 @@
       }
       camBtn.classList.toggle("off", !camOn);
       camBtn.setAttribute("aria-pressed", String(camOn));
-      camBtn.textContent = camOn ? "📷" : "🚫";
+      camIcon.innerHTML = camOn ? ICON_CAM_ON : ICON_CAM_OFF;
       log("cam " + (camOn ? "on" : "off"));
     });
 
@@ -723,14 +764,11 @@
         showError("PIP 啟動失敗 · " + e.message);
       }
     });
-    liveVideo.addEventListener("leavepictureinpicture", function () {
-      log("PIP closed");
-    });
+    liveVideo.addEventListener("leavepictureinpicture", function () { log("PIP closed"); });
 
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") {
-        var s = lifecycle.state;
-        if (s === "in-call" || s === "soft-prompt") endConversation();
+        if (shell.getAttribute("data-state") === "in-call") endConversation();
       }
     });
 
@@ -748,11 +786,10 @@
       });
     }
 
-    log("Voice Path v0.7.1 hotfix ready · audio transceiver + instructions inject + 9:16 mobile fullscreen + explicit play()");
+    log("Voice Path v0.7.2 ready - 2-state simplified - Edward spec 2026-05-23");
 
     window.__sophie = {
-      lifecycle: lifecycle,
-      setState: function (s) { lifecycle.transitionTo(s); },
+      setState: setState,
       log: log
     };
   })();
