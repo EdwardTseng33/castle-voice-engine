@@ -108,21 +108,6 @@
       color: var(--fg);
       letter-spacing: 0.3px;
     }
-    .info-dot {
-      width: 18px; height: 18px;
-      border-radius: 50%;
-      border: 1px solid var(--line);
-      background: transparent;
-      color: var(--fg-dim);
-      font: italic 11px Georgia, serif;
-      cursor: help;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      transition: border-color var(--motion-fast) var(--easing),
-                  color var(--motion-fast) var(--easing);
-    }
-    .info-dot:hover { border-color: var(--fg-dim); color: var(--fg); }
     .stage-canvas {
       flex: 1;
       position: relative;
@@ -320,7 +305,7 @@
       pointer-events: auto;
     }
     .log.open { display: block; }
-    .action-btn:focus-visible, .info-dot:focus-visible {
+    .action-btn:focus-visible {
       outline: 2px solid var(--fg);
       outline-offset: 3px;
     }
@@ -398,7 +383,6 @@
     <header class="top">
       <div class="name-block">
         <span class="name">蘇菲</span>
-        <button class="info-dot" id="infoBtn" aria-label="關於蘇菲" title="關於蘇菲">i</button>
       </div>
     </header>
 
@@ -411,7 +395,7 @@
         muted
         loop
         preload="auto"
-        src="/static/sophie-poc-loop.mp4"
+        src="/static/sophie-idle.mp4"
         poster="/static/sophie-portrait.png"
       ></video>
       <audio class="live-audio" id="liveAudio" autoplay playsinline></audio>
@@ -474,11 +458,13 @@
 
   </div>
 
+  <script src="/static/animation-pool.js"></script>
+
   <script>
   (function () {
     "use strict";
 
-    // v0.7.2 · 2 state simplified · Edward 2026-05-23 spec
+    // v0.8 · 4 state animation pool (idle + speaking + task-received + task-handoff) · Edward 2026-05-23 spec
     // state="idle" (load) <-> state="in-call" (start clicked) · no intermediate state · no timeout
     // video loop always playing (autoplay loop muted) · no voice-lifecycle.js
 
@@ -496,6 +482,19 @@
     var logEl      = document.getElementById("log");
     var micIcon    = document.getElementById("micIcon");
     var camIcon    = document.getElementById("camIcon");
+
+    // v0.8 · 4-state animation pool init
+    var animPool = null;
+    try {
+      if (typeof AnimationPool === "function") {
+        animPool = new AnimationPool(liveVideo);
+        window.animPool = animPool;
+      } else {
+        console.warn("[sophie] AnimationPool not loaded, fallback to native loop");
+      }
+    } catch (e) {
+      console.warn("[sophie] animation pool init fail:", e.message);
+    }
 
     var peerConn        = null;
     var localStream     = null;
@@ -622,8 +621,20 @@
         var dc = peerConn.createDataChannel("oai-events");
         dc.addEventListener("open", function () {
           log("dc open");
-          var instructions = window.__sophieInstructions ||
+          var baseInstr = window.__sophieInstructions ||
             "You are Sophie, the warm Mandarin companion. Always respond in Traditional Chinese (zh-TW). Keep replies short and conversational.";
+          var animDirective = "
+
+[Animation Cues] 你可以呼叫 emit_animation_state(state) 觸發蘇菲 avatar 動態：
+" +
+            "- state=\"task-received\": 用戶剛講完話、你準備開始回答時呼叫
+" +
+            "- state=\"speaking\": 你回答超過一句話時呼叫一次（會展現自然講話動態 5 秒）
+" +
+            "- state=\"task-handoff\": 對話結束、用戶要走時呼叫
+" +
+            "不必每次都呼叫、自然判斷即可。每次最多呼叫一個 state。";
+          var instructions = baseInstr + animDirective;
           try {
             dc.send(JSON.stringify({
               type: "session.update",
@@ -642,10 +653,28 @@
                     }
                   },
                   output: { voice: "marin" }
-                }
+                },
+                tools: [
+                  {
+                    type: "function",
+                    name: "emit_animation_state",
+                    description: "Trigger Sophie avatar to play a specific emotion/action animation loop. Call this inline with your response based on conversational context. State auto-returns to idle after the loop plays (5 seconds).",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        state: {
+                          type: "string",
+                          enum: ["speaking", "task-received", "task-handoff"],
+                          description: "speaking = while you are talking (any response longer than one sentence). task-received = right after user finishes speaking, before you start your full response. task-handoff = at end of conversation when user is leaving."
+                        }
+                      },
+                      required: ["state"]
+                    }
+                  }
+                ]
               }
             }));
-            log("session.update sent (instr len=" + instructions.length + ")");
+            log("session.update sent (instr len=" + instructions.length + ", tools=1)");
           } catch (e) {
             log("session.update send fail: " + e.message);
           }
@@ -663,6 +692,20 @@
             } else if (data.type === "session.created" || data.type === "session.updated" ||
                        data.type === "response.created" || data.type === "response.done") {
               log("OAI evt: " + data.type);
+            } else if (data.type === "response.function_call_arguments.done") {
+              try {
+                var fnName = data.name || "";
+                if (fnName === "emit_animation_state") {
+                  var args = JSON.parse(data.arguments || "{}");
+                  var state = args.state;
+                  log("animation function call: " + state);
+                  if (animPool && typeof animPool.playAction === "function") {
+                    animPool.playAction(state);
+                  }
+                }
+              } catch (fnErr) {
+                log("function_call parse fail: " + fnErr.message);
+              }
             }
           } catch (e) {}
         });
@@ -786,7 +829,7 @@
       });
     }
 
-    log("Voice Path v0.7.2 ready - 2-state simplified - Edward spec 2026-05-23");
+    log("Voice Path v0.8 ready - 4-state animation pool - Edward spec 2026-05-23");
 
     window.__sophie = {
       setState: setState,
