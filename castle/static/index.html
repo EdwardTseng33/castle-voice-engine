@@ -662,7 +662,8 @@
         preload="auto"
         src="/static/sophie-idle.mp4"
       ></video>
-      <!-- v1.2.0e · double video buffer B (crossfade · 解切換閃黑) -->
+      <!-- v1.2.0f · double video buffer B (crossfade · 解切換閃黑) -->
+      <!-- 預設 src = speaking.mp4 · 第一次切話 instant ready 不卡 (Edward 5/23 catch「嘴沒動」) -->
       <video
         class="live-video buffer-b"
         id="liveVideoB"
@@ -671,6 +672,7 @@
         muted
         loop
         preload="auto"
+        src="/static/sophie-speaking.mp4"
       ></video>
       <audio class="live-audio" id="liveAudio" autoplay playsinline></audio>
 
