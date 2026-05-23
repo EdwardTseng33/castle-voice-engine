@@ -725,7 +725,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.9.10</span>
+          <span class="vm-version">v1.9.11</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -734,6 +734,15 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.11</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>砍掉 v1.9.10 auto-reload · 影片載入被干擾全橘色</li>
+            <li>QA Gate 5 抓到:videoWidth 0 / readyState 0 / 蘇菲消失</li>
+            <li>改保守:只 check SW update · 不強制 reload · 下次刷新自然生效</li>
+            <li>SW network-first 已確保 HTML 永遠最新版</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.10</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>SW 自動更新 · 不再卡舊版 cache · Edward 不用刷兩次</li>
@@ -2771,35 +2780,15 @@
         navigator.serviceWorker.register("/static/sw.js", { scope: "/static/" })
           .then(function (reg) {
             log("sw registered");
-            // v1.9.10 · 自動偵測 SW 更新、有新版立刻 activate (不用 Edward 刷兩次)
-            try {
-              reg.update();
-              reg.addEventListener("updatefound", function () {
-                var nw = reg.installing;
-                if (!nw) return;
-                nw.addEventListener("statechange", function () {
-                  if (nw.state === "installed" && navigator.serviceWorker.controller) {
-                    log("[sw] new version installed · reloading...");
-                    // 通知 new SW skipWaiting 並 reload
-                    try { nw.postMessage && nw.postMessage({ type: "SKIP_WAITING" }); } catch (e) {}
-                    setTimeout(function () { window.location.reload(); }, 300);
-                  }
-                });
-              });
-            } catch (e) {}
+            // v1.9.11 · 砍掉 auto-reload 干擾影片載入 · 只 check update、不強制 reload
+            // 新 SW 安裝完 = 下次 Edward 自己刷新自然生效 (network-first 確保 HTML 拿到最新)
+            try { reg.update(); } catch (e) {}
           })
           .catch(function (err) { log("sw fail: " + err.message); });
-        // v1.9.10 · controllerchange = 新 SW 接管 · 立刻 reload 拿最新 HTML
-        navigator.serviceWorker.addEventListener("controllerchange", function () {
-          if (window.__sophieReloaded) return;
-          window.__sophieReloaded = true;
-          log("[sw] controller changed · reload");
-          setTimeout(function () { window.location.reload(); }, 200);
-        });
       });
     }
 
-    log("Voice Path v1.9.10 ready - SW auto-update + QA-strict ship - 2026-05-24");
+    log("Voice Path v1.9.11 ready - SW conservative · 不 auto reload 干擾影片 - 2026-05-24");
 
     // ===== v1.9.7 · 單 video 保活 (砍雙層、只剩底層 idle) =====
     (function setupVideoKeepAlive() {
