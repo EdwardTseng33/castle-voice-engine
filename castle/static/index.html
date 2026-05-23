@@ -411,16 +411,10 @@
       object-fit: cover;
       background: var(--bg);
       opacity: 1;
-      transition: opacity 200ms ease-out;
+      /* v1.2.0g · 砍雙緩衝、回單 video · src 切換時 150ms opacity fade 隱黑頻 */
+      transition: opacity 150ms ease-out;
     }
-    /* v1.2.0e · double video buffer 解切換閃黑 · A/B 交替 crossfade */
-    .live-video.buffer-b {
-      opacity: 0;
-      z-index: 1;
-    }
-    .live-video.buffer-a { z-index: 2; }
-    .live-video.is-active { opacity: 1; z-index: 3; }
-    .live-video.is-fading { opacity: 0; z-index: 2; }
+    .live-video.is-switching { opacity: 0.3; }
     .bottom {
       position: absolute;
       bottom: 0; left: 0; right: 0;
@@ -653,7 +647,7 @@
 
     <main class="stage-canvas">
       <video
-        class="live-video buffer-a is-active"
+        class="live-video"
         id="liveVideo"
         autoplay
         playsinline
@@ -661,18 +655,6 @@
         loop
         preload="auto"
         src="/static/sophie-idle.mp4"
-      ></video>
-      <!-- v1.2.0f · double video buffer B (crossfade · 解切換閃黑) -->
-      <!-- 預設 src = speaking.mp4 · 第一次切話 instant ready 不卡 (Edward 5/23 catch「嘴沒動」) -->
-      <video
-        class="live-video buffer-b"
-        id="liveVideoB"
-        autoplay
-        playsinline
-        muted
-        loop
-        preload="auto"
-        src="/static/sophie-speaking.mp4"
       ></video>
       <audio class="live-audio" id="liveAudio" autoplay playsinline></audio>
 
@@ -1146,7 +1128,7 @@
     var endBtn     = document.getElementById("endBtn");
     var timerEl    = document.getElementById("timer");
     var liveVideo  = document.getElementById("liveVideo");
-    var liveVideoB = document.getElementById("liveVideoB");  // v1.2.0e · double buffer · A/B crossfade
+    // v1.2.0g · 砍 liveVideoB · 回單 video element 簡潔架構
     var liveAudio  = document.getElementById("liveAudio");
     var errBar     = document.getElementById("errBar");
     var logEl      = document.getElementById("log");
@@ -1157,12 +1139,10 @@
     var animPool = null;
     try {
       if (typeof AnimationPool === "function") {
-        animPool = new AnimationPool(liveVideo, liveVideoB);
+        animPool = new AnimationPool(liveVideo);
         window.animPool = animPool;
-        // v1.2.0b · 未 Start 時自動輪播 rich pool (親親 / 撒嬌 / hello / acknowledgement / happy / playful)
-        if (typeof animPool.startPreCallRotation === "function") {
-          setTimeout(function () { animPool.startPreCallRotation(); }, 2500);
-        }
+        // v1.2.0g · 砍 pre-call rich rotation (Edward「架構怪怪」) · 未 Start 維持 idle.mp4 loop
+        // 想加豐富動作 v1.3+ 重新設計時再說
       } else {
         console.warn("[sophie] AnimationPool not loaded, fallback to native loop");
       }
@@ -1337,10 +1317,7 @@
     async function startConversation() {
       if (shell.getAttribute("data-state") !== "idle") return;
       startBtn.disabled = true;
-      // v1.2.0b · 通話開始 · 停 pre-call rich 輪播 · in-call 由 GPT event 驅動
-      if (animPool && typeof animPool.stopPreCallRotation === "function") {
-        try { animPool.stopPreCallRotation(); } catch (e) {}
-      }
+      // v1.2.0g · 砍 stopPreCallRotation (rich pool 已砍)
       try {
         localStream = await navigator.mediaDevices.getUserMedia({
           audio: true,
@@ -1903,10 +1880,7 @@
       micBtn.setAttribute("aria-pressed", "true");
       camBtn.setAttribute("aria-pressed", "true");
       setState("idle");
-      // v1.2.0b · 通話結束 · 重啟 pre-call rich 輪播 (親親 / 撒嬌 / hello)
-      if (animPool && typeof animPool.startPreCallRotation === "function") {
-        try { animPool.startPreCallRotation(); } catch (e) {}
-      }
+      // v1.2.0g · 砍 pre-call rich rotation · 維持 idle.mp4 loop
       // v1.1.2 · 通話結束自動摘要當日對話 + TTL cleanup (raw > 7 天 / summary > 30 天)
       try {
         if (window.ConversationMemory && window.ConversationMemory.summarizeDay) {

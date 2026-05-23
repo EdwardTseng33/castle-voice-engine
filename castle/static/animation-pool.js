@@ -173,13 +173,10 @@
   };
   SpeakingController.prototype.isActive = function () { return this._active; };
 
-  function AnimationPool(videoEl, videoElB) {
+  function AnimationPool(videoEl) {
     if (!videoEl) { console.warn("[animPool] no video element supplied"); return; }
-    // v1.2.0e · double video buffer · A/B 交替 crossfade · 解切換閃黑
-    this.videoA = videoEl;
-    this.videoB = videoElB || document.getElementById("liveVideoB") || null;
-    this.video = videoEl;  // 對外: current active = videoA initially (legacy refs 都指 videoA · 不破)
-    this._activeBuffer = "a";  // a | b
+    // v1.2.0g · 砍 double buffer · 回單 video 簡潔架構
+    this.video = videoEl;
     this.currentState = "idle";
     this.frequencyGuard = new FrequencyGuard();
     this.idleRotator = new IdleRotator();
@@ -191,86 +188,38 @@
     this._maybeFireGreeting();
   }
 
-  // v1.2.0e · 取目前 active video element (要播的目標切到「inactive buffer」)
-  AnimationPool.prototype._getActive = function () {
-    return this._activeBuffer === "a" ? this.videoA : this.videoB;
-  };
-  AnimationPool.prototype._getInactive = function () {
-    return this._activeBuffer === "a" ? this.videoB : this.videoA;
-  };
-  AnimationPool.prototype._swapBuffers = function () {
-    var prev = this._getActive();
-    var next = this._getInactive();
-    if (!prev || !next) return;
-    next.classList.add("is-active");
-    next.classList.remove("is-fading");
-    prev.classList.remove("is-active");
-    prev.classList.add("is-fading");
-    this._activeBuffer = (this._activeBuffer === "a") ? "b" : "a";
-    this.video = this._getActive();  // legacy ref keeps pointing to active
-  };
-
   AnimationPool.prototype._playRaw = function (state, loop) {
     var src = ANIMATION_POOL[state];
     if (!src) { this._log("_playRaw missing: " + state); return; }
-
-    // 沒 buffer B · fallback 老單 video 行為 (保險)
-    if (!this.videoB) {
-      if (this._endHandler) {
-        this.videoA.removeEventListener("ended", this._endHandler);
-        this._endHandler = null;
-      }
-      try { this.videoA.src = src; } catch (e) { this._log("_playRaw set src fail: " + e.message); return; }
-      this.videoA.loop = !!loop;
-      this.videoA.muted = true;
-      var pa = this.videoA.play();
-      if (pa && pa.then) { pa["catch"](function () {}); }
-      this.currentState = state;
-      return;
-    }
-
-    // v1.2.0e · double buffer crossfade
-    var inactive = this._getInactive();
-    var active = this._getActive();
-    var sameSrc = false;
-    try { sameSrc = (inactive.currentSrc && inactive.currentSrc.indexOf(src) !== -1); } catch (e) {}
-
-    // 清掉舊 ended handler (在 prev active 上)
-    if (this._endHandler && active) {
-      active.removeEventListener("ended", this._endHandler);
+    if (this._endHandler) {
+      this.video.removeEventListener("ended", this._endHandler);
       this._endHandler = null;
     }
-
-    // 把 inactive buffer 設新 src (active 仍在播舊 frame · 沒黑)
-    if (!sameSrc) {
-      try { inactive.src = src; } catch (e) { this._log("_playRaw set src fail: " + e.message); return; }
-    }
-    inactive.loop = !!loop;
-    inactive.muted = true;
-
+    // v1.2.0g · src 切換時短暫 opacity 0.3 隱黑頻 (transition 150ms)
     var self = this;
-    var doSwap = function () {
-      var p = inactive.play();
-      if (p && p.then) { p["catch"](function () {}); }
-      self._swapBuffers();
-      self.currentState = state;
-    };
-
-    // 若 inactive 已 ready · 直接 swap · 否則等 loadeddata
-    if (inactive.readyState >= 2) {
-      doSwap();
-    } else {
+    var sameSrc = false;
+    try { sameSrc = (this.video.currentSrc && this.video.currentSrc.indexOf(src) !== -1); } catch (e) {}
+    if (!sameSrc) {
+      this.video.classList.add("is-switching");
+      try { this.video.src = src; }
+      catch (e) { this._log("_playRaw set src fail: " + e.message); this.video.classList.remove("is-switching"); return; }
+      // canplay 後移除 is-switching · fade 回 opacity 1
       var onReady = function () {
-        inactive.removeEventListener("loadeddata", onReady);
-        doSwap();
+        self.video.removeEventListener("canplay", onReady);
+        self.video.classList.remove("is-switching");
       };
-      inactive.addEventListener("loadeddata", onReady, { once: true });
-      // safety fallback · 600ms 後若仍未 ready · 強制 swap (避免永遠卡)
+      this.video.addEventListener("canplay", onReady, { once: true });
+      // safety fallback 500ms 後強制復原
       setTimeout(function () {
-        try { inactive.removeEventListener("loadeddata", onReady); } catch (e) {}
-        if (self.currentState !== state) doSwap();
-      }, 600);
+        try { self.video.removeEventListener("canplay", onReady); } catch (e) {}
+        self.video.classList.remove("is-switching");
+      }, 500);
     }
+    this.video.loop = !!loop;
+    this.video.muted = true;
+    var p = this.video.play();
+    if (p && p.then) { p["catch"](function () {}); }
+    this.currentState = state;
   };
 
   AnimationPool.prototype._initIdle = function () {
@@ -321,35 +270,24 @@
       this._log("playAction throttled: " + state);
       return;
     }
-    // v1.2.0e · 走 _playRaw double buffer · 切完後接 ended handler 到新 active
     this._playRaw(state, false);
     this._log("playAction -> " + state);
     var self = this;
-    // 略微延遲掛 ended handler · 確保 _swapBuffers 完成 (active 已切到新 video)
-    setTimeout(function () {
-      var active = self._getActive ? self._getActive() : self.video;
-      if (!active) return;
-      self._endHandler = function () { self._returnToIdle(); };
-      active.addEventListener("ended", self._endHandler, { once: true });
-    }, 50);
+    this._endHandler = function () { self._returnToIdle(); };
+    this.video.addEventListener("ended", this._endHandler, { once: true });
   };
 
   AnimationPool.prototype._returnToIdle = function () {
     var nextIdle = this.idleRotator.pickNext();
     var isLoop = (IDLE_VARIANTS.indexOf(nextIdle) !== -1);
-    // v1.2.0e · 走 _playRaw double buffer crossfade
     this._playRaw(nextIdle, isLoop);
     if (!isLoop) {
       var self = this;
-      setTimeout(function () {
-        var active = self._getActive ? self._getActive() : self.video;
-        if (!active) return;
-        self._endHandler = function () {
-          var idle = self.idleRotator.pickIdleOnly();
-          self._playRaw(idle, true);
-        };
-        active.addEventListener("ended", self._endHandler, { once: true });
-      }, 50);
+      this._endHandler = function () {
+        var idle = self.idleRotator.pickIdleOnly();
+        self._playRaw(idle, true);
+      };
+      this.video.addEventListener("ended", this._endHandler, { once: true });
     }
     this._log("returnToIdle -> " + nextIdle);
   };
