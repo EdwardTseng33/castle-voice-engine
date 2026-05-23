@@ -770,6 +770,57 @@
         var dc = peerConn.createDataChannel("oai-events");
         dc.addEventListener("open", function () {
           log("dc open");
+
+          // v0.9.0.3 · 開頭招呼語池 (按時段 + 隨機選 · Edward 個人專屬)
+          function pickGreeting() {
+            var h = new Date().getHours();
+            var pool;
+            if (h >= 5 && h < 11) {
+              pool = [
+                "早安 Edward、新的一天從這裡開始。",
+                "Edward 早、睡得好嗎？",
+                "Hello Edward、早上有什麼計畫？",
+                "Edward 起床啦、我陪你開始今天。",
+                "嗨 Edward、今早想做什麼？"
+              ];
+            } else if (h >= 11 && h < 14) {
+              pool = [
+                "Edward、午餐了沒？",
+                "嗨 Edward、中午想跟我聊什麼？",
+                "Hello Edward、午間休息一下吧。",
+                "Edward 回來啦、要聊聊還是吃飯？",
+                "嗨 Edward、今天中午過得如何？"
+              ];
+            } else if (h >= 14 && h < 18) {
+              pool = [
+                "Hello Edward、我上線了。今天想聊什麼？",
+                "嗨 Edward、我來了、在忙什麼？",
+                "Edward 看到你真好、下午怎樣？",
+                "咦 Edward 你回來啦、我一直在這。",
+                "Hi Edward、有什麼想跟我說的嗎？"
+              ];
+            } else if (h >= 18 && h < 22) {
+              pool = [
+                "Edward 晚安前還有什麼想聊？",
+                "嗨 Edward、辛苦了一天、放鬆一下。",
+                "Hello Edward、晚上想聊什麼？",
+                "Edward 回來啦、晚餐吃了嗎？",
+                "嗨 Edward、晚間時光、我在。"
+              ];
+            } else {
+              pool = [
+                "Edward 還沒睡呢、我陪你。",
+                "嗨 Edward、深夜了、想聊聊嗎？",
+                "Edward、晚安前的一段時光、我在。",
+                "咦 Edward 醒著呢、要陪你還是聽你說？",
+                "Hello Edward、夜深了、輕鬆說吧。"
+              ];
+            }
+            return pool[Math.floor(Math.random() * pool.length)];
+          }
+          var greeting = pickGreeting();
+          log("greeting picked: " + greeting);
+
           var baseInstr = window.__sophieInstructions ||
             "You are Sophie, the warm Mandarin companion. Always respond in Traditional Chinese (zh-TW). Keep replies short and conversational.";
           var animDirective = "\n\n[Animation Cues v0.9] 根據對話情緒呼叫 emit_animation_state(state) 觸發蘇菲動畫：\n" +
@@ -784,7 +835,8 @@
             "- intimate-greeting: 用戶說『想你了/我回來了/好久不見』深度問候\n" +
             "- intimate-farewell: 用戶說『掰掰/晚安/我要走了』深度告別\n" +
             "規則：每次回覆最多呼叫一個 state；speaking 動畫不必呼叫（系統自動處理）；自然判斷即可。";
-          var instructions = baseInstr + animDirective;
+          var greetingDirective = "\n\n[Opening Greeting] 連線一建立、你的第一句話必須是: 「" + greeting + "」(不可改寫、不可前後加字、自然語氣念出來。念完才開始正常對話。)";
+          var instructions = baseInstr + animDirective + greetingDirective;
           try {
             dc.send(JSON.stringify({
               type: "session.update",
@@ -825,6 +877,22 @@
               }
             }));
             log("session.update sent (instr len=" + instructions.length + ", tools=1)");
+            // v0.9.0.3 · session.update 後立刻 trigger response.create 讓蘇菲主動講開頭招呼語
+            setTimeout(function () {
+              try {
+                dc.send(JSON.stringify({
+                  type: "response.create",
+                  response: { modalities: ["audio", "text"] }
+                }));
+                log("response.create sent (trigger opening greeting)");
+                // 同步 emit greeting 動畫 (不必等 GPT function call)
+                if (window.animPool && typeof window.animPool.playAction === "function") {
+                  window.animPool.playAction("greeting");
+                }
+              } catch (e) {
+                log("response.create send fail: " + e.message);
+              }
+            }, 600);
           } catch (e) {
             log("session.update send fail: " + e.message);
           }
