@@ -745,7 +745,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.9.2</span>
+          <span class="vm-version">v1.9.3</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -754,6 +754,15 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.3</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>底層 idle 保活 · Chrome MCP 實測抓到瀏覽器會自動 pause 底層</li>
+            <li>iOS Safari 尤其 · 上層顯示時底層 idle 被偷停 = 卡住凍結 frame</li>
+            <li>兜底：每 2 秒檢查兩個 video · 若 paused 強制 play()</li>
+            <li>視窗回前景立刻檢查一次 · 切換 app 回來不卡</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.2</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>講話黑頻根本解 · 雙層 video crossfade · 完全砍 src 切換</li>
@@ -2779,7 +2788,34 @@
       });
     }
 
-    log("Voice Path v1.9 ready - perception layer (4 signals) + companion rhythm - 2026-05-24");
+    log("Voice Path v1.9.3 ready - dual-layer crossfade + idle keep-alive - 2026-05-24");
+
+    // ===== v1.9.3 · 底層 idle 保活 + 上層 speaking 保活 =====
+    // 實測抓到: 上層顯示時瀏覽器會自動 pause 底層 (iOS Safari 尤其) · 上層 paused 也常見
+    // 兜底機制: 每 2 秒檢查兩個 video 是不是 paused · 若 paused 強制 .play()
+    (function setupVideoKeepAlive() {
+      function keepAlive() {
+        try {
+          var idle = document.getElementById("liveVideo");
+          var sp = document.getElementById("liveVideoSpeaking");
+          if (idle && idle.paused) {
+            var p = idle.play();
+            if (p && p.catch) p.catch(function () {});
+          }
+          if (sp && sp.paused) {
+            var p2 = sp.play();
+            if (p2 && p2.catch) p2.catch(function () {});
+          }
+        } catch (e) {}
+      }
+      // 立刻檢查 + 每 2s 巡一次
+      setTimeout(keepAlive, 500);
+      setInterval(keepAlive, 2000);
+      // 視窗回到前景時立刻檢查 (iOS Safari 切回 PWA 必跑)
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "visible") setTimeout(keepAlive, 100);
+      });
+    })();
 
     // ===== v1.9 感知層 · 訊號 1 + 4 瀏覽器端 detect · 每 30s 推一次 =====
     (function setupPerceptionLoop() {
