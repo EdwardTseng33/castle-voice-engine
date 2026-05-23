@@ -110,14 +110,82 @@ class MuseTalkRunner:
         print("[MuseTalk] cold start begin", flush=True)
 
         # Ensure weights exist on volume (first run downloads ~10-15 GB)
-        weights_dir = "/weights/musetalkV15"
-        if not os.path.exists(weights_dir):
-            print("[MuseTalk] weights missing, running download_weights.sh", flush=True)
+        # Phase 5 fix (2026-05-23 calcifer): use sentinel file instead of dir exist check
+        # because empty dir shells from failed previous downloads pass the os.path.exists check
+        sentinel = "/weights/.muse_v15_complete"
+        weights_ready = os.path.exists(sentinel)
+
+        if not weights_ready:
+            print("[MuseTalk] weights sentinel missing, running download_weights.sh", flush=True)
             os.makedirs("/weights", exist_ok=True)
             # MuseTalk's own download script · pulls from HF + gdown
-            os.system("cd /root/MuseTalk && bash download_weights.sh || true")
-            os.system(f"cp -r /root/MuseTalk/models/* /weights/ 2>/dev/null || true")
+            import subprocess
+            r = subprocess.run(
+                ["bash", "download_weights.sh"],
+                cwd="/root/MuseTalk",
+                capture_output=True,
+                text=True,
+                timeout=1500,  # 25 min stop loss inside download itself
+            )
+            print("[MuseTalk] download_weights.sh stdout (tail):", r.stdout[-1500:], flush=True)
+            if r.returncode != 0:
+                print("[MuseTalk] download_weights.sh stderr (tail):", r.stderr[-1500:], flush=True)
+                raise RuntimeError(f"download_weights.sh failed rc={r.returncode}")
+
+            # Copy MuseTalk-downloaded models dir contents into /weights volume
+            r2 = subprocess.run(
+                "cp -r /root/MuseTalk/models/. /weights/",
+                shell=True, capture_output=True, text=True,
+            )
+            print("[MuseTalk] cp models -> /weights rc:", r2.returncode, flush=True)
+            if r2.returncode != 0:
+                print("[MuseTalk] cp stderr:", r2.stderr[-500:], flush=True)
+                raise RuntimeError("cp models -> /weights failed")
+
+            # Diagnostic: list actual contents (download_weights.sh structure unknown)
+            for path in ["/root/MuseTalk/models", "/weights"]:
+                ls = subprocess.run(["ls", "-la", path], capture_output=True, text=True)
+                print(f"[MuseTalk] DIAG ls {path}:\n{ls.stdout}", flush=True)
+                # Recurse 2 levels for full picture
+                find = subprocess.run(
+                    ["find", path, "-maxdepth", "2", "-type", "f"],
+                    capture_output=True, text=True,
+                )
+                print(f"[MuseTalk] DIAG files under {path}:\n{find.stdout}", flush=True)
+
+            # Verify critical model files exist before sealing sentinel
+            critical = [
+                "/weights/sd-vae/config.json",
+                "/weights/sd-vae/diffusion_pytorch_model.bin",
+                "/weights/musetalkV15/unet.pth",
+            ]
+            missing = [p for p in critical if not os.path.exists(p)]
+            if missing:
+                raise RuntimeError(f"critical model files missing after download: {missing}")
+
+            with open(sentinel, "w") as f:
+                f.write("v15 download complete · calcifer phase 5 · 2026-05-23\n")
             MUSETALK_VOLUME.commit()
+            print("[MuseTalk] sentinel written + volume committed", flush=True)
+        else:
+            print("[MuseTalk] sentinel found, skip download", flush=True)
+
+        # Critical: MuseTalk internal code uses hardcoded relative path "models/sd-vae"
+        # So we must (a) chdir to /root/MuseTalk and (b) symlink /root/MuseTalk/models -> /weights
+        if not os.path.lexists("/root/MuseTalk/models"):
+            os.symlink("/weights", "/root/MuseTalk/models")
+            print("[MuseTalk] symlink /root/MuseTalk/models -> /weights created", flush=True)
+        elif os.path.islink("/root/MuseTalk/models"):
+            print("[MuseTalk] symlink already in place", flush=True)
+        else:
+            # real dir from download_weights.sh exists, replace with symlink to volume
+            import shutil
+            shutil.rmtree("/root/MuseTalk/models")
+            os.symlink("/weights", "/root/MuseTalk/models")
+            print("[MuseTalk] replaced real dir with symlink -> /weights", flush=True)
+
+        os.chdir("/root/MuseTalk")
+        weights_dir = "/weights/musetalkV15"
 
         # Lazy import after weights ready
         from musetalk.utils.utils import load_all_model
@@ -190,7 +258,7 @@ class MuseTalkRunner:
 def fastapi_app():
     import os
 
-    from fastapi import FastAPI, WebSocket, HTTPException, UploadFile, File, Form
+    from fastapi import FastAPI, WebSocket, HTTPException, UploadFile, File, Form, Header
     from fastapi.responses import JSONResponse
 
     api = FastAPI(title="castle-voice-engine MuseTalk")
@@ -212,7 +280,7 @@ def fastapi_app():
             raise HTTPException(status_code=401, detail="invalid bearer")
 
     @api.get("/musetalk/health")
-    async def health(authorization: str | None = None):
+    async def health(authorization: str | None = Header(None)):
         _check_auth(authorization)
         info = runner.warm.remote()
         return info
@@ -221,7 +289,7 @@ def fastapi_app():
     async def enroll(
         image: UploadFile = File(...),
         subject: str = Form("speaker_unknown"),
-        authorization: str | None = None,
+        authorization: str | None = Header(None),
     ):
         _check_auth(authorization)
         # Server-side Sally hard rule defense-in-depth (Gate 4 WARN-1).
