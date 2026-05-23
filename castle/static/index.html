@@ -719,7 +719,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.2.0</span>
+          <span class="vm-version">v1.3.3</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -728,6 +728,34 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.3.3</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>蘇菲講完立刻嘴停 (延遲 1500ms → 250ms · 修「講 2 秒嘴 5 秒」)</li>
+            <li>關閉除錯小視窗 · 通話畫面乾淨</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.3.2</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>防呆暴力觸發 · 任何含 audio 訊息名 → startSpeaking</li>
+            <li>抓到 OpenAI 真實事件名 response.output_audio.done</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.3.1</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>CRITICAL · 修講話動畫從來沒被觸發 (OpenAI 改聽 audio.delta 事件)</li>
+            <li>蘇菲講話現在真的會切到 sophie-speaking.mp4 不再卡 idle</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.3.0</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>音量驅動微呼吸 · 蘇菲講話時畫面微縮放 + 亮度浮動 (純陪伴感 · 不假裝嘴對齊)</li>
+            <li>手動 loop 控制 · 避開 Chrome 影片接縫黑 frame</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.2.0</span><span class="vm-entry-date">2026-05-23</span></header>
           <ul class="vm-list">
             <li>v1.0 GA · 訪客模式 ship · 不再強制前置登入頁</li>
