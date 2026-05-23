@@ -134,22 +134,29 @@
     this._active = false;
     this._phase = 0;
   }
-  // v1.2.0d · Edward 5/23 catch「講話一直閃黑頻」+「對話遲鈍」· 砍 phase 1 + 加 deferred idle (合併短句不切)
-  // start: 直接 speaking.mp4 loop (不切 with-gesture)
-  // stop: 不立刻切 idle · 1500ms 內若新 start 就維持 speaking loop (合併短句子間隔 · 不再多次切 src 黑頻)
+  // v1.9.2 · 雙層 video crossfade · 完全砍 src 切換 · idle 永遠在底層 loop · speaking 上層 opacity 切
+  // Edward 5/24 catch「跟他講話他回覆時就會閃黑頻」· 根本問題 = 單 video 切 src 必然有空檔
+  // 解 = 兩個 video 元素永遠不切 src、用 opacity crossfade
   SpeakingController.prototype.start = function () {
-    // 清 deferred idle (如果在 1.5s 等待中、cancel)
     if (this._idleDelay) { clearTimeout(this._idleDelay); this._idleDelay = null; }
     if (this._active) {
-      // 已在 speaking loop · 不重新 set src · 直接續 (不閃黑)
-      this.pool._log("speaking continue (already active · no src reset)");
+      this.pool._log("speaking continue (already active · opacity 維持)");
       return;
     }
     this._stopTimers();
     this._active = true;
     this._phase = 2;
-    this.pool._playRaw("speaking", true);
-    this.pool._log("speaking start (loop speaking.mp4 · no phase 1 · no breath pause)");
+    // v1.9.2 · 不切 src · 改 opacity crossfade
+    try {
+      var sp = document.getElementById("liveVideoSpeaking");
+      if (sp) {
+        sp.classList.add("is-active");
+        // 確保 speaking layer 在播 (autoplay loop 已開、不應該停 · 但 iOS Safari 有時 stall)
+        if (sp.paused) { try { sp.play(); } catch (e) {} }
+      }
+    } catch (e) { this.pool._log("speaking start layer fail: " + e.message); }
+    this.pool.currentState = "speaking";
+    this.pool._log("speaking start (crossfade in · 雙 video 不切 src)");
   };
   SpeakingController.prototype.stop = function () {
     if (!this._active && !this._idleDelay) return;
@@ -157,14 +164,16 @@
     this._stopTimers();
     if (this._idleDelay) { clearTimeout(this._idleDelay); this._idleDelay = null; }
     var self = this;
-    // v1.3.3 · Edward 5/23「講 2 秒嘴 5 秒」catch · deferred 1500ms → 250ms
-    // 蘇菲講完立刻切待機 · 不再「嘴動超出聲音 3 秒」· 250ms 兜底句子間隔閃黑
+    // 250ms 兜底句子間隔 · 期間若新 start 直接 cancel
     this._idleDelay = setTimeout(function () {
       self._idleDelay = null;
-      if (self._active) return; // 又 start 了、不切 idle
-      var idle = self.pool.idleRotator.pickIdleOnly();
-      self.pool._playRaw(idle, true);
-      self.pool._log("speaking stop -> idle " + idle + " (250ms no new audio)");
+      if (self._active) return;
+      try {
+        var sp = document.getElementById("liveVideoSpeaking");
+        if (sp) sp.classList.remove("is-active");
+      } catch (e) {}
+      self.pool.currentState = "idle";
+      self.pool._log("speaking stop (crossfade out · idle 永遠在底層 · 完全不切 src)");
     }, 250);
   };
   SpeakingController.prototype._stopTimers = function () {

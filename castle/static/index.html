@@ -415,14 +415,20 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
-      /* v1.9.1 · video 自己 transparent · src 切換 fallback = 顯露後面 stage-canvas 橘色 · 不再閃黑 */
       background: transparent;
-      opacity: 1;
-      /* v1.2.0g · 砍雙緩衝、回單 video · src 切換時 opacity fade 隱黑頻 */
-      /* v1.9.1 · 切換期 opacity 0.85 (不要降太低、否則整張縱使是橘色也會看到 dip) */
-      transition: opacity 120ms ease-out;
     }
-    .live-video.is-switching { opacity: 0.85; }
+    /* v1.9.2 · 雙層 video crossfade · 底層 idle 永遠在 · 上層 speaking 用 opacity 切 */
+    .live-video-idle { z-index: 1; opacity: 1; }
+    .live-video-speaking {
+      z-index: 2;
+      opacity: 0;
+      /* 講話切入 200ms 平滑淡入 · 停止 400ms 慢慢淡出 (講完不要瞬間斷感 · 像呼吸銜接) */
+      transition: opacity 220ms ease-out;
+      pointer-events: none;
+    }
+    .live-video-speaking.is-active { opacity: 1; transition: opacity 200ms ease-in; }
+    /* legacy · v1.2.0g is-switching 保留兼容 · v1.9.2 後沒人在用 */
+    .live-video.is-switching { opacity: 0.85; transition: opacity 120ms ease-out; }
     .bottom {
       position: absolute;
       bottom: 0; left: 0; right: 0;
@@ -655,8 +661,9 @@
     </header>
 
     <main class="stage-canvas">
+      <!-- v1.9.2 · 雙層 video crossfade · 永不切 src · 講話跟 idle 無縫融合 -->
       <video
-        class="live-video"
+        class="live-video live-video-idle"
         id="liveVideo"
         autoplay
         playsinline
@@ -665,6 +672,16 @@
         preload="auto"
         poster="/static/sophie-portrait.png"
         src="/static/sophie-idle.mp4"
+      ></video>
+      <video
+        class="live-video live-video-speaking"
+        id="liveVideoSpeaking"
+        autoplay
+        playsinline
+        muted
+        loop
+        preload="auto"
+        src="/static/sophie-speaking.mp4"
       ></video>
       <audio class="live-audio" id="liveAudio" autoplay playsinline></audio>
 
@@ -728,7 +745,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.9.1</span>
+          <span class="vm-version">v1.9.2</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -737,6 +754,18 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.2</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>講話黑頻根本解 · 雙層 video crossfade · 完全砍 src 切換</li>
+            <li>架構改：兩個 video 元素疊著 · idle 永遠底層 loop · speaking 上層</li>
+            <li>蘇菲講話 = speaking 層 opacity 0 → 1 淡入 (220ms)</li>
+            <li>蘇菲停 = speaking 層 opacity 1 → 0 淡出 (250ms 兜底句子間隔)</li>
+            <li>兩個 video 都不切 src = 完全沒有切換空檔 = 永遠不閃黑</li>
+            <li>v1.5.0 嘴對齊 100 句暫停 (要重做走 speaking 上層 · 排 v1.9.3+)</li>
+            <li>Edward 5/24 「跟他講話他回覆時就會閃黑頻」catch 後立</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.1</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>核心體驗 hotfix · Edward 截圖戳破「沒滿版 + 講話又黑頻」回頭修</li>
@@ -2256,7 +2285,7 @@
                 animPool && typeof animPool.startSpeaking === "function") {
               window.__sophieSpeakingTriggered = true;
               animPool.startSpeaking();
-              log("[FORCE] " + t + " · 含 audio → startSpeaking · 切 sophie-speaking.mp4");
+              log("[FORCE] " + t + " · 含 audio → startSpeaking · 上層 speaking crossfade in");
             }
             // 含 audio + done = stopSpeaking
             var isAudioOutputDone =
@@ -2324,24 +2353,11 @@
               if (typeof data.delta === "string") {
                 sophieTextBuffer += data.delta;
               }
-              // v1.5.0 · transcript 累 5+ 字 · fuzzy match 預錄嘴對齊版 · 命中切 mp4
-              if (window.PhraseMatcher && !window.__sophiePhraseMatched && sophieTextBuffer.length >= 5) {
-                var match = window.PhraseMatcher.findMatching(sophieTextBuffer);
-                if (match) {
-                  window.__sophiePhraseMatched = true;
-                  try {
-                    var v = document.getElementById('liveVideo');
-                    if (v) {
-                      v.src = match.phrase.mp4_url;
-                      v.loop = false;
-                      v.muted = true;
-                      v.play()["catch"](function () {});
-                      log("[LIPSYNC HIT] " + match.phrase.sentence + " (dist=" + match.distance + ")");
-                    }
-                  } catch (e) {
-                    log("[LIPSYNC] switch fail: " + e.message);
-                  }
-                }
+              // v1.9.2 · lipsync 暫停 (會壓掉底層 idle loop 破壞雙層架構)
+              // TODO v1.9.3+ · 重做 lipsync 走 speaking 上層 + 兜底 idle 不斷
+              // v1.5.0 原邏輯保留 reference 在 git log fb3e98b
+              if (false && window.PhraseMatcher && !window.__sophiePhraseMatched && sophieTextBuffer.length >= 5) {
+                // disabled
               }
             } else if (data.type === "conversation.item.input_audio_transcription.completed") {
               // v1.1.2 · user turn 寫進 IndexedDB · whisper-1 transcribe 完成的 user 語音文字
