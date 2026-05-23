@@ -151,9 +151,9 @@ def fastapi_app():
         fastapi_instance.mount("/static", StaticFiles(directory=str(static_dir), html=True), name="static")
 
         @fastapi_instance.get("/")
-        async def _root(request: Request):
-            # v1.2.0 訪客模式 · 一律 redirect 到 index.html
-            # auth.html 仍保留 (PWA shortcut / 老 bookmark) · 但不再強制 redirect
+        async def _root():
+            # v1.2.0a fix · 砍 request: Request 參數 (Modal serverless closure 內 type hint resolve fail · 422 query.request missing)
+            # 純 redirect 不需要 request object · 直接無參數定義最穩
             return RedirectResponse(url="/static/index.html")
 
         # v0.4.2 · 替 /static/* 加 no-cache header (確保 Edward 永遠拿最新版)
