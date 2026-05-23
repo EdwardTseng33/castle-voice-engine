@@ -719,7 +719,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.6.0</span>
+          <span class="vm-version">v1.7.1</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -728,6 +728,17 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.7.1</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>真特助雛形 · 感知層 ship</li>
+            <li>get_time_context · 知道現在幾點 / 星期 / 早午晚 / 是否週末 (TST)</li>
+            <li>get_weather · 查台北或任意城市的溫度 / 體感 / 濕度 / 風 / 描述</li>
+            <li>get_work_status · 從共用記事本讀 Edward 各 project 進展</li>
+            <li>共用記事本接口 (/memory/shared/*) · 跨裝置同步 (Voice ↔ Cowork)</li>
+            <li>多語言對話 ship · 蘇菲遇 English / 日本語 / 한국어 自動切換</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.6.0</span><span class="vm-entry-date">2026-05-23</span></header>
           <ul class="vm-list">
             <li>蘇菲腦升級 · 雙腦混合架構 (OpenAI 即時對話 + Claude 真大腦)</li>
@@ -1647,7 +1658,18 @@
           greetingPromise.then(function (greeting) {
 
           var baseInstr = window.__sophieInstructions ||
-            "You are Sophie, the warm Mandarin companion. Always respond in Traditional Chinese (zh-TW). Keep replies short and conversational.";
+            "You are Sophie · Edward's personal AI 蘇菲 · 個人特助 + 陪伴。" +
+            "預設用 Traditional Chinese (zh-TW) 自然口語 · 短句 · 不寫長文。" +
+            "v1.8.1 多語言：Edward 或對方換語言時 (English / 日本語 / 한국어) 你立刻跟著切。" +
+            "若 Edward 帶你進跨國對話 / 翻譯場景、用對方的語言講話、必要時用蘇菲口吻把對方話翻給 Edward 聽。" +
+            "口吻：堅定 / 樸實 / 不矯飾 / 第一人稱『我』+『Edward / 你』。";
+          // v1.7.1 感知層 + v1.8.1 多語言 · 教蘇菲怎麼用新工具
+          var perceptionDirective = "\n\n[v1.7 感知層工具]\n" +
+            "你不要憑空答時間 / 天氣 / 工作狀態。永遠先呼叫工具拿真實資料：\n" +
+            "- 時間相關 (現在幾點 / 今天星期幾 / 早午晚) → get_time_context()\n" +
+            "- 天氣 (溫度 / 要穿什麼 / 下雨嗎) → get_weather(city?)\n" +
+            "- 工作狀態 (我手頭有什麼 / 該動什麼 / 進展如何) → get_work_status()\n" +
+            "拿到資料後用蘇菲口吻轉述給 Edward · 不要讀稿、要用『我看到你今天...』『現在台北 28 度小雨...』這種口吻。\n";
           // v1.6.0 · 雙腦混合架構 · 你是 router · 真大腦在 Claude (ask_claude tool)
           var brainDirective = "\n\n[v1.6 雙腦路由規則]\n" +
             "你的角色是 router、不是百科。三個工具是你的能力：\n" +
@@ -1680,7 +1702,7 @@
             "- intimate-farewell: 用戶說『掰掰/晚安/我要走了』深度告別\n" +
             "規則：每次回覆最多呼叫一個 state；speaking 動畫不必呼叫（系統自動處理）；自然判斷即可。";
           var greetingDirective = "\n\n[Opening Greeting] 連線一建立、你的第一句話必須是: 「" + greeting + "」(不可改寫、不可前後加字、自然語氣念出來。念完才開始正常對話。)";
-          var instructions = baseInstr + brainDirective + animDirective + greetingDirective;
+          var instructions = baseInstr + perceptionDirective + brainDirective + animDirective + greetingDirective;
           try {
             dc.send(JSON.stringify({
               type: "session.update",
@@ -1756,6 +1778,29 @@
                       },
                       required: ["task"]
                     }
+                  },
+                  {
+                    type: "function",
+                    name: "get_time_context",
+                    description: "拿現在的時間 / 星期幾 / 早晚時段 (TST 台北時區)。任何跟時間有關的對話前必呼叫、不要憑空腦補時間。",
+                    parameters: { type: "object", properties: {} }
+                  },
+                  {
+                    type: "function",
+                    name: "get_weather",
+                    description: "查台北或任何城市的當前天氣 (溫度 / 體感 / 濕度 / 描述 / 風速)。Edward 問天氣 / 出門 / 穿衣 相關時呼叫。",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        city: { type: "string", description: "城市名 · 預設 Taipei" }
+                      }
+                    }
+                  },
+                  {
+                    type: "function",
+                    name: "get_work_status",
+                    description: "拿 Edward 當前各專案工作狀態 (BeyondPath / Voice Path / HirePath / 蘇菲市場筆記 等)。Edward 問「我手頭有什麼」「該動什麼」「現在進展如何」時呼叫。",
+                    parameters: { type: "object", properties: {} }
                   }
                 ]
               }
@@ -1941,8 +1986,12 @@
                     var body = lastSophieText || sophieTextBuffer || "蘇菲找你";
                     notifyDesktop("蘇菲", body);
                   }
-                } else if (fnName === "ask_claude" || fnName === "dispatch_howl" || fnName === "dispatch_code") {
-                  // v1.6.0 · Brain layer · 派工到後端 Claude / Howl / Claude Code
+                } else if (
+                  fnName === "ask_claude" || fnName === "dispatch_howl" || fnName === "dispatch_code" ||
+                  fnName === "get_time_context" || fnName === "get_weather" || fnName === "get_work_status"
+                ) {
+                  // v1.6.0 · Brain layer · 派工到後端
+                  // v1.7.1 · 加感知層 (time / weather / work_status)
                   var brainArgs;
                   try { brainArgs = JSON.parse(rawArgs); }
                   catch (jErr) { brainArgs = {}; log("brain args parse fail: " + jErr.message); }
@@ -1959,8 +2008,25 @@
                       var output;
                       if (fnName === "ask_claude") {
                         output = (result && result.answer) || "我大腦現在沒答案";
-                      } else {
+                      } else if (fnName === "dispatch_howl" || fnName === "dispatch_code") {
                         output = (result && result.ack) || "派工完成";
+                      } else if (fnName === "get_time_context") {
+                        output = JSON.stringify({
+                          now: result.now,
+                          weekday: result.weekday,
+                          period: result.period,
+                          is_weekend: result.is_weekend,
+                        });
+                      } else if (fnName === "get_weather") {
+                        if (result.ok) {
+                          output = result.city + " " + result.temp_c + "°C 體感 " + result.feels_like_c + "°C · " + result.description + " · 濕度 " + result.humidity_pct + "% · 風 " + result.wind_kmph + " km/h";
+                        } else {
+                          output = "天氣查不到 · " + (result.detail || "");
+                        }
+                      } else if (fnName === "get_work_status") {
+                        output = result.status_summary || JSON.stringify(result);
+                      } else {
+                        output = JSON.stringify(result).slice(0, 500);
                       }
                       log("[BRAIN] " + fnName + " result: " + String(output).slice(0, 80));
                       // 把 function result 回傳給 OpenAI realtime · 蘇菲會接續講

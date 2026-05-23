@@ -169,3 +169,134 @@ def attach_brain_routes(app):
             "anthropic_key": bool(_resolve_anthropic_key()),
             "model": "claude-sonnet-4-5",
         }
+
+    # ===== v1.7.1 感知層 · 時間 / 天氣 / 工作狀態 =====
+
+    @app.post("/brain/get_time_context")
+    async def _get_time_context(request: Request):
+        from datetime import datetime
+        try:
+            import zoneinfo
+            tz = zoneinfo.ZoneInfo("Asia/Taipei")
+            now = datetime.now(tz)
+        except Exception:
+            now = datetime.now()
+        weekday_zh = ["週一","週二","週三","週四","週五","週六","週日"][now.weekday()]
+        hour = now.hour
+        if hour < 5: period = "深夜"
+        elif hour < 9: period = "早上"
+        elif hour < 12: period = "上午"
+        elif hour < 14: period = "中午"
+        elif hour < 18: period = "下午"
+        elif hour < 22: period = "晚上"
+        else: period = "深夜"
+        return {
+            "ok": True,
+            "now": now.strftime("%Y-%m-%d %H:%M"),
+            "weekday": weekday_zh,
+            "period": period,
+            "hour": hour,
+            "is_weekend": now.weekday() >= 5,
+            "timezone": "Asia/Taipei",
+        }
+
+    @app.post("/brain/get_weather")
+    async def _get_weather(request: Request):
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        city = "Taipei"
+        if isinstance(body, dict) and body.get("city"):
+            city = str(body["city"])
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.get(f"https://wttr.in/{city}?format=j1&lang=zh-tw")
+                data = r.json()
+                current = data.get("current_condition", [{}])[0]
+                temp_c = current.get("temp_C", "?")
+                feels = current.get("FeelsLikeC", "?")
+                humidity = current.get("humidity", "?")
+                weather_desc = current.get("lang_zh-tw", [{}])
+                desc_zh = (weather_desc[0].get("value", "") if weather_desc else "") or current.get("weatherDesc", [{}])[0].get("value", "")
+                wind = current.get("windspeedKmph", "?")
+                return {
+                    "ok": True,
+                    "city": city,
+                    "temp_c": temp_c,
+                    "feels_like_c": feels,
+                    "humidity_pct": humidity,
+                    "description": desc_zh,
+                    "wind_kmph": wind,
+                }
+        except Exception as e:
+            logger.exception("[brain] get_weather fail")
+            return {"ok": False, "detail": str(e)[:200]}
+
+    @app.post("/brain/get_work_status")
+    async def _get_work_status(request: Request):
+        path = "/lipsync_cache/sophie_work_status.json"
+        if not os.path.exists(path):
+            return {
+                "ok": True,
+                "status_summary": "目前沒看到工作狀態紀錄 · 你可以告訴我你正在動什麼專案",
+                "projects": [],
+                "last_updated": None,
+            }
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return {"ok": True, **data}
+        except Exception as e:
+            logger.exception("[brain] get_work_status fail")
+            return {"ok": False, "detail": str(e)[:200]}
+
+    # ===== v1.7 共用記事本 · 跨裝置同步 (Voice ↔ Cowork) =====
+
+    @app.post("/memory/shared/set")
+    async def _shared_set(request: Request):
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"ok": False, "detail": "body parse fail"}, status_code=400)
+        if not isinstance(body, dict):
+            return JSONResponse({"ok": False, "detail": "body must be object"}, status_code=400)
+        key = body.get("key")
+        value = body.get("value")
+        if not key or not isinstance(key, str):
+            return JSONResponse({"ok": False, "detail": "key missing"}, status_code=400)
+        # 防 path traversal
+        safe_key = "".join(c for c in key if c.isalnum() or c in "_-")[:64]
+        if not safe_key:
+            return JSONResponse({"ok": False, "detail": "key invalid"}, status_code=400)
+        path = f"/lipsync_cache/shared_{safe_key}.json"
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"key": safe_key, "value": value, "ts": time.time()}, f, ensure_ascii=False)
+            return {"ok": True, "key": safe_key}
+        except Exception as e:
+            return JSONResponse({"ok": False, "detail": str(e)[:200]}, status_code=500)
+
+    @app.get("/memory/shared/get/{key}")
+    async def _shared_get(key: str):
+        safe_key = "".join(c for c in key if c.isalnum() or c in "_-")[:64]
+        path = f"/lipsync_cache/shared_{safe_key}.json"
+        if not os.path.exists(path):
+            return {"ok": False, "detail": "not found", "key": safe_key}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return {"ok": True, **data}
+        except Exception as e:
+            return JSONResponse({"ok": False, "detail": str(e)[:200]}, status_code=500)
+
+    @app.get("/memory/shared/list")
+    async def _shared_list():
+        import glob
+        try:
+            files = glob.glob("/lipsync_cache/shared_*.json")
+            keys = [os.path.basename(f).replace("shared_", "").replace(".json", "") for f in files]
+            return {"ok": True, "keys": keys, "total": len(keys)}
+        except Exception as e:
+            return JSONResponse({"ok": False, "detail": str(e)[:200]}, status_code=500)
