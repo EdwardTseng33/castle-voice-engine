@@ -719,7 +719,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.7.2</span>
+          <span class="vm-version">v1.7.5</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -728,6 +728,15 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.7.5</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>訂位代辦 MVP · restaurant_booking 工具 ship</li>
+            <li>蘇菲幫整理：餐廳 / 時間 / 人數 / Google 搜訂位 / Maps · 存共用記事本</li>
+            <li>不替 Edward 動錢動承諾 · 紅線守住 (你最後 1 click)</li>
+            <li>v1.7.7 跨裝置同步 SOP 落檔 (docs/v1.7.7-cowork-sync-sop.md)</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.7.2</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>蘇菲晨間 brief 上線 · 工作日早上 5-11 點開蘇菲 · 她直接整理今天</li>
@@ -1837,6 +1846,21 @@
                     name: "get_work_status",
                     description: "拿 Edward 當前各專案工作狀態 (BeyondPath / Voice Path / HirePath / 蘇菲市場筆記 等)。Edward 問「我手頭有什麼」「該動什麼」「現在進展如何」時呼叫。",
                     parameters: { type: "object", properties: {} }
+                  },
+                  {
+                    type: "function",
+                    name: "restaurant_booking",
+                    description: "蘇菲幫 Edward 整理訂位資料。Edward 說「幫我訂 X 餐廳 X 時間 X 人」時、先口頭覆述全部細節確認 Edward 拍板後才呼叫。不替 Edward 直接動錢動承諾、只整理資訊存進筆記 + 給 Google 搜訂位連結。",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        restaurant: { type: "string", description: "餐廳名稱含分店 (例 南港 CITYLINK 牛角燒肉)" },
+                        when: { type: "string", description: "訂位時間 (例 今晚 7:30)" },
+                        party_size: { type: "string", description: "人數 (字串、可帶『人』)" },
+                        special_request: { type: "string", description: "特殊需求 (素食 / 過敏 / 慶生 等)" }
+                      },
+                      required: ["restaurant", "when", "party_size"]
+                    }
                   }
                 ]
               }
@@ -2024,7 +2048,8 @@
                   }
                 } else if (
                   fnName === "ask_claude" || fnName === "dispatch_howl" || fnName === "dispatch_code" ||
-                  fnName === "get_time_context" || fnName === "get_weather" || fnName === "get_work_status"
+                  fnName === "get_time_context" || fnName === "get_weather" || fnName === "get_work_status" ||
+                  fnName === "restaurant_booking"
                 ) {
                   // v1.6.0 · Brain layer · 派工到後端
                   // v1.7.1 · 加感知層 (time / weather / work_status)
@@ -2061,6 +2086,9 @@
                         }
                       } else if (fnName === "get_work_status") {
                         output = result.status_summary || JSON.stringify(result);
+                      } else if (fnName === "restaurant_booking") {
+                        // brief + google search link · 蘇菲口頭講 brief、連結會存進記事本
+                        output = (result.brief || "訂位資料整理完") + " · Google 搜訂位連結: " + (result.google_search || "");
                       } else {
                         output = JSON.stringify(result).slice(0, 500);
                       }

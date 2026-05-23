@@ -301,6 +301,87 @@ def attach_brain_routes(app):
         except Exception as e:
             return JSONResponse({"ok": False, "detail": str(e)[:200]}, status_code=500)
 
+    # ===== v1.7.5 訂位代辦 · 蘇菲幫整理訂位資訊 =====
+
+    @app.post("/brain/restaurant_booking")
+    async def _restaurant_booking(request: Request):
+        """蘇菲整理訂位資料 + 帶 Google 搜尋連結 + 存共用記事本"""
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"ok": False, "detail": "body parse fail"}, status_code=400)
+        if not isinstance(body, dict):
+            return JSONResponse({"ok": False, "detail": "body must be object"}, status_code=400)
+
+        restaurant = body.get("restaurant") or ""
+        when = body.get("when") or ""
+        party = body.get("party_size") or ""
+        special = body.get("special_request", "") or ""
+
+        if not restaurant:
+            return JSONResponse({"ok": False, "detail": "restaurant missing"}, status_code=400)
+
+        import urllib.parse
+        search_q = f"{restaurant} 線上訂位"
+        google_search = f"https://www.google.com/search?q={urllib.parse.quote(search_q)}"
+        maps_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(restaurant)}"
+
+        # 用 Claude 寫蘇菲口吻 brief
+        api_key = _resolve_anthropic_key()
+        brief = ""
+        if api_key:
+            try:
+                from anthropic import Anthropic
+                cli = Anthropic(api_key=api_key)
+                prompt_user = (
+                    f"[訂位請求]\n"
+                    f"餐廳: {restaurant}\n"
+                    f"時間: {when}\n"
+                    f"人數: {party}\n"
+                    f"備註: {special}\n\n"
+                    "請給 Edward 1 段口頭回應、≤ 80 字、蘇菲口吻、像朋友轉述。"
+                    "提示他：你會把訂位資料存進筆記、他可以從 Google 搜該餐廳訂位連結 · 或打電話。"
+                    "不要說『以下幾點』類條列。"
+                )
+                msg = cli.messages.create(
+                    model="claude-sonnet-4-5",
+                    max_tokens=300,
+                    system="你是 Sophie · Edward 個人特助 · zh-TW 自然口語",
+                    messages=[{"role": "user", "content": prompt_user}],
+                )
+                brief = msg.content[0].text if msg.content else ""
+            except Exception as e:
+                logger.exception("[brain] restaurant_booking claude fail")
+                brief = f"我幫你整理了 {restaurant} 訂位資料 · Google 搜訂位連結 · 我把資料存進筆記了"
+
+        # 存進共用記事本 (key=last_booking)
+        booking_data = {
+            "restaurant": restaurant,
+            "when": when,
+            "party_size": party,
+            "special_request": special,
+            "google_search": google_search,
+            "maps_url": maps_url,
+            "brief": brief,
+            "ts": time.time(),
+        }
+        try:
+            with open("/lipsync_cache/shared_last_booking.json", "w", encoding="utf-8") as f:
+                json.dump({"key": "last_booking", "value": booking_data, "ts": time.time()}, f, ensure_ascii=False)
+        except Exception as e:
+            logger.warning("[brain] booking save fail: %s", str(e)[:200])
+
+        return {
+            "ok": True,
+            "brief": brief,
+            "restaurant": restaurant,
+            "when": when,
+            "party_size": party,
+            "google_search": google_search,
+            "maps_url": maps_url,
+            "saved_to_notebook": True,
+        }
+
     # ===== v1.7.2 晨間簡報 · 蘇菲特助級早安整合 =====
 
     @app.post("/brain/morning_brief")
