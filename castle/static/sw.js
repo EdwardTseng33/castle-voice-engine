@@ -1,7 +1,7 @@
 // castle/static/sw.js
 // Voice Path v0.7 Service Worker
 // 待機 shell offline-first · realtime / breeze / musetalk 永遠 network-first 不 cache
-const CACHE_VERSION = 'v0.8.1';
+const CACHE_VERSION = 'v0.8.2';
 const CACHE_NAME = 'sophie-' + CACHE_VERSION;
 
 // 不 precache mp4 (5MB+ · 阻塞 install) · video element 自己 streaming load 即可
@@ -47,6 +47,13 @@ self.addEventListener('activate', function (event) {
 
 self.addEventListener('fetch', function (event) {
   var url = new URL(event.request.url);
+
+  // CRITICAL · video / audio 完全 bypass SW · 讓瀏覽器 native fetch 處理 Range request
+  // SW respondWith fetch() 會把 206 partial 變 200 全檔、video element 不能 streaming play
+  if (url.pathname.endsWith('.mp4') || url.pathname.endsWith('.webm') ||
+      url.pathname.endsWith('.m4a') || url.pathname.endsWith('.ogg')) {
+    return; // 不 respondWith = SW pass-through
+  }
 
   // realtime / lipsync / ASR 路徑 = 永遠 network · 不 cache
   for (var i = 0; i < NEVER_CACHE.length; i++) {
