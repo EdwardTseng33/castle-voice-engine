@@ -516,7 +516,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v0.9.6</span>
+          <span class="vm-version">v1.1.0</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -525,6 +525,15 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.1.0</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>PWA 強化 · 右鍵 PWA icon 快捷「跟蘇菲聊聊 / 看版本紀錄」</li>
+            <li>PIP 浮窗模式 polish · 按鈕 active 狀態 + 雙向事件 listener</li>
+            <li>桌面通知 baseline · 蘇菲親密招呼 / 結束 → 你切走也召喚得到</li>
+            <li>Service Worker push / sync handler baseline (server 端 v1.2+ build)</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v0.9.6</span><span class="vm-entry-date">2026-05-23</span></header>
           <ul class="vm-list">
             <li>Google 登入認證 ship · 只 edwardt0303@gmail.com 可進</li>
@@ -691,6 +700,47 @@
     var micOn           = true;
     var camOn           = true;
 
+    // v1.1.0 · 桌面通知 baseline · 蘇菲主動「召喚」
+    var notifPermission   = (typeof Notification !== "undefined") ? Notification.permission : "denied";
+    var notifAskedThisSession = false;
+    var lastSophieText    = "";
+    var sophieTextBuffer  = "";
+
+    function askNotifPermissionOnce() {
+      if (typeof Notification === "undefined") return;
+      if (notifAskedThisSession) return;
+      if (notifPermission === "granted" || notifPermission === "denied") return;
+      notifAskedThisSession = true;
+      try {
+        Notification.requestPermission().then(function (p) {
+          notifPermission = p;
+          log("notif permission: " + p);
+        })["catch"](function (e) { log("notif request fail: " + e.message); });
+      } catch (e) { log("notif request throw: " + e.message); }
+    }
+
+    function notifyDesktop(title, body) {
+      // 只在 user 不在當前 tab 時推 · 同 tab focused 不打擾
+      if (typeof Notification === "undefined") return;
+      if (Notification.permission !== "granted") return;
+      if (!document.hidden && document.hasFocus && document.hasFocus()) return;
+      try {
+        var n = new Notification(title || "蘇菲", {
+          body: (body || "").slice(0, 120),
+          icon: "/static/icon-192.png",
+          badge: "/static/icon-192.png",
+          tag: "sophie-summon",
+          renotify: true,
+          silent: false
+        });
+        n.onclick = function () {
+          window.focus();
+          try { n.close(); } catch (ce) {}
+        };
+        log("notif fired: " + title);
+      } catch (e) { log("notif throw: " + e.message); }
+    }
+
     var ICON_MIC_ON =
       '<rect x="9" y="2" width="6" height="12" rx="3"/>' +
       '<path d="M19 11v1a7 7 0 0 1-14 0v-1"/>' +
@@ -750,6 +800,7 @@
     }
 
     startBtn.addEventListener("click", function () {
+      askNotifPermissionOnce();
       startConversation().catch(function (err) {
         log("start err: " + (err && err.message));
         showError("啟動失敗 · " + (err && err.message ? err.message : ""));
@@ -957,6 +1008,16 @@
                 animPool.stopSpeaking();
                 log("audio.done -> stopSpeaking");
               }
+              // v1.1.0 · flush transcript buffer 進 lastSophieText
+              if (sophieTextBuffer && sophieTextBuffer.length > 0) {
+                lastSophieText = sophieTextBuffer;
+                sophieTextBuffer = "";
+              }
+            } else if (data.type === "response.audio_transcript.delta" || data.type === "response.output_audio_transcript.delta") {
+              // v1.1.0 · 累積 transcript chunk · 餵桌面通知 body
+              if (typeof data.delta === "string") {
+                sophieTextBuffer += data.delta;
+              }
             } else if (data.type === "vision.emotion" || data.type === "vp.vision.emotion") {
               try {
                 var vState = data.state || (data.payload && data.payload.state);
@@ -979,6 +1040,11 @@
                   log("animation function call: " + state);
                   if (animPool && typeof animPool.playAction === "function") {
                     animPool.playAction(state);
+                  }
+                  // v1.1.0 · 蘇菲主動「召喚」桌面通知 · 親密 / 結束場合
+                  if (state === "intimate-greeting" || state === "task-handoff" || state === "intimate-farewell") {
+                    var body = lastSophieText || sophieTextBuffer || "蘇菲找你";
+                    notifyDesktop("蘇菲", body);
                   }
                 }
               } catch (fnErr) {
@@ -1160,7 +1226,7 @@
       });
     }
 
-    log("Voice Path v0.8 ready - 4-state animation pool - Edward spec 2026-05-23");
+    log("Voice Path v1.1.0 ready - ambient companion (PWA + PIP + notification) - 2026-05-23");
 
     window.__sophie = {
       setState: setState,
