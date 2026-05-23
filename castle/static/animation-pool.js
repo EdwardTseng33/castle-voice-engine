@@ -79,19 +79,19 @@
     this._absent = false;  // v1.1.3
     this._preCall = false; // v1.2.0b · pre-call (未 Start) 用 rich 池
   }
-  // v1.2.0b · 待機豐富動作池 · Edward 5/23「未 start 加幾組親親 / 撒嬌 / hello」
-  // 機率：55% idle / 12% stroke-hair / 10% greeting / 7% playful / 6% intimate-greeting
-  //       4% acknowledgement / 3% intimate-farewell / 3% happy
+  // v1.3.5 · 待機豐富動作池 · 適合 pre-call (未 Start) 場景 · 砍情緒反應類
+  // 機率：65% idle (4 變體輪播)
+  //      15% stroke-hair (摸頭髮 / 撒嬌)
+  //      12% playful (玩耍 / 表情變化)
+  //      8% greeting (打招呼 hello)
+  // 砍：intimate-* (親密互動 · 訪客不該看)
+  // 砍：acknowledgement / happy / apologetic / resigned (對話反應類 · 不適合待機 random)
   IdleRotator.prototype._pickPreCallRich = function () {
     var r = Math.random();
-    if (r < 0.55) return IDLE_VARIANTS[Math.floor(Math.random() * IDLE_VARIANTS.length)];
-    if (r < 0.67) return "stroke-hair";
-    if (r < 0.77) return "greeting";
-    if (r < 0.84) return "playful";
-    if (r < 0.90) return "intimate-greeting";
-    if (r < 0.94) return "acknowledgement";
-    if (r < 0.97) return "intimate-farewell";
-    return "happy";
+    if (r < 0.65) return IDLE_VARIANTS[Math.floor(Math.random() * IDLE_VARIANTS.length)];
+    if (r < 0.80) return "stroke-hair";
+    if (r < 0.92) return "playful";
+    return "greeting";
   };
   IdleRotator.prototype.pickNext = function () {
     var h = new Date().getHours();
@@ -391,10 +391,10 @@
         // 走 _returnToIdle 走 pickNext (rich pool) · 含正確的 loop / ended handler 邏輯
         self._returnToIdle();
         schedule();
-      }, 10000 + Math.random() * 8000);  // 10-18s 隨機間隔
+      }, 14000 + Math.random() * 8000);  // v1.3.5 · 14-22s 隨機間隔 · 慢一點不密集切
     };
     schedule();
-    this._log("preCallRotation start (rich pool · 親親 / 撒嬌 / hello)");
+    this._log("preCallRotation start (rich pool · idle 65% / stroke-hair 15% / playful 12% / greeting 8%)");
   };
 
   AnimationPool.prototype.stopPreCallRotation = function () {

@@ -719,7 +719,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.3.4</span>
+          <span class="vm-version">v1.3.5</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -728,6 +728,14 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.3.5</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>未 Start 待機輪播重啟 (砍掉情緒反應類 · 適合訪客場景)</li>
+            <li>機率分配：65% idle 4 變體 / 15% 摸頭髮 / 12% playful / 8% 招呼</li>
+            <li>14-22 秒隨機切 · 不密集亂跳 · 通話開始自動停 / 結束自動重啟</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.3.4</span><span class="vm-entry-date">2026-05-23</span></header>
           <ul class="vm-list">
             <li>全面 audit 驗收 · 結構面全綠 (訪客模式 / API 認證 / 影片 streaming / 動畫池 / 記憶系統)</li>
@@ -1177,8 +1185,11 @@
       if (typeof AnimationPool === "function") {
         animPool = new AnimationPool(liveVideo);
         window.animPool = animPool;
-        // v1.2.0g · 砍 pre-call rich rotation (Edward「架構怪怪」) · 未 Start 維持 idle.mp4 loop
-        // 想加豐富動作 v1.3+ 重新設計時再說
+        // v1.3.5 · 重啟未 Start 待機豐富輪播 · 砍掉情緒反應類 (適合訪客場景)
+        // 65% idle / 15% stroke-hair / 12% playful / 8% greeting · 14-22s 隨機切
+        if (typeof animPool.startPreCallRotation === "function") {
+          setTimeout(function () { animPool.startPreCallRotation(); }, 3000);
+        }
       } else {
         console.warn("[sophie] AnimationPool not loaded, fallback to native loop");
       }
@@ -1361,7 +1372,10 @@
     async function startConversation() {
       if (shell.getAttribute("data-state") !== "idle") return;
       startBtn.disabled = true;
-      // v1.2.0g · 砍 stopPreCallRotation (rich pool 已砍)
+      // v1.3.5 · 通話開始 · 停 pre-call 待機輪播 (in-call 由 GPT 主導)
+      if (animPool && typeof animPool.stopPreCallRotation === "function") {
+        try { animPool.stopPreCallRotation(); } catch (e) {}
+      }
       try {
         try {
           localStream = await navigator.mediaDevices.getUserMedia({
@@ -1987,7 +2001,10 @@
       micBtn.setAttribute("aria-pressed", "true");
       camBtn.setAttribute("aria-pressed", "true");
       setState("idle");
-      // v1.2.0g · 砍 pre-call rich rotation · 維持 idle.mp4 loop
+      // v1.3.5 · 通話結束 · 重啟待機豐富輪播
+      if (animPool && typeof animPool.startPreCallRotation === "function") {
+        try { animPool.startPreCallRotation(); } catch (e) {}
+      }
       // v1.1.2 · 通話結束自動摘要當日對話 + TTL cleanup (raw > 7 天 / summary > 30 天)
       try {
         if (window.ConversationMemory && window.ConversationMemory.summarizeDay) {
