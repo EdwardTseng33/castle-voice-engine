@@ -2,7 +2,7 @@
 // Voice Path v1.1.2.1 Service Worker
 // 待機 shell offline-first · realtime / breeze / musetalk 永遠 network-first 不 cache
 // v1.1.0 baseline · push notification handler + background sync handler (framework only · server 端 push 尚未 build)
-const CACHE_VERSION = 'v1.5.0a';
+const CACHE_VERSION = 'v1.5.0b';
 const CACHE_NAME = 'sophie-' + CACHE_VERSION;
 
 // 不 precache mp4 (5MB+ · 阻塞 install) · video element 自己 streaming load 即可

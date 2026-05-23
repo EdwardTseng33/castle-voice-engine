@@ -69,7 +69,17 @@
   function findMatching(text) {
     if (!MANIFEST || !MANIFEST.phrases || MANIFEST.phrases.length === 0) return null;
     var nt = _normalize(text);
-    if (!nt || nt.length < 3) return null;  // 太短不 match · 避免誤觸
+    if (!nt) return null;
+    // v1.5.0b · 太短的對話片段直接走「完全相等」path · 不走 Levenshtein
+    // (「我懂」這類 2 字 phrase 之前被誤過濾)
+    if (nt.length < 3) {
+      for (var k = 0; k < MANIFEST.phrases.length; k++) {
+        if ((MANIFEST.phrases[k]._normalized || _normalize(MANIFEST.phrases[k].sentence)) === nt) {
+          return { phrase: MANIFEST.phrases[k], distance: 0, ratio: 0 };
+        }
+      }
+      return null;
+    }
 
     var best = null;
     var bestDist = Infinity;
