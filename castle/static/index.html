@@ -515,7 +515,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v0.9.0.4</span>
+          <span class="vm-version">v0.9.6</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -524,6 +524,22 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v0.9.6</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>Google 登入認證 ship · 只 edwardt0303@gmail.com 可進</li>
+            <li>沒登入 → redirect /static/auth.html 顯示登入頁</li>
+            <li>登入後 cookie 30 天免重登入</li>
+            <li>WebRTC /sdp 也守 · 防別人燒 OpenAI 月費</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v0.9.0.5</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>補 v0.9.0.1-4 漏記的 changelog</li>
+            <li>pre-ship-verify.sh 加 changelog drift 自動偵測</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v0.9.0.4</span><span class="vm-entry-date">2026-05-23</span></header>
           <ul class="vm-list">
             <li>修 OpenAI 新規範 response.modalities 報錯</li>
