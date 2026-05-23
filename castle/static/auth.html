@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <title>蘇菲 · 登入</title>
+  <title>蘇菲</title>
   <link rel="preconnect" href="https://rsms.me/" />
   <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -12,7 +12,6 @@
     :root {
       --bg: #000;
       --fg: rgba(255, 255, 255, 0.95);
-      --fg-dim: rgba(255, 255, 255, 0.55);
       --fg-fade: rgba(255, 255, 255, 0.28);
       --red: #e3392b;
     }
@@ -33,6 +32,7 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
+      gap: 40px;
       padding: 24px;
     }
     .name {
@@ -41,42 +41,11 @@
       font-size: 56px;
       font-weight: 400;
       letter-spacing: 0.5px;
-      margin-bottom: 12px;
       color: var(--fg);
-    }
-    .tagline {
-      color: var(--fg-dim);
-      font-size: 14px;
-      letter-spacing: 0.3px;
-      margin-bottom: 48px;
-      text-align: center;
-      max-width: 380px;
-      line-height: 1.5;
-    }
-    .login-card {
-      background: rgba(20, 20, 22, 0.78);
-      -webkit-backdrop-filter: blur(28px) saturate(140%);
-      backdrop-filter: blur(28px) saturate(140%);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 18px;
-      padding: 36px 40px;
-      box-shadow:
-        0 24px 64px rgba(0, 0, 0, 0.5),
-        0 8px 16px rgba(0, 0, 0, 0.3),
-        inset 0 1px 0 rgba(255, 255, 255, 0.08);
-      text-align: center;
-      min-width: 320px;
-    }
-    .login-hint {
-      color: var(--fg-fade);
-      font-size: 12px;
-      margin-top: 24px;
-      letter-spacing: 0.3px;
     }
     .err {
       color: var(--red);
       font-size: 13px;
-      margin-top: 18px;
       min-height: 18px;
       opacity: 0;
       transition: opacity 0.3s ease;
@@ -87,9 +56,8 @@
     }
     .err.show { opacity: 1; }
     .loading {
-      color: var(--fg-dim);
+      color: var(--fg-fade);
       font-size: 13px;
-      margin-top: 14px;
       opacity: 0;
       transition: opacity 0.3s ease;
     }
@@ -109,34 +77,42 @@
 <body>
   <div class="shell">
     <div class="name">蘇菲</div>
-    <div class="tagline">蘇菲 · 個人 AI 陪伴 · 用 Google 登入開始</div>
 
-    <div class="login-card">
-      <div id="g_id_onload"
-           data-client_id="870408555328-dv80l5gs73os63r44e8ed79kndcoorbm.apps.googleusercontent.com"
-           data-callback="onSignIn"
-           data-auto_prompt="false"
-           data-context="signin">
-      </div>
-      <div class="g_id_signin"
-           data-type="standard"
-           data-shape="pill"
-           data-theme="filled_black"
-           data-text="signin_with"
-           data-size="large"
-           data-locale="zh_TW"
-           data-logo_alignment="left">
-      </div>
-      <div class="loading" id="loading">驗證中…</div>
-      <div class="login-hint">登入後將驗證您的存取權限</div>
-    </div>
+    <div id="g_id_onload"
+         data-client_id="870408555328-dv80l5gs73os63r44e8ed79kndcoorbm.apps.googleusercontent.com"
+         data-callback="onSignIn"
+         data-auto_prompt="false"
+         data-context="signin"></div>
+    <div class="g_id_signin"
+         data-type="standard"
+         data-shape="pill"
+         data-theme="filled_black"
+         data-text="signin_with"
+         data-size="large"
+         data-locale="zh_TW"
+         data-logo_alignment="left"></div>
 
+    <div class="loading" id="loading">驗證中…</div>
     <div class="err" id="err"></div>
   </div>
 
   <div class="footer">POWERED BY 城堡</div>
 
   <script>
+    function safeStr(v) {
+      if (v == null) return "";
+      if (typeof v === "string") return v;
+      try { return String(v); } catch (e) { return ""; }
+    }
+
+    function showErr(text) {
+      var loading = document.getElementById("loading");
+      var err = document.getElementById("err");
+      loading.classList.remove("show");
+      err.textContent = safeStr(text) || "登入失敗 · 請重試";
+      err.classList.add("show");
+    }
+
     function onSignIn(response) {
       var loading = document.getElementById("loading");
       var err = document.getElementById("err");
@@ -147,44 +123,38 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ credential: response.credential }),
-        credentials: "include",
+        credentials: "include"
       })
         .then(function (r) {
           if (r.ok) {
             return r.json().then(function () {
               location.href = "/static/index.html";
             });
-          } else {
-            return r.json().then(function (j) {
-              loading.classList.remove("show");
-              // v1.2.0 · 未授權時也顯示邀請文案 (有 contact field 就附上)
-              var msg = j.detail || "登入失敗";
-              if (j.contact) {
-                msg += "
-
-您的帳號 " + (j.your_email || "") + "
-請聯絡 " + j.contact + " 開放";
-              }
-              err.textContent = msg;
-              err.classList.add("show");
-            });
           }
+          return r.json().then(function (j) {
+            var detail = safeStr(j && j.detail) || "登入失敗";
+            var contact = safeStr(j && j.contact);
+            var yourEmail = safeStr(j && j.your_email);
+            var msg = detail;
+            if (contact) {
+              msg = detail + "\n\n" +
+                    (yourEmail ? "您的帳號 " + yourEmail + "\n" : "") +
+                    "請聯絡 " + contact + " 開放";
+            }
+            showErr(msg);
+          }).catch(function () {
+            showErr("登入失敗 · 請重試");
+          });
         })
         .catch(function (e) {
-          loading.classList.remove("show");
-          err.textContent = "網路錯誤 · " + e.message;
-          err.classList.add("show");
+          showErr("網路錯誤 · " + safeStr(e && e.message));
         });
     }
 
-    // 已登入的話直接 redirect (cookie 認在 server 端、這邊只做 redirect hint)
     document.addEventListener("DOMContentLoaded", function () {
       if (document.cookie.indexOf("sophie_auth=") !== -1) {
-        // 試圖 redirect · 若 server 認 cookie 沒過就會 redirect 回來
         fetch("/auth/whoami", { credentials: "include" })
-          .then(function (r) {
-            if (r.ok) location.href = "/static/index.html";
-          })
+          .then(function (r) { if (r.ok) location.href = "/static/index.html"; })
           .catch(function () {});
       }
     });
