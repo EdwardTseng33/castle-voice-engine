@@ -745,7 +745,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.9.4</span>
+          <span class="vm-version">v1.9.5</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -754,6 +754,15 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.5</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>徹底清掉舊照片三道保險 · Edward catch「v1.9.4 還是會閃舊照片」</li>
+            <li>1. 直接從伺服器刪除 sophie-portrait.png 檔案 · 找不到就閃不出</li>
+            <li>2. Service Worker index.html 改 network-first · 永遠拉最新版不吃 cache</li>
+            <li>3. 升 cache 版本到 v1.9.5 · 強制清掉 v1.9.1 含 poster 那版舊 cache</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.4</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>拿掉 poster 屬性 · Edward catch「最一開始顯示舊的蘇菲照片」</li>

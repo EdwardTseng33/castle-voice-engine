@@ -2,7 +2,7 @@
 // Voice Path v1.1.2.1 Service Worker
 // 待機 shell offline-first · realtime / breeze / musetalk 永遠 network-first 不 cache
 // v1.1.0 baseline · push notification handler + background sync handler (framework only · server 端 push 尚未 build)
-const CACHE_VERSION = 'v1.9.4';
+const CACHE_VERSION = 'v1.9.5';
 const CACHE_NAME = 'sophie-' + CACHE_VERSION;
 
 // 不 precache mp4 (5MB+ · 阻塞 install) · video element 自己 streaming load 即可
@@ -67,7 +67,23 @@ self.addEventListener('fetch', function (event) {
     }
   }
 
-  // shell asset = stale-while-revalidate
+  // v1.9.5 · index.html = network-first 強制 (避免 Edward 看到 cache 舊版含 poster)
+  if (url.pathname === '/static/index.html') {
+    event.respondWith(
+      fetch(event.request).then(function (resp) {
+        if (resp && resp.ok) {
+          var clone = resp.clone();
+          caches.open(CACHE_NAME).then(function (c) { c.put(event.request, clone); });
+        }
+        return resp;
+      }).catch(function () {
+        return caches.match(event.request);
+      })
+    );
+    return;
+  }
+
+  // 其他 shell asset = stale-while-revalidate
   if (event.request.method === 'GET' && SHELL_ASSETS.indexOf(url.pathname) !== -1) {
     event.respondWith(
       caches.match(event.request).then(function (cached) {
