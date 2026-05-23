@@ -53,6 +53,7 @@ PUBLIC_EXACT = frozenset({
 PUBLIC_PREFIX = (
     "/auth/",   # /auth/verify · /auth/logout · /auth/whoami
     "/static/", # v1.2.0 · 訪客模式 · 整個 static 公開 (UI / shell / mp4 / sw.js) · API endpoints 仍守
+    "/lipsync/",# v1.5.0 · 嘴對齊預錄 mp4 · 訪客看 idle 動畫一樣 · 可看不能燒 GPT
 )
 
 

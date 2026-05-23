@@ -48,6 +48,9 @@ image = (
 
 app = modal.App("castle-voice-engine")
 
+# v1.5.0 · 嘴對齊 100 句預生 mp4 cache · 共用 modal.Volume sophie-lipsync-cache
+lipsync_volume = modal.Volume.from_name("sophie-lipsync-cache", create_if_missing=True)
+
 
 @app.function(
     image=image,
@@ -58,6 +61,7 @@ app = modal.App("castle-voice-engine")
         modal.Secret.from_name("anthropic-key"),
         modal.Secret.from_name("tavus"),  # v0.3.2 Phase 3.2 Tavus CVI 即時對話
     ],
+    volumes={"/lipsync_cache": lipsync_volume},  # v1.5.0 · 100 句嘴對齊 mp4
 )
 @modal.asgi_app()
 def fastapi_app():
@@ -78,6 +82,41 @@ def fastapi_app():
     attach_dispatch_routes(fastapi_instance)  # v0.3.0 Phase 2 後半段: castle dispatch + phase2/status
     attach_tavus_routes(fastapi_instance)  # v0.3.2 Phase 3.2: Tavus CVI 即時對話 video
     attach_memory_routes(fastapi_instance)  # v1.1.2 Phase 3.3: 記憶連續性 (Claude Haiku 摘要 · 後端 stateless)
+
+    # v1.5.0 · 嘴對齊 100 句預生 mp4 serve · 從 modal.Volume sophie-lipsync-cache 讀
+    import os as _os
+    import json as _json
+    from fastapi.responses import FileResponse
+    LIPSYNC_DIR = "/lipsync_cache"
+
+    @fastapi_instance.get("/lipsync/manifest.json")
+    async def _lipsync_manifest():
+        try:
+            lipsync_volume.reload()
+        except Exception:
+            pass
+        mf = f"{LIPSYNC_DIR}/manifest.json"
+        if not _os.path.exists(mf):
+            return JSONResponse({"phrases": [], "total": 0})
+        try:
+            with open(mf, "r", encoding="utf-8") as f:
+                return JSONResponse(_json.load(f))
+        except Exception as e:
+            return JSONResponse({"phrases": [], "total": 0, "error": str(e)[:200]})
+
+    @fastapi_instance.get("/lipsync/{phrase_file}")
+    async def _lipsync_file(phrase_file: str):
+        # 防 path traversal · 只接受 phrase_XXX.mp4
+        if not phrase_file.startswith("phrase_") or not phrase_file.endswith(".mp4"):
+            return JSONResponse({"detail": "bad phrase_file"}, status_code=400)
+        try:
+            lipsync_volume.reload()
+        except Exception:
+            pass
+        full = f"{LIPSYNC_DIR}/{phrase_file}"
+        if not _os.path.exists(full):
+            return JSONResponse({"detail": "not found"}, status_code=404)
+        return FileResponse(full, media_type="video/mp4")
 
     # v0.9.6 Google OAuth 認證 (Edward 5/23 拍板)
     # Request 已在 module-level import (line 40) · 不在 closure 內 re-import (避免 from __future__ annotations 解析 fail)

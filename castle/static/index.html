@@ -719,7 +719,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.3.5</span>
+          <span class="vm-version">v1.5.0a</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -728,6 +728,15 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.5.0a</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>嘴對齊 100 句預錄整合 (sync/lipsync-2-pro studio grade · 餘額 $59 跑掉 $43)</li>
+            <li>新接口 /lipsync/* 從雲端硬碟讀嘴對齊 mp4 · 訪客也能看</li>
+            <li>phrase-matcher.js 模糊比對 · 蘇菲講常用句即時切到嘴對齊版</li>
+            <li>不命中常用句 → fallback 通用講話影片 (沒 break v1.3.x)</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.3.5</span><span class="vm-entry-date">2026-05-23</span></header>
           <ul class="vm-list">
             <li>未 Start 待機輪播重啟 (砍掉情緒反應類 · 適合訪客場景)</li>
@@ -1155,6 +1164,7 @@
   <script src="/static/session-memory.js"></script>
   <script src="/static/conversation-memory.js"></script>
   <script src="/static/animation-pool.js"></script>
+  <script src="/static/phrase-matcher.js"></script>
 
   <script>
   (function () {
@@ -1189,6 +1199,12 @@
         // 65% idle / 15% stroke-hair / 12% playful / 8% greeting · 14-22s 隨機切
         if (typeof animPool.startPreCallRotation === "function") {
           setTimeout(function () { animPool.startPreCallRotation(); }, 3000);
+        }
+        // v1.5.0 · 預載嘴對齊預錄 100 句 manifest (fuzzy match 用)
+        if (window.PhraseMatcher && typeof window.PhraseMatcher.init === "function") {
+          window.PhraseMatcher.init().then(function (m) {
+            console.log("[sophie] PhraseMatcher ready · " + (m.phrases ? m.phrases.length : 0) + " phrases");
+          });
         }
       } else {
         console.warn("[sophie] AnimationPool not loaded, fallback to native loop");
@@ -1768,6 +1784,8 @@
               // v1.3.1 · response.created 時 reset speaking trigger flag (每次新回應重新等第一個 audio delta)
               if (data.type === "response.created") {
                 window.__sophieSpeakingTriggered = false;
+                // v1.5.0 · reset phrase match flag · 每次新回應重新 fuzzy match
+                window.__sophiePhraseMatched = false;
               }
             } else if (data.type === "response.audio.delta" || data.type === "response.output_audio.delta") {
               // v1.3.1 CRITICAL FIX · OpenAI Realtime 不 emit *.start · 改聽第一個 audio delta trigger startSpeaking
@@ -1799,6 +1817,25 @@
               // v1.1.0 · 累積 transcript chunk · 餵桌面通知 body
               if (typeof data.delta === "string") {
                 sophieTextBuffer += data.delta;
+              }
+              // v1.5.0 · transcript 累 5+ 字 · fuzzy match 預錄嘴對齊版 · 命中切 mp4
+              if (window.PhraseMatcher && !window.__sophiePhraseMatched && sophieTextBuffer.length >= 5) {
+                var match = window.PhraseMatcher.findMatching(sophieTextBuffer);
+                if (match) {
+                  window.__sophiePhraseMatched = true;
+                  try {
+                    var v = document.getElementById('liveVideo');
+                    if (v) {
+                      v.src = match.phrase.mp4_url;
+                      v.loop = false;
+                      v.muted = true;
+                      v.play()["catch"](function () {});
+                      log("[LIPSYNC HIT] " + match.phrase.sentence + " (dist=" + match.distance + ")");
+                    }
+                  } catch (e) {
+                    log("[LIPSYNC] switch fail: " + e.message);
+                  }
+                }
               }
             } else if (data.type === "conversation.item.input_audio_transcription.completed") {
               // v1.1.2 · user turn 寫進 IndexedDB · whisper-1 transcribe 完成的 user 語音文字
