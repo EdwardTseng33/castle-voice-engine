@@ -236,24 +236,6 @@
       pointer-events: auto;
     }
     .shell[data-state="in-call"] .timer { opacity: 1; }
-    .demo-disclaimer {
-      position: absolute;
-      bottom: calc(var(--safe-bottom) + 72px);
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 11px;
-      color: var(--fg-fade);
-      font-style: italic;
-      letter-spacing: 0.3px;
-      text-shadow: 0 1px 8px rgba(0, 0, 0, 0.78);
-      opacity: 0;
-      transition: opacity var(--motion-smooth) var(--easing);
-      pointer-events: none;
-      z-index: 25;
-      text-align: center;
-      max-width: 82%;
-    }
-    .shell[data-state="in-call"] .demo-disclaimer { opacity: 0.62; }
     .actions {
       justify-self: center;
       display: flex;
@@ -440,10 +422,6 @@
       .stage-canvas { flex: 1; min-height: 0; }
       .top { padding-top: max(env(safe-area-inset-top), 16px); }
       .bottom { padding-bottom: max(env(safe-area-inset-bottom), 16px); }
-      .demo-disclaimer {
-        bottom: calc(max(env(safe-area-inset-bottom), 16px) + 88px);
-        max-width: 90%;
-      }
     }
   </style>
 </head>
@@ -477,7 +455,7 @@
       ></video>
       <audio class="live-audio" id="liveAudio" autoplay playsinline></audio>
 
-      <div class="demo-disclaimer" id="demoDisclaimer">語音對話即時 · 視訊為預錄迎賓</div>
+
 
       <div class="err-bar" id="errBar" role="alert"></div>
       <div class="log" id="log" aria-hidden="true"></div>
@@ -756,10 +734,19 @@
           if (ev.track.kind === "audio") {
             try {
               liveAudio.srcObject = ev.streams[0];
+              liveAudio.volume = 1.0;
+              liveAudio.muted = false;
               var pp = liveAudio.play();
               if (pp && pp.then) {
-                pp.then(function () { log("liveAudio.play() OK"); })
-                  .catch(function (err) { log("liveAudio.play() FAIL: " + err.message); showError("音訊播放被擋，請點畫面任意位置一次"); });
+                pp.then(function () { log("liveAudio.play() OK · volume=1.0 unmuted"); })
+                  .catch(function (err) {
+                    log("liveAudio.play() FAIL: " + err.message);
+                    showError("聽不到蘇菲說話 · 請點畫面任意位置一次解鎖 · 或檢查瀏覽器音量 / 系統喇叭");
+                    document.addEventListener("click", function unlock() {
+                      liveAudio.play().then(function () { log("audio unlocked by click"); errBar.style.display = "none"; });
+                      document.removeEventListener("click", unlock);
+                    }, { once: true });
+                  });
               }
               ev.track.onunmute = function () { log("audio track unmuted"); };
               ev.track.onended  = function () { log("audio track ended"); };
