@@ -45,10 +45,15 @@
     .shell {
       position: fixed;
       inset: 0;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
       background: var(--bg);
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
+    .live-audio { display: none; }
     .top {
       position: absolute;
       top: 0; left: 0; right: 0;
@@ -313,6 +318,26 @@
       .action-btn.mic, .action-btn.cam, .action-btn.end { width: 46px; height: 46px; font-size: 17px; }
       .top, .bottom { padding-block: 10px; }
     }
+    /* v0.7.1 hotfix: 9:16 mobile fullscreen Duix Lily 範式 */
+    @media (orientation: portrait) and (max-width: 600px) {
+      html, body { height: 100dvh; }
+      .shell { width: 100vw; height: 100dvh; }
+      .portrait, .live-video {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center center;
+      }
+      .stage-canvas { flex: 1; min-height: 0; }
+      .top { padding-top: max(env(safe-area-inset-top), 16px); }
+      .bottom { padding-bottom: max(env(safe-area-inset-bottom), 16px); }
+      .demo-disclaimer {
+        bottom: calc(max(env(safe-area-inset-bottom), 16px) + 88px);
+        max-width: 90%;
+      }
+    }
   </style>
 </head>
 <body>
@@ -329,7 +354,7 @@
     <main class="stage-canvas">
       <img class="portrait" id="portrait" src="/static/sophie-portrait.png" alt="" />
       <video class="live-video" id="liveVideo" autoplay playsinline muted loop preload="auto" poster="/static/sophie-portrait.png"></video>
-      <audio class="live-audio" id="liveAudio" autoplay></audio>
+      <audio class="live-audio" id="liveAudio" autoplay playsinline></audio>
 
       <div class="waking-spinner" aria-hidden="true"></div>
       <div class="waking-label">準備中</div>
@@ -471,12 +496,36 @@
           iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
         });
 
+        // v0.7.1 hotfix: 顯式 audio transceiver sendrecv,
+        // 確保 OpenAI SDP answer 含 m=audio 並回傳 audio track
+        peerConn.addTransceiver("audio", { direction: "sendrecv" });
+
         peerConn.ontrack = function (ev) {
-          log("ontrack: " + ev.track.kind);
+          log("ontrack kind=" + ev.track.kind + " streams=" + (ev.streams && ev.streams.length));
           if (ev.track.kind === "audio") {
-            liveAudio.srcObject = ev.streams[0];
+            try {
+              liveAudio.srcObject = ev.streams[0];
+              // v0.7.1 hotfix: explicit play() 配合 user gesture
+              // (startBtn click 已是 user gesture)
+              var pp = liveAudio.play();
+              if (pp && pp.then) {
+                pp.then(function () { log("liveAudio.play() OK"); })
+                  .catch(function (err) { log("liveAudio.play() FAIL: " + err.message); showError("音訊播放被擋,請點畫面任意位置一次"); });
+              }
+              ev.track.onunmute = function () { log("audio track unmuted"); };
+              ev.track.onended = function () { log("audio track ended"); };
+            } catch (e) {
+              log("ontrack attach err: " + e.message);
+            }
           }
         };
+
+        peerConn.addEventListener("connectionstatechange", function () {
+          log("pc state: " + peerConn.connectionState);
+        });
+        peerConn.addEventListener("iceconnectionstatechange", function () {
+          log("ice state: " + peerConn.iceConnectionState);
+        });
 
         localStream.getAudioTracks().forEach(function (t) {
           peerConn.addTrack(t, localStream);
@@ -484,21 +533,47 @@
 
         var dc = peerConn.createDataChannel("oai-events");
         dc.addEventListener("open", function () {
-          log("data channel open · 注入 turn_detection");
-          dc.send(JSON.stringify({
-            type: "session.update",
-            session: {
-              turn_detection: {
-                type: "server_vad",
-                threshold: 0.5,
-                prefix_padding_ms: 300,
-                silence_duration_ms: 800,
-                create_response: true
-              },
-              voice: "marin",
-              input_audio_transcription: { model: "whisper-1" }
-            }
-          }));
+          log("dc open · 注入 session.update (instructions + turn_detection)");
+          // v0.7.1 hotfix: 把 instructions 注入,否則蘇菲不知道要講中文
+          // (從 SDP response header x-realtime-instructions-b64 取)
+          var instructions = window.__sophieInstructions ||
+            "You are Sophie, Edward's warm Mandarin companion. Always respond in Traditional Chinese (zh-TW). Keep replies short and conversational.";
+          try {
+            // v0.7.1 hotfix #3: OpenAI Realtime API GA v1 schema (verified 2026-05-23)
+            // - session.type="realtime" required
+            // - turn_detection moved to session.audio.input.turn_detection
+            // - voice moved to session.audio.output.voice
+            // - input_audio_transcription -> session.audio.input.transcription
+            dc.send(JSON.stringify({
+              type: "session.update",
+              session: {
+                type: "realtime",
+                instructions: instructions,
+                audio: {
+                  input: {
+                    transcription: { model: "whisper-1" },
+                    turn_detection: {
+                      type: "server_vad",
+                      threshold: 0.5,
+                      prefix_padding_ms: 300,
+                      silence_duration_ms: 800,
+                      create_response: true
+                    }
+                  },
+                  output: { voice: "marin" }
+                }
+              }
+            }));
+            log("session.update sent (instr len=" + instructions.length + ")");
+          } catch (e) {
+            log("session.update send fail: " + e.message);
+          }
+        });
+        dc.addEventListener("error", function (ev) {
+          log("dc error: " + (ev.error ? ev.error.message : "unknown"));
+        });
+        dc.addEventListener("close", function () {
+          log("dc closed");
         });
         dc.addEventListener("message", function (ev) {
           try {
@@ -506,13 +581,19 @@
             if (data.type === "response.audio.delta" ||
                 data.type === "response.audio_transcript.delta") {
               lifecycle.markVoice();
+            } else if (data.type === "error") {
+              log("OAI error: " + JSON.stringify(data.error || data).slice(0, 300));
+              showError("OpenAI: " + (data.error && data.error.message ? data.error.message : "未知錯誤"));
+            } else if (data.type === "session.created" || data.type === "session.updated" ||
+                       data.type === "response.created" || data.type === "response.done") {
+              log("OAI evt: " + data.type);
             }
           } catch (e) {}
         });
 
         var offer = await peerConn.createOffer();
         await peerConn.setLocalDescription(offer);
-        log("offer created");
+        log("offer created (sdp len=" + offer.sdp.length + ")");
 
         var resp = await fetch("/sdp?persona=sophie&model=gpt-realtime-2", {
           method: "POST",
@@ -523,9 +604,20 @@
           var errText = await resp.text();
           throw new Error("SDP backend " + resp.status + ": " + errText.slice(0, 200));
         }
+        // v0.7.1 hotfix: 從 SDP response header 取 instructions (base64),
+        // dc.open 時注入給 OpenAI
+        var instrB64 = resp.headers.get("x-realtime-instructions-b64");
+        if (instrB64) {
+          try {
+            window.__sophieInstructions = decodeURIComponent(escape(atob(instrB64)));
+            log("instructions loaded from header (len=" + window.__sophieInstructions.length + ")");
+          } catch (e) {
+            log("instructions decode fail: " + e.message);
+          }
+        }
         var answerSdp = await resp.text();
         await peerConn.setRemoteDescription({ type: "answer", sdp: answerSdp });
-        log("SDP exchange OK");
+        log("SDP exchange OK (answer len=" + answerSdp.length + ")");
 
         startSophieVideoLoop();
 
@@ -656,7 +748,7 @@
       });
     }
 
-    log("Voice Path v0.7b ready · 純黑 Duix · OpenAI realtime audio + 蘇菲 PoC loop video (Phase 7b downgrade · realtime streaming deferred to 7c)");
+    log("Voice Path v0.7.1 hotfix ready · audio transceiver + instructions inject + 9:16 mobile fullscreen + explicit play()");
 
     window.__sophie = {
       lifecycle: lifecycle,
