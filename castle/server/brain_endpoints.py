@@ -301,6 +301,198 @@ def attach_brain_routes(app):
         except Exception as e:
             return JSONResponse({"ok": False, "detail": str(e)[:200]}, status_code=500)
 
+    # ===== v1.8.3 會議代理人模式 · 8 大專業助理能力 =====
+
+    @app.post("/brain/start_meeting")
+    async def _start_meeting(request: Request):
+        """蘇菲進入會議代理模式 · 接收會議元資料 + Claude 整理會前 brief"""
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"ok": False, "detail": "body parse fail"}, status_code=400)
+        if not isinstance(body, dict):
+            return JSONResponse({"ok": False, "detail": "body must be object"}, status_code=400)
+
+        subject = body.get("subject", "")
+        goal = body.get("goal", "")
+        attendees = body.get("attendees", "")
+        duration_min = body.get("duration_min", 30)
+        edward_position = body.get("edward_position", "")  # Edward 對議題的立場
+
+        meeting_data = {
+            "subject": subject,
+            "goal": goal,
+            "attendees": attendees,
+            "duration_min": duration_min,
+            "edward_position": edward_position,
+            "started_ts": time.time(),
+            "transcript": [],
+            "topics_covered": [],
+            "topics_pending": [],
+        }
+
+        # 寫進共用記事本 current_meeting
+        try:
+            with open("/lipsync_cache/shared_current_meeting.json", "w", encoding="utf-8") as f:
+                json.dump({"key": "current_meeting", "value": meeting_data, "ts": time.time()}, f, ensure_ascii=False)
+        except Exception as e:
+            logger.warning("[brain] start_meeting save fail: %s", str(e)[:200])
+
+        # Claude 整理會前 brief
+        api_key = _resolve_anthropic_key()
+        brief = ""
+        if api_key:
+            try:
+                from anthropic import Anthropic
+                cli = Anthropic(api_key=api_key)
+                prompt_user = (
+                    f"[會議準備]\n"
+                    f"主題: {subject}\n"
+                    f"目標: {goal}\n"
+                    f"與會者: {attendees}\n"
+                    f"預計時長: {duration_min} 分鐘\n"
+                    f"Edward 立場: {edward_position}\n\n"
+                    "你是蘇菲 · 即將代 Edward 出席這場會議。\n"
+                    "請用 1 段 (≤ 120 字) 蘇菲口吻給 Edward 一個會前 brief：\n"
+                    "1. 我已記下主題 + 目標 + 與會者\n"
+                    "2. 我會怎麼引導會議 (簡述策略)\n"
+                    "3. 哪些點我會特別注意 / 哪些點高風險我會說『需跟 Edward 確認』\n"
+                    "結尾留個鉤子讓 Edward 補充 (譬如『你還有什麼要我注意的嗎』)"
+                )
+                msg = cli.messages.create(
+                    model="claude-sonnet-4-5",
+                    max_tokens=400,
+                    system="你是 Sophie · Edward 個人 AI 特助 · 即將代他出席會議 · zh-TW 自然口語",
+                    messages=[{"role": "user", "content": prompt_user}],
+                )
+                brief = msg.content[0].text if msg.content else ""
+            except Exception as e:
+                logger.exception("[brain] start_meeting brief fail")
+                brief = f"好 · 我記下了 · 主題 {subject} · 與會 {attendees} · {duration_min} 分鐘 · 你還有要我注意的嗎"
+
+        return {"ok": True, "brief": brief, "meeting": meeting_data}
+
+    @app.post("/brain/log_meeting_turn")
+    async def _log_meeting_turn(request: Request):
+        """會議中累積對話紀錄"""
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"ok": False, "detail": "body parse fail"}, status_code=400)
+        if not isinstance(body, dict):
+            return JSONResponse({"ok": False, "detail": "body must be object"}, status_code=400)
+
+        speaker = body.get("speaker", "unknown")
+        content = body.get("content", "")
+        if not content:
+            return {"ok": False, "detail": "content missing"}
+
+        path = "/lipsync_cache/shared_current_meeting.json"
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f).get("value", {})
+            transcript = data.get("transcript", [])
+            transcript.append({"speaker": speaker, "content": content, "ts": time.time()})
+            data["transcript"] = transcript
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"key": "current_meeting", "value": data, "ts": time.time()}, f, ensure_ascii=False)
+            return {"ok": True, "transcript_len": len(transcript)}
+        except Exception as e:
+            return JSONResponse({"ok": False, "detail": str(e)[:200]}, status_code=500)
+
+    @app.post("/brain/meeting_status")
+    async def _meeting_status(request: Request):
+        """會議進度 · 剩餘時間 / 已 cover 議題 / 未 cover"""
+        path = "/lipsync_cache/shared_current_meeting.json"
+        if not os.path.exists(path):
+            return {"ok": False, "detail": "no active meeting"}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f).get("value", {})
+            elapsed_sec = time.time() - data.get("started_ts", time.time())
+            elapsed_min = elapsed_sec / 60
+            duration_min = data.get("duration_min", 30)
+            remaining_min = max(0, duration_min - elapsed_min)
+            return {
+                "ok": True,
+                "subject": data.get("subject", ""),
+                "elapsed_min": round(elapsed_min, 1),
+                "remaining_min": round(remaining_min, 1),
+                "duration_min": duration_min,
+                "transcript_turns": len(data.get("transcript", [])),
+                "topics_covered": data.get("topics_covered", []),
+                "topics_pending": data.get("topics_pending", []),
+                "overtime": elapsed_min > duration_min,
+            }
+        except Exception as e:
+            return JSONResponse({"ok": False, "detail": str(e)[:200]}, status_code=500)
+
+    @app.post("/brain/end_meeting")
+    async def _end_meeting(request: Request):
+        """蘇菲結束會議 · Claude 整理 transcript → 會後正式紀錄"""
+        path = "/lipsync_cache/shared_current_meeting.json"
+        if not os.path.exists(path):
+            return {"ok": False, "detail": "no active meeting"}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f).get("value", {})
+        except Exception as e:
+            return JSONResponse({"ok": False, "detail": str(e)[:200]}, status_code=500)
+
+        api_key = _resolve_anthropic_key()
+        if not api_key:
+            return {"ok": False, "detail": "anthropic key missing"}
+
+        transcript_str = "\n".join([
+            f"{t.get('speaker', '?')}: {t.get('content', '')}"
+            for t in data.get("transcript", [])
+        ])
+
+        try:
+            from anthropic import Anthropic
+            cli = Anthropic(api_key=api_key)
+            prompt_user = (
+                f"[會議資訊]\n"
+                f"主題: {data.get('subject', '')}\n"
+                f"目標: {data.get('goal', '')}\n"
+                f"與會者: {data.get('attendees', '')}\n\n"
+                f"[完整對話]\n{transcript_str[:8000]}\n\n"
+                "你是 Sophie · 剛剛代 Edward 出席這場會議。請整理會後紀錄："
+                "\n\n## 摘要\n(3-5 句蘇菲口吻給 Edward 聽)"
+                "\n\n## 重點決議\n(條列、客觀)"
+                "\n\n## 待辦事項\n(誰 + 什麼 + 何時)"
+                "\n\n## Edward 需確認 / 需動作\n(條列、高風險或需 Edward 拍板的事)"
+                "\n\n## 下次會議建議\n(若有後續)"
+            )
+            msg = cli.messages.create(
+                model="claude-sonnet-4-5",
+                max_tokens=1500,
+                system="你是 Sophie · Edward 個人 AI 特助 · 剛剛代他出席會議 · 用 zh-TW 整理會後紀錄",
+                messages=[{"role": "user", "content": prompt_user}],
+            )
+            notes = msg.content[0].text if msg.content else ""
+
+            # 存進 meeting archive
+            archive_path = f"/lipsync_cache/shared_meeting_archive_{int(time.time())}.json"
+            archive_data = {
+                **data,
+                "ended_ts": time.time(),
+                "notes": notes,
+            }
+            with open(archive_path, "w", encoding="utf-8") as f:
+                json.dump({"key": f"meeting_archive_{int(time.time())}", "value": archive_data, "ts": time.time()}, f, ensure_ascii=False)
+
+            # 清掉 current_meeting
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+
+            return {"ok": True, "notes": notes, "subject": data.get("subject", "")}
+        except Exception as e:
+            logger.exception("[brain] end_meeting fail")
+            return JSONResponse({"ok": False, "detail": str(e)[:200]}, status_code=500)
+
     # ===== v1.7.6 主動聊 · 興趣學習 + 新聞分享 =====
 
     @app.post("/brain/news_brief")

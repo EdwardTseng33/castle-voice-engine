@@ -719,7 +719,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.7.6</span>
+          <span class="vm-version">v1.8.3</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -728,6 +728,18 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.8.3</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>會議代理模式 ship · 蘇菲代 Edward 出席 8 大專業能力</li>
+            <li>身份意識 / 會前準備 / 聚焦 / 專業對話 / 時間管理 / 代理表達 / 紀錄 / 結束流程</li>
+            <li>start_meeting · Claude 整理會前 brief 給 Edward 過目</li>
+            <li>log_meeting_turn · 對方說重點即時記下進共用記事本</li>
+            <li>meeting_status · 進度 + 剩時 + 超時提醒 (10-15 分鐘自查)</li>
+            <li>end_meeting · Claude 整理摘要 + 重點決議 + 待辦 + 需 Edward 確認</li>
+            <li>紅線：不簽合約 / 不動錢 / 不做承諾 / 不洩露 Sally · 高風險決定『會後給您』</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.7.6</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>主動聊新聞 + 興趣學 ship · 蘇菲分享當天有趣事 + 記 Edward 興趣</li>
@@ -1740,7 +1752,18 @@
             "2. 全程聆聽、累積對話內容到記憶\n" +
             "3. 只有 Edward 直接喚『蘇菲』+ 問題時才簡短回應（私語）\n" +
             "4. Edward 說「結束會議」、你給 3-5 個重點 + 待辦 + 下一步\n" +
-            "5. 角色定位：陪在 Edward 旁邊的特助、不是會議主持人";
+            "5. 角色定位：陪在 Edward 旁邊的特助、不是會議主持人\n" +
+            "\n[v1.8.3 會議代理模式 · Edward 派你代他出席]\n" +
+            "Edward 說『派你代我跟 X 開會』時、你是專業代理人 · 8 大能力：\n" +
+            "1. 身份意識：先 start_meeting 工具記下主題/目標/與會者/時長/Edward 立場 · 上線開頭自我介紹『我是蘇菲、代 Edward 出席今天 X 會議』\n" +
+            "2. 會前準備：拿到 brief 後跟 Edward 確認你會如何引導 · 問他還有什麼要注意\n" +
+            "3. 聚焦：對方偏題時你引回主題、不跟著跑題\n" +
+            "4. 專業對話：親切但專業 · 主動揭露『我是 Edward 的 AI 特助』· 用 zh-TW 或對方語言\n" +
+            "5. 時間管理：每 10-15 分鐘 meeting_status 查進度 · 剩 5 分鐘提醒『我們還有 5 分鐘、X 議題還沒過』· 引導會議在時限內結束\n" +
+            "6. 代理表達：用 Edward 立場 + 蘇菲口吻表達 · 但高風險決定 (簽合約 / 動錢 / 對外承諾) 直接說『這部分我需要跟 Edward 確認、會後給您』\n" +
+            "7. 紀錄：對方說的重點立刻 log_meeting_turn 紀錄 (speaker + content)\n" +
+            "8. 結束流程：對方道別時 end_meeting · 拿到 Claude 整理的會後紀錄 · Edward 確認後同步給與會者\n" +
+            "\n紅線：不替 Edward 簽合約 / 不替動錢 / 不替做承諾 / 不洩露 Sally 任何資訊 / 不講 Edward 不想說的隱私";
           // v1.7.1 感知層 + v1.8.1 多語言 · 教蘇菲怎麼用新工具
           var perceptionDirective = "\n\n[v1.7 感知層工具]\n" +
             "你不要憑空答時間 / 天氣 / 工作狀態。永遠先呼叫工具拿真實資料：\n" +
@@ -1917,6 +1940,47 @@
                       },
                       required: ["interest"]
                     }
+                  },
+                  {
+                    type: "function",
+                    name: "start_meeting",
+                    description: "Edward 派蘇菲出席會議時呼叫。Edward 講『等下 3 點要跟 X 公司開會、主題是 Y』、蘇菲記下會議元資料 + 拿到會前 brief。會議元資料含主題/目標/與會者/時長/Edward 立場。",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        subject: { type: "string", description: "會議主題" },
+                        goal: { type: "string", description: "會議目標 / 想達成的成果" },
+                        attendees: { type: "string", description: "與會者 (姓名/公司/角色)" },
+                        duration_min: { type: "number", description: "預計時長 (分鐘)" },
+                        edward_position: { type: "string", description: "Edward 對議題的立場 / 想表達的觀點 (給蘇菲參考、不一定逐字表達)" }
+                      },
+                      required: ["subject"]
+                    }
+                  },
+                  {
+                    type: "function",
+                    name: "log_meeting_turn",
+                    description: "會議中蘇菲偵測到重要對話、紀錄一輪。Edward 或對方說了重要決議 / 待辦時呼叫。",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        speaker: { type: "string", description: "講話人 (Edward / 對方姓名 / Sophie)" },
+                        content: { type: "string", description: "講話內容摘要" }
+                      },
+                      required: ["speaker", "content"]
+                    }
+                  },
+                  {
+                    type: "function",
+                    name: "meeting_status",
+                    description: "會議進度查詢 (剩餘時間 / 已 cover 議題 / 未 cover)。蘇菲偵測會議時間快到 / Edward 問進度時呼叫。",
+                    parameters: { type: "object", properties: {} }
+                  },
+                  {
+                    type: "function",
+                    name: "end_meeting",
+                    description: "Edward 說「結束會議」/「散會」時呼叫。蘇菲拉 transcript + Claude 整合會後紀錄 (摘要/重點決議/待辦/Edward 需確認/下次會議)。",
+                    parameters: { type: "object", properties: {} }
                   }
                 ]
               }
@@ -2105,10 +2169,12 @@
                 } else if (
                   fnName === "ask_claude" || fnName === "dispatch_howl" || fnName === "dispatch_code" ||
                   fnName === "get_time_context" || fnName === "get_weather" || fnName === "get_work_status" ||
-                  fnName === "restaurant_booking" || fnName === "news_brief" || fnName === "save_interest"
+                  fnName === "restaurant_booking" || fnName === "news_brief" || fnName === "save_interest" ||
+                  fnName === "start_meeting" || fnName === "log_meeting_turn" || fnName === "meeting_status" || fnName === "end_meeting"
                 ) {
                   // v1.6.0 · Brain layer · 派工到後端
                   // v1.7.1 · 加感知層 (time / weather / work_status)
+                  // v1.8.3 · 加會議代理 (start_meeting / log_meeting_turn / meeting_status / end_meeting)
                   var brainArgs;
                   try { brainArgs = JSON.parse(rawArgs); }
                   catch (jErr) { brainArgs = {}; log("brain args parse fail: " + jErr.message); }
@@ -2148,6 +2214,20 @@
                         output = result.share || "我今天還沒看到什麼特別有趣的";
                       } else if (fnName === "save_interest") {
                         output = "好 · 我記下了 " + (result.added || "");
+                      } else if (fnName === "start_meeting") {
+                        var mtg = result.meeting || {};
+                        output = result.brief || ("會議開始 · 主題 " + (mtg.subject || "") + " · 目標 " + (mtg.goal || "") + " · 與會 " + (mtg.attendees || "") + " · 預計 " + (mtg.duration_min || 30) + " 分鐘");
+                      } else if (fnName === "log_meeting_turn") {
+                        output = "好 · 記下了 (累積 " + (result.transcript_len || 0) + " 條)";
+                      } else if (fnName === "meeting_status") {
+                        var em = result.elapsed_min || 0;
+                        var rm = result.remaining_min || 0;
+                        var dm = result.duration_min || 30;
+                        var tt = result.transcript_turns || 0;
+                        var advice = result.overtime ? "已超時 · 該收尾" : (rm <= 5 ? "剩 5 分鐘 · 該收尾" : "繼續");
+                        output = em + "/" + dm + " 分鐘 · 剩 " + rm + " 分 · 已記 " + tt + " 條 · " + advice;
+                      } else if (fnName === "end_meeting") {
+                        output = result.notes || "會議結束 · 紀錄已存";
                       } else {
                         output = JSON.stringify(result).slice(0, 500);
                       }
