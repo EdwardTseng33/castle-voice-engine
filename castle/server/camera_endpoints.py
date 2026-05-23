@@ -182,4 +182,28 @@ def attach_camera_routes(app):
                 break
         return {"text": latest_text, "ts": latest_ts, "enabled": s.get("enabled"), "stat": s.get("stat")}
 
+    @app.get("/vision/emotion_latest")
+    async def vision_emotion_latest():
+        """v0.9.3 - Browser polls this at ~1Hz to drive sophie animation pool.
+
+        Returns dict {state, confidence, ts} if a new emotion event fires (after 15s cooldown),
+        or {state: null} for idle frames. FaceMesh-only this version (Pose/Hands deferred).
+        """
+        try:
+            from castle.multimodal.camera import get_camera_manager
+        except Exception as e:
+            return {"state": None, "error": str(e)}
+        mgr = get_camera_manager()
+        if not mgr.is_enabled():
+            return {"state": None, "reason": "camera_disabled"}
+        try:
+            evt = mgr.get_emotion_event()
+            if evt is None:
+                return {"state": None}
+            evt["type"] = "vision.emotion"
+            return evt
+        except Exception as e:
+            logger.warning("[/vision/emotion_latest] err: %s", e)
+            return {"state": None, "error": str(e)}
+
     logger.info("camera_endpoints attached: /camera/* and /vision/*")

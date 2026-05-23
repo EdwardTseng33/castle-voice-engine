@@ -244,7 +244,11 @@ class CameraManager:
                 if fm_res.multi_face_landmarks:
                     pts = fm_res.multi_face_landmarks[0].landmark
                     result.face_present = True
-                    keypoint_idx = [33, 263, 1, 61, 291, 199, 17, 10]
+                    # v0.9.3 emotion-relevant FaceMesh indices (subset of 468)
+                    # eye corners (33 / 263) - eye openness (159 145 / 386 374) -
+                    # nose (1) - mouth corners (61 / 291) - mouth top/bot (13 / 14)
+                    # chin (17 / 199) - forehead (10) - brows (9 / 8 - inner brow midpoint)
+                    keypoint_idx = [33, 133, 159, 145, 263, 362, 386, 374, 1, 61, 291, 13, 14, 17, 199, 10, 9, 8]
                     result.face_landmarks = [{"x": pts[i].x, "y": pts[i].y, "z": pts[i].z} for i in keypoint_idx if i < len(pts)]
             if self._pose is not None:
                 pose_res = self._pose.process(rgb)
@@ -291,6 +295,110 @@ class CameraManager:
             "last_frame_age_s": (round(time.time() - self._stat.last_frame_ts, 2) if self._stat.last_frame_ts else None),
         }
 
+    # ===== v0.9.3 Emotion Detection (FaceMesh-only · Pose/Hands deferred) =====
+    # Edward 2026-05-23 spec: docs/v0.9-animation-pool-design.md § 4.1 + § 4.4
+    # 表情類觸發: happy / apologetic / acknowledgement / resigned
+    # 注視類觸發: gaze_present / gaze_absent
+    # 15s cooldown per state · confidence >= 0.7 only
+
+    EMOTION_COOLDOWN_S = 15.0
+    GAZE_PRESENT_S    = 3.0   # face seen 3s+ = gaze_present
+    GAZE_ABSENT_S     = 30.0  # face gone 30s+ = gaze_absent
+
+    def detect_emotion(self):
+        """Read latest landmarks + return (state, confidence) or (None, 0). v0.9.3 FaceMesh-only.
+
+        Returns one of: happy / apologetic / acknowledgement / resigned / playful / None
+        Confidence in [0, 1]. None means no signal detected this frame."""
+        lm = self.get_latest_landmarks()
+        if not lm or not lm.face_present or not lm.face_landmarks:
+            return (None, 0.0)
+        try:
+            pts = lm.face_landmarks
+            # Layout (after v0.9.3 expansion):
+            # 0=eye33  1=eye133  2=eye159  3=eye145  4=eye263  5=eye362  6=eye386  7=eye374
+            # 8=nose1  9=mouth_l61  10=mouth_r291  11=lip_top13  12=lip_bot14
+            # 13=chin17  14=chin199  15=fhead10  16=brow9  17=brow8
+            if len(pts) < 18:
+                return (None, 0.0)
+
+            mouth_l = pts[9]
+            mouth_r = pts[10]
+            lip_top = pts[11]
+            lip_bot = pts[12]
+            eye_l_top = pts[2]; eye_l_bot = pts[3]
+            eye_l_out = pts[0]; eye_l_in  = pts[1]
+            eye_r_top = pts[6]; eye_r_bot = pts[7]
+            eye_r_out = pts[4]; eye_r_in  = pts[5]
+            brow_l = pts[16]; brow_r = pts[17]
+            chin   = pts[14]
+            fhead  = pts[15]
+
+            # EAR (Eye Aspect Ratio): vertical / horizontal opening
+            def ear(top, bot, out, inn):
+                v = abs(top["y"] - bot["y"])
+                h = abs(out["x"] - inn["x"])
+                return v / h if h > 1e-6 else 0
+            ear_l = ear(eye_l_top, eye_l_bot, eye_l_out, eye_l_in)
+            ear_r = ear(eye_r_top, eye_r_bot, eye_r_out, eye_r_in)
+            ear_avg = (ear_l + ear_r) / 2
+
+            # Mouth aspect: vertical / horizontal (uses lip pair + mouth corners)
+            mouth_v = abs(lip_top["y"] - lip_bot["y"])
+            mouth_h = abs(mouth_l["x"] - mouth_r["x"])
+            mouth_aspect = mouth_v / mouth_h if mouth_h > 1e-6 else 0
+
+            # Mouth corner angle relative to lip midline (sign-aware)
+            mid_y = (lip_top["y"] + lip_bot["y"]) / 2
+            # Negative = corners above midline (smile); positive = below (frown)
+            avg_corner_y = (mouth_l["y"] + mouth_r["y"]) / 2
+            corner_offset = avg_corner_y - mid_y
+
+            # Brow distance (inner brow points; smaller = more frown)
+            brow_gap = abs(brow_l["x"] - brow_r["x"])
+
+            # ---- Decision (priority: surprised -> sad -> happy -> resigned -> none) ----
+            # All thresholds normalized (FaceMesh coords are 0..1 of frame size)
+
+            # Surprised (mouth open wide + eyes wider than baseline) -> acknowledgement
+            if mouth_aspect > 0.55 and ear_avg > 0.35:
+                return ("acknowledgement", min(1.0, mouth_aspect * 1.4))
+
+            # Sad / Frown (corners droop below midline + brow gap narrow) -> apologetic
+            if corner_offset > 0.012 and brow_gap < 0.045:
+                conf = min(1.0, (corner_offset / 0.025) * 0.7 + (0.045 - brow_gap) / 0.045 * 0.3)
+                return ("apologetic", conf)
+
+            # Happy / Smile (corners above midline + mouth wider) -> happy
+            if corner_offset < -0.010 and mouth_h > 0.060:
+                conf = min(1.0, abs(corner_offset) / 0.020 * 0.75 + (mouth_h / 0.10) * 0.25)
+                return ("happy", conf)
+
+            # Resigned (eye half-closed + neutral mouth) -> resigned
+            if ear_avg < 0.18 and abs(corner_offset) < 0.005:
+                conf = min(1.0, (0.18 - ear_avg) / 0.18 * 0.8 + 0.2)
+                return ("resigned", conf)
+
+            return (None, 0.0)
+        except Exception as e:
+            logger.warning("emotion detect fail: %s", e)
+            return (None, 0.0)
+
+    # ===== v0.9.3 Emotion cooldown / dedup =====
+    # _last_emotion_emit: state -> ts; called by /vision/emotion_latest endpoint
+    def get_emotion_event(self):
+        """Snapshot emotion (with cooldown). Returns dict or None."""
+        state, conf = self.detect_emotion()
+        if not state or conf < 0.7:
+            return None
+        if not hasattr(self, "_last_emotion_emit"):
+            self._last_emotion_emit = {}
+        now = time.time()
+        last = self._last_emotion_emit.get(state, 0)
+        if now - last < self.EMOTION_COOLDOWN_S:
+            return None
+        self._last_emotion_emit[state] = now
+        return {"state": state, "confidence": round(conf, 3), "ts": now}
 
 _singleton = None
 _singleton_lock = threading.Lock()
