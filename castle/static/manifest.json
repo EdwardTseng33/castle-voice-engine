@@ -5,12 +5,14 @@
   "lang": "zh-Hant",
   "dir": "ltr",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone"],
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#000000",
   "theme_color": "#000000",
   "orientation": "any",
   "start_url": "/static/index.html?launched_from=pwa",
   "scope": "/static/",
+  "categories": ["productivity", "social"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/static/icon-192.png",
@@ -39,7 +41,22 @@
   ],
   "shortcuts": [
     {
+      "name": "跟蘇菲聊聊",
+      "short_name": "聊聊",
+      "description": "立刻開始跟蘇菲對話",
+      "url": "/static/index.html?action=start",
+      "icons": [{ "src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "看版本紀錄",
+      "short_name": "版本",
+      "description": "查看蘇菲版本與更新內容",
+      "url": "/static/index.html?action=info",
+      "icons": [{ "src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
       "name": "立刻喚醒",
+      "short_name": "喚醒",
       "url": "/static/index.html?wake=1"
     }
   ]

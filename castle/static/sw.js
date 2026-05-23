@@ -1,7 +1,8 @@
 // castle/static/sw.js
-// Voice Path v0.7 Service Worker
+// Voice Path v1.1.0 Service Worker
 // 待機 shell offline-first · realtime / breeze / musetalk 永遠 network-first 不 cache
-const CACHE_VERSION = 'v0.9.6';
+// v1.1.0 baseline · push notification handler + background sync handler (framework only · server 端 push 尚未 build)
+const CACHE_VERSION = 'v1.1.0';
 const CACHE_NAME = 'sophie-' + CACHE_VERSION;
 
 // 不 precache mp4 (5MB+ · 阻塞 install) · video element 自己 streaming load 即可
@@ -84,4 +85,61 @@ self.addEventListener('fetch', function (event) {
   event.respondWith(
     fetch(event.request).catch(function () { return caches.match(event.request); })
   );
+});
+
+// v1.1.0 · push notification baseline (server push 待 v1.2+ build · 現在只是接收框架)
+self.addEventListener('push', function (event) {
+  var title = '蘇菲';
+  var body = '蘇菲找你';
+  var data = {};
+  if (event.data) {
+    try {
+      var payload = event.data.json();
+      title = payload.title || title;
+      body = payload.body || body;
+      data = payload.data || {};
+    } catch (e) {
+      body = event.data.text() || body;
+    }
+  }
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: body,
+      icon: '/static/icon-192.png',
+      badge: '/static/icon-192.png',
+      tag: 'sophie-push',
+      renotify: true,
+      data: data
+    })
+  );
+});
+
+// 點 notification → focus 蘇菲 tab (或開新 tab)
+self.addEventListener('notificationclick', function (event) {
+  event.notification.close();
+  var targetUrl = (event.notification.data && event.notification.data.url) || '/static/index.html';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (winList) {
+      for (var i = 0; i < winList.length; i++) {
+        var client = winList[i];
+        if (client.url.indexOf('/static/') !== -1 && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+    })
+  );
+});
+
+// v1.1.0 · background sync baseline (server queue 待 v1.2+ build · 現在只是接收框架)
+self.addEventListener('sync', function (event) {
+  if (event.tag === 'sophie-pending-messages') {
+    event.waitUntil(
+      // 未來：fetch /messages/pending → 顯示通知
+      // baseline · 純 framework · 不做事
+      Promise.resolve()
+    );
+  }
 });
