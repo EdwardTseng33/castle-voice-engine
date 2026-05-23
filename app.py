@@ -37,6 +37,7 @@
 from __future__ import annotations
 
 import modal
+from fastapi import Request  # module-level import · 防 from __future__ import annotations 讓 FastAPI 在 closure 內 resolve Request type 失敗 → 422 query.X missing
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -79,7 +80,7 @@ def fastapi_app():
     attach_memory_routes(fastapi_instance)  # v1.1.2 Phase 3.3: 記憶連續性 (Claude Haiku 摘要 · 後端 stateless)
 
     # v0.9.6 Google OAuth 認證 (Edward 5/23 拍板)
-    from fastapi import Request
+    # Request 已在 module-level import (line 40) · 不在 closure 內 re-import (避免 from __future__ annotations 解析 fail)
     from fastapi.responses import JSONResponse, Response
     from pydantic import BaseModel
     from castle.server.auth_middleware import (
