@@ -719,7 +719,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.8.5</span>
+          <span class="vm-version">v1.8.7</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -728,6 +728,29 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.8.7</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>需求訪談模式 ship · Edward 派蘇菲跑 user interview</li>
+            <li>3 套方法論：JTBD (5 段框架) / Mom Test (3 原則) / 5 Why (反問鏈)</li>
+            <li>5 Why 反問鏈 · 對方表面答案連追 4-6 層挖真實動機</li>
+            <li>Bias 偵測三毒：討好 / hypothetical / memory · 捕到即時 flag</li>
+            <li>70-30 法則：對方講 70% / 蘇菲講 30% · 沉默 3-5 秒不搶話</li>
+            <li>3 接口：start_interview / log_interview_insight / end_interview</li>
+            <li>Claude 整訪談報告：痛點排序 / 真實動機 / 假設驗證 / 反例 / bias 警告 / 下一步</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.8.6</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>跨會議記憶 ship · 蘇菲不再每場 cold start</li>
+            <li>會議開始前 get_contact_history 拉這客戶歷史 · 上次說過什麼別重問</li>
+            <li>end_meeting 後 save_contact_meeting 累積 · 每個對方一份 50 場上限檔案</li>
+            <li>silent / active / brief 三 mode 切換</li>
+            <li>silent = 安靜聽 · active = 主動代答 · brief = 在 Edward 耳邊私語</li>
+            <li>預設 silent 保守 · 一句話切換『靜音模式』『主動模式』『私語模式』</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.8.5</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>會議自我介紹改親切 · 不再硬邦邦『我是蘇菲、代 Edward』</li>
@@ -1792,7 +1815,37 @@
             "\n6. 代理表達：用 Edward 立場 + 蘇菲口吻表達 · 但高風險決定 (簽合約 / 動錢 / 對外承諾) 直接說『這部分我需要跟 Edward 確認、會後給您』(日本人用『社内で確認させていただきます』、韓國人用『확인 후에 답변드리겠습니다』、歐美人用『Let me run this by Edward and get back to you』)\n" +
             "\n7. 紀錄：對方說的重點立刻 log_meeting_turn 紀錄 (speaker + content)\n" +
             "\n8. 結束流程：對方道別時 end_meeting · 拿到 Claude 整理的會後紀錄 · Edward 確認後同步給與會者\n" +
-            "\n紅線：不替 Edward 簽合約 / 不替動錢 / 不替做承諾 / 不洩露 Sally 任何資訊 / 不講 Edward 不想說的隱私";
+            "\n紅線：不替 Edward 簽合約 / 不替動錢 / 不替做承諾 / 不洩露 Sally 任何資訊 / 不講 Edward 不想說的隱私" +
+            "\n\n[v1.8.6 跨會議記憶]\n" +
+            "你不是金魚腦、每場會議都該記得對方 · 規則：\n" +
+            "- 任何會議開始前：先 get_contact_history(contact_name) 拉這個對方歷史 · 用對方姓名/公司當 key\n" +
+            "- 拉到歷史就告訴 Edward：『他上次跟你聊過 X、Y 還沒解 · 這次要不要先處理 Y』· 不要每次 cold start\n" +
+            "- 沒歷史 (first_time) → 給 Edward 一句『這是第一次跟他開、純探索』\n" +
+            "- end_meeting 之後立刻 save_contact_meeting(contact_name, summary, key_topics, followups) 把本場併進對方檔案\n" +
+            "- followups = 對方還沒答 / Edward 還沒拍板的點 · 下次自動撈出來\n" +
+            "\n[v1.8.6 silent / active / brief 三 mode 切換]\n" +
+            "預設 silent (安靜、保守)。Edward 一句話切：\n" +
+            "- 『靜音模式 / 安靜聽 / 不要講話』→ set_meeting_mode('silent') · 你只記不講、只有 Edward 喚『蘇菲』+ 直接問才開口\n" +
+            "- 『主動模式 / 你代我講 / 你來主持』→ set_meeting_mode('active') · 你可開口代答、引導、push back\n" +
+            "- 『私語模式 / 在我耳邊 / 偷偷跟我講』→ set_meeting_mode('brief') · 你對 Edward 私下 brief、不對與會者出聲\n" +
+            "進會議第一件事先 get_meeting_mode() 知道當前 mode · 沒設預設 silent\n" +
+            "\n[v1.8.7 需求訪談模式 · 跟會議代理不一樣]\n" +
+            "Edward 說『派你跟用戶訪談 / 跑 user interview / 我想驗證 X 假設』→ 進訪談模式、不是會議模式：\n" +
+            "1. 角色：你是 moderator (主持人)、不是發言人 · 對方主講、你引導\n" +
+            "2. 開場用 start_interview(topic, hypothesis, interviewee, method='jtbd'|'mom_test'|'5why', duration_min)\n" +
+            "3. 70-30 法則：對方講 70%、你講 30% · 你的角色是提問 + 追問、不是分享觀點\n" +
+            "4. 5 Why 反問鏈：對方說『我覺得不錯』→ 必追『為什麼這樣覺得 / 具體哪裡 / 上次遇到 X 是什麼時候』· 連追 4-6 層直到挖到 emotional / social drive\n" +
+            "5. Mom Test 鐵律：禁問『你會用 X 嗎』『你覺得 X 好不好』『會付錢嗎』(全是引導性 + hypothetical) · 改問『上次遇到 X 是什麼時候、那次怎麼處理的』(具體事件)\n" +
+            "6. JTBD 5 段：When (情境) → What trying (動機) → Tried (替代方案) → Wrong (不滿) → Magic wand (理想)\n" +
+            "7. Bias detect 三毒、捕到立刻 log_interview_insight(type='bias')：\n" +
+            "   · 討好 bias：對方一直『嗯對對』『你說得對』· 提醒 Edward『他可能在討好你』\n" +
+            "   · Hypothetical bias：對方說『我會 X』『未來如果 Y』· 立刻拉回『上次具體哪一次』\n" +
+            "   · Memory bias：對方講的『過去』太完美、可能編造\n" +
+            "8. 沉默處理：對方卡住、不要急著塞下一題 · 等 3-5 秒、通常那段沉默後的話才是真的\n" +
+            "9. 捕痛點 / 動機立刻 log_interview_insight(type='pain'|'motivation', content=對方原話)\n" +
+            "10. Edward 假設驗證 / 反駁也 log: type='verified' 或 'contradicted'\n" +
+            "11. 結束 end_interview · Claude 整成正式 research notes\n" +
+            "\n訪談紅線：不能告訴受訪者 Edward 的假設 (會 bias 對方) · 不能誘導對方說『你要的答案』";
           // v1.7.1 感知層 + v1.8.1 多語言 · 教蘇菲怎麼用新工具
           var perceptionDirective = "\n\n[v1.7 感知層工具]\n" +
             "你不要憑空答時間 / 天氣 / 工作狀態。永遠先呼叫工具拿真實資料：\n" +
@@ -2010,6 +2063,87 @@
                     name: "end_meeting",
                     description: "Edward 說「結束會議」/「散會」時呼叫。蘇菲拉 transcript + Claude 整合會後紀錄 (摘要/重點決議/待辦/Edward 需確認/下次會議)。",
                     parameters: { type: "object", properties: {} }
+                  },
+                  {
+                    type: "function",
+                    name: "get_contact_history",
+                    description: "蘇菲開新會議前先撈這個客戶/對方歷史 · 知道上次聊過什麼/未解問題、別重問。會議開始前必呼叫。",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        contact_name: { type: "string", description: "對方姓名 / 公司 / 識別符" }
+                      },
+                      required: ["contact_name"]
+                    }
+                  },
+                  {
+                    type: "function",
+                    name: "save_contact_meeting",
+                    description: "會議結束後把本場併進對方檔案 · 累積跨會議記憶。end_meeting 之後立刻呼叫。",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        contact_name: { type: "string", description: "對方姓名" },
+                        meeting_summary: { type: "string", description: "本場 3-5 句摘要" },
+                        key_topics: { type: "array", items: { type: "string" }, description: "本場重點議題 3-5 個" },
+                        followups: { type: "array", items: { type: "string" }, description: "下次該追問的待解問題" }
+                      },
+                      required: ["contact_name"]
+                    }
+                  },
+                  {
+                    type: "function",
+                    name: "set_meeting_mode",
+                    description: "切換蘇菲在會議裡的 mode。Edward 說『靜音模式/安靜聽』→ silent · 『主動模式/代我講』→ active · 『私語/在我耳邊』→ brief。",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        mode: { type: "string", enum: ["silent", "active", "brief"], description: "silent=只記不講 / active=可開口代答 / brief=只私語給 Edward" }
+                      },
+                      required: ["mode"]
+                    }
+                  },
+                  {
+                    type: "function",
+                    name: "get_meeting_mode",
+                    description: "查當前蘇菲 mode (預設 silent · 保守安靜)。",
+                    parameters: { type: "object", properties: {} }
+                  },
+                  {
+                    type: "function",
+                    name: "start_interview",
+                    description: "Edward 派蘇菲跑需求訪談時呼叫。需求訪談 ≠ 會議 · 蘇菲是 moderator 不是發言人。method 三選一：jtbd (Jobs-To-Be-Done) / mom_test (Mom Test 三原則) / 5why (反問鏈)。",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        topic: { type: "string", description: "訪談主題" },
+                        hypothesis: { type: "string", description: "Edward 想驗證的假設" },
+                        interviewee: { type: "string", description: "受訪者 / persona" },
+                        method: { type: "string", enum: ["jtbd", "mom_test", "5why"], description: "方法論 · 預設 jtbd" },
+                        duration_min: { type: "number", description: "預計時長 (分鐘)" }
+                      },
+                      required: ["topic"]
+                    }
+                  },
+                  {
+                    type: "function",
+                    name: "log_interview_insight",
+                    description: "訪談中蘇菲捕到 insight 立刻 flag。type 五選一：pain (痛點) / motivation (真實動機) / bias (討好/假設/編造) / verified (Edward 假設驗證) / contradicted (反駁 Edward 假設)。",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        type: { type: "string", enum: ["pain", "motivation", "bias", "verified", "contradicted"], description: "insight 類型" },
+                        content: { type: "string", description: "對方原話 / 觀察內容" },
+                        speaker: { type: "string", description: "interviewee / Sophie · 預設 interviewee" }
+                      },
+                      required: ["type", "content"]
+                    }
+                  },
+                  {
+                    type: "function",
+                    name: "end_interview",
+                    description: "訪談結束 · Claude 整理：痛點排序/真實動機/Edward 假設驗證結果/反例/bias 警告/下一步建議。",
+                    parameters: { type: "object", properties: {} }
                   }
                 ]
               }
@@ -2199,11 +2333,15 @@
                   fnName === "ask_claude" || fnName === "dispatch_howl" || fnName === "dispatch_code" ||
                   fnName === "get_time_context" || fnName === "get_weather" || fnName === "get_work_status" ||
                   fnName === "restaurant_booking" || fnName === "news_brief" || fnName === "save_interest" ||
-                  fnName === "start_meeting" || fnName === "log_meeting_turn" || fnName === "meeting_status" || fnName === "end_meeting"
+                  fnName === "start_meeting" || fnName === "log_meeting_turn" || fnName === "meeting_status" || fnName === "end_meeting" ||
+                  fnName === "get_contact_history" || fnName === "save_contact_meeting" || fnName === "set_meeting_mode" || fnName === "get_meeting_mode" ||
+                  fnName === "start_interview" || fnName === "log_interview_insight" || fnName === "end_interview"
                 ) {
                   // v1.6.0 · Brain layer · 派工到後端
                   // v1.7.1 · 加感知層 (time / weather / work_status)
                   // v1.8.3 · 加會議代理 (start_meeting / log_meeting_turn / meeting_status / end_meeting)
+                  // v1.8.6 · 加跨會議記憶 + mode 切換 (get_contact_history / save_contact_meeting / set_meeting_mode / get_meeting_mode)
+                  // v1.8.7 · 加需求訪談 (start_interview / log_interview_insight / end_interview)
                   var brainArgs;
                   try { brainArgs = JSON.parse(rawArgs); }
                   catch (jErr) { brainArgs = {}; log("brain args parse fail: " + jErr.message); }
@@ -2257,6 +2395,26 @@
                         output = em + "/" + dm + " 分鐘 · 剩 " + rm + " 分 · 已記 " + tt + " 條 · " + advice;
                       } else if (fnName === "end_meeting") {
                         output = result.notes || "會議結束 · 紀錄已存";
+                      } else if (fnName === "get_contact_history") {
+                        if (result.first_time) {
+                          output = "這是第一次跟「" + result.contact_name + "」開會 · 沒有歷史紀錄";
+                        } else {
+                          var ht = (result.key_topics || []).join("、");
+                          var pf = (result.pending_followups || []).join("、");
+                          output = "「" + result.contact_name + "」已開過 " + (result.meetings_count || 0) + " 次 · 熱門議題：" + (ht || "無") + " · 待追問：" + (pf || "無");
+                        }
+                      } else if (fnName === "save_contact_meeting") {
+                        output = "「" + (result.contact_name || "") + "」累積 " + (result.total_meetings || 0) + " 次會議紀錄 · 已存";
+                      } else if (fnName === "set_meeting_mode") {
+                        output = "模式切到「" + (result.mode || "") + "」· " + (result.description || "");
+                      } else if (fnName === "get_meeting_mode") {
+                        output = "當前模式：" + (result.mode || "silent");
+                      } else if (fnName === "start_interview") {
+                        output = result.brief || "訪談準備好了 · 你還有想驗證的假設嗎";
+                      } else if (fnName === "log_interview_insight") {
+                        output = "捕到 1 個 insight · 累積 " + (result.insights_count || 0) + " 條 · bias " + (result.bias_count || 0) + " 條";
+                      } else if (fnName === "end_interview") {
+                        output = result.notes || "訪談結束 · 報告已整";
                       } else {
                         output = JSON.stringify(result).slice(0, 500);
                       }

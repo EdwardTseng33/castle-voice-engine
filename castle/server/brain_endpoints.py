@@ -737,3 +737,342 @@ def attach_brain_routes(app):
             # graceful fallback
             brief = f"Edward 早 · 今天{weekday_zh} · {weather_str} · 今天想動什麼？"
             return {"ok": True, "brief": brief, "fallback": True, "detail": str(e)[:200]}
+
+    # ===== v1.8.6 跨會議記憶 + silent/active 切換 =====
+
+    @app.post("/brain/get_contact_history")
+    async def _get_contact_history(request: Request):
+        """蘇菲開新會議前、先撈這個對方歷史紀錄、知道上次聊過什麼"""
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"ok": False, "detail": "body parse fail"}, status_code=400)
+        contact_name = (body.get("contact_name") or "").strip()
+        if not contact_name:
+            return {"ok": False, "detail": "contact_name missing"}
+
+        # 安全的檔名 (去掉路徑符號)
+        safe_name = "".join(c for c in contact_name if c.isalnum() or c in "_-")[:80]
+        path = f"/lipsync_cache/shared_contact_{safe_name}.json"
+        if not os.path.exists(path):
+            return {"ok": True, "contact_name": contact_name, "first_time": True, "history": []}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f).get("value", {})
+            return {
+                "ok": True,
+                "contact_name": contact_name,
+                "first_time": False,
+                "meetings_count": len(data.get("meetings", [])),
+                "last_meeting_ts": data.get("last_meeting_ts"),
+                "key_topics": data.get("key_topics", []),
+                "pending_followups": data.get("pending_followups", []),
+                "edward_notes": data.get("edward_notes", ""),
+                "recent_meetings": data.get("meetings", [])[-3:],  # 最近 3 次
+            }
+        except Exception as e:
+            return JSONResponse({"ok": False, "detail": str(e)[:200]}, status_code=500)
+
+    @app.post("/brain/save_contact_meeting")
+    async def _save_contact_meeting(request: Request):
+        """end_meeting 後把這場會議併進對方檔案 · 累積跨會議記憶"""
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"ok": False, "detail": "body parse fail"}, status_code=400)
+        contact_name = (body.get("contact_name") or "").strip()
+        if not contact_name:
+            return {"ok": False, "detail": "contact_name missing"}
+
+        meeting_summary = body.get("meeting_summary", "")
+        key_topics = body.get("key_topics", [])
+        followups = body.get("followups", [])
+        ts = time.time()
+
+        safe_name = "".join(c for c in contact_name if c.isalnum() or c in "_-")[:80]
+        path = f"/lipsync_cache/shared_contact_{safe_name}.json"
+
+        # Load existing or init
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f).get("value", {})
+            except Exception:
+                data = {}
+        else:
+            data = {}
+
+        meetings = data.get("meetings", [])
+        meetings.append({
+            "ts": ts,
+            "summary": meeting_summary[:2000],  # 防爆長
+            "topics": key_topics,
+        })
+        # 累積熱門 topics (取最近 10 場、出現 > 1 次)
+        all_topics = []
+        for m in meetings[-10:]:
+            all_topics.extend(m.get("topics", []))
+        topic_freq = {}
+        for t in all_topics:
+            topic_freq[t] = topic_freq.get(t, 0) + 1
+        hot_topics = [t for t, c in sorted(topic_freq.items(), key=lambda x: -x[1]) if c >= 2][:5]
+
+        data["contact_name"] = contact_name
+        data["meetings"] = meetings[-50:]  # 上限 50 場避免無限長
+        data["key_topics"] = hot_topics
+        data["pending_followups"] = (data.get("pending_followups", []) + followups)[-10:]
+        data["last_meeting_ts"] = ts
+
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"key": f"contact_{safe_name}", "value": data, "ts": ts}, f, ensure_ascii=False)
+            return {"ok": True, "contact_name": contact_name, "total_meetings": len(meetings)}
+        except Exception as e:
+            return JSONResponse({"ok": False, "detail": str(e)[:200]}, status_code=500)
+
+    @app.post("/brain/set_meeting_mode")
+    async def _set_meeting_mode(request: Request):
+        """切換蘇菲在會議裡的 mode: silent (安靜聽) / active (主動代答) / brief (只私語 Edward)"""
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"ok": False, "detail": "body parse fail"}, status_code=400)
+        mode = (body.get("mode") or "").strip().lower()
+        if mode not in ("silent", "active", "brief"):
+            return {"ok": False, "detail": "mode must be silent / active / brief"}
+
+        path = "/lipsync_cache/shared_meeting_mode.json"
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"key": "meeting_mode", "value": {"mode": mode, "set_ts": time.time()}, "ts": time.time()}, f, ensure_ascii=False)
+            mode_desc = {
+                "silent": "靜音聆聽 · 只記不講 · Edward 喚才開口",
+                "active": "主動代理 · 蘇菲可開口代 Edward 講",
+                "brief": "私語 brief · 蘇菲對著 Edward 耳邊 brief、不對與會者講",
+            }
+            return {"ok": True, "mode": mode, "description": mode_desc[mode]}
+        except Exception as e:
+            return JSONResponse({"ok": False, "detail": str(e)[:200]}, status_code=500)
+
+    @app.post("/brain/get_meeting_mode")
+    async def _get_meeting_mode(request: Request):
+        """讀當前 mode (default silent · 保守設定)"""
+        path = "/lipsync_cache/shared_meeting_mode.json"
+        if not os.path.exists(path):
+            return {"ok": True, "mode": "silent", "default": True}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f).get("value", {})
+            return {"ok": True, "mode": data.get("mode", "silent"), "set_ts": data.get("set_ts")}
+        except Exception:
+            return {"ok": True, "mode": "silent", "default": True}
+
+    # ===== v1.8.7 需求訪談模式 =====
+
+    @app.post("/brain/start_interview")
+    async def _start_interview(request: Request):
+        """訪談開始 · 蘇菲拿到 brief + 訪談大綱 + 該用哪個方法論 (JTBD / Mom Test / 5 Why)"""
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"ok": False, "detail": "body parse fail"}, status_code=400)
+
+        topic = body.get("topic", "")
+        hypothesis = body.get("hypothesis", "")  # Edward 想驗證的假設
+        interviewee = body.get("interviewee", "")  # 受訪者 (姓名 / persona)
+        method = (body.get("method") or "jtbd").lower()  # jtbd / mom_test / 5why
+        duration_min = body.get("duration_min", 30)
+
+        interview_data = {
+            "topic": topic,
+            "hypothesis": hypothesis,
+            "interviewee": interviewee,
+            "method": method,
+            "duration_min": duration_min,
+            "started_ts": time.time(),
+            "transcript": [],
+            "insights": [],
+            "why_chain_depth": 0,  # 已追問到第幾層
+            "bias_flags": [],
+        }
+
+        try:
+            with open("/lipsync_cache/shared_current_interview.json", "w", encoding="utf-8") as f:
+                json.dump({"key": "current_interview", "value": interview_data, "ts": time.time()}, f, ensure_ascii=False)
+        except Exception as e:
+            logger.warning("[brain] start_interview save fail: %s", str(e)[:200])
+
+        # 訪談大綱：按方法論選 prompt
+        method_prompts = {
+            "jtbd": (
+                "Jobs-To-Be-Done 框架 · 5 段：\n"
+                "1. 當下情境 (When you... 描述觸發場景)\n"
+                "2. 動機 (What were you trying to accomplish? 想達成什麼)\n"
+                "3. 替代方案 (What did you try first? 之前怎麼解)\n"
+                "4. 不滿意點 (What went wrong? 哪裡卡)\n"
+                "5. 理想狀態 (If you had a magic wand? 完美解長怎樣)\n"
+            ),
+            "mom_test": (
+                "Mom Test 三原則 · 跑訪談時時提醒自己：\n"
+                "1. 講過去、不講未來 (Talk about their life, not your idea)\n"
+                "2. 問具體事件、不問抽象意見 (Ask specifics, not generics)\n"
+                "3. 多聽少講 (Talk less, listen more · 70-30 法則)\n"
+                "禁問：『你會用 X 嗎』『你覺得 X 好不好』『會付錢嗎』(都是引導性 + hypothetical)\n"
+                "改問：『上次遇到 X 是什麼時候、那次怎麼處理的』\n"
+            ),
+            "5why": (
+                "5 Why 反問鏈 · 每個關鍵答案追 4-6 層 why：\n"
+                "對方說『我覺得不錯』→『為什麼這樣覺得 · 具體哪裡』\n"
+                "對方說『因為方便』→『為什麼方便對你重要 · 替代方案差在哪』\n"
+                "對方說『因為省時間』→『省下的時間你拿去做什麼』\n"
+                "...連追 4-6 層直到對方答出『真實動機』(emotional / social drive)\n"
+            ),
+        }
+        method_prompt = method_prompts.get(method, method_prompts["jtbd"])
+
+        api_key = _resolve_anthropic_key()
+        brief = ""
+        if api_key:
+            try:
+                from anthropic import Anthropic
+                cli = Anthropic(api_key=api_key)
+                prompt_user = (
+                    f"[訪談準備]\n"
+                    f"主題: {topic}\n"
+                    f"Edward 假設: {hypothesis}\n"
+                    f"受訪者: {interviewee}\n"
+                    f"預計時長: {duration_min} 分鐘\n"
+                    f"方法論: {method}\n\n"
+                    f"方法論 cheatsheet:\n{method_prompt}\n\n"
+                    "你是 Sophie · 即將代 Edward 跑這場需求訪談。\n"
+                    "請用 1 段 (≤ 150 字) 蘇菲口吻給 Edward 一個訪談前 brief：\n"
+                    "1. 我會怎麼開場 (破冰句、不問引導性問題)\n"
+                    "2. 我會用什麼方法論套對方 (JTBD / Mom Test / 5 Why 哪幾個)\n"
+                    "3. 哪些 bias 我會特別小心 (討好 / 假設 / 編造)\n"
+                    "結尾問 Edward『你還有想驗證的假設嗎』"
+                )
+                msg = cli.messages.create(
+                    model="claude-sonnet-4-5",
+                    max_tokens=500,
+                    system="你是 Sophie · Edward 個人 AI 特助 · 即將代他跑需求訪談 · zh-TW 自然口語",
+                    messages=[{"role": "user", "content": prompt_user}],
+                )
+                brief = msg.content[0].text if msg.content else ""
+            except Exception as e:
+                logger.exception("[brain] start_interview brief fail")
+                brief = f"訪談準備好了 · 主題 {topic} · 用 {method} 跑 · 你還有想驗證的假設嗎"
+
+        return {"ok": True, "brief": brief, "method_cheatsheet": method_prompt, "interview": interview_data}
+
+    @app.post("/brain/log_interview_insight")
+    async def _log_interview_insight(request: Request):
+        """訪談中蘇菲捕到 insight · 即時 flag (痛點 / 動機 / bias / 假設驗證)"""
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"ok": False, "detail": "body parse fail"}, status_code=400)
+
+        insight_type = (body.get("type") or "").lower()  # pain / motivation / bias / verified / contradicted
+        content = body.get("content", "")
+        speaker = body.get("speaker", "interviewee")
+
+        path = "/lipsync_cache/shared_current_interview.json"
+        if not os.path.exists(path):
+            return {"ok": False, "detail": "no active interview"}
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f).get("value", {})
+            insights = data.get("insights", [])
+            insights.append({
+                "type": insight_type,
+                "content": content,
+                "speaker": speaker,
+                "ts": time.time(),
+            })
+            data["insights"] = insights
+            if insight_type == "bias":
+                data["bias_flags"] = data.get("bias_flags", []) + [content[:120]]
+            # transcript 也存
+            transcript = data.get("transcript", [])
+            transcript.append({"speaker": speaker, "content": content, "ts": time.time()})
+            data["transcript"] = transcript
+
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"key": "current_interview", "value": data, "ts": time.time()}, f, ensure_ascii=False)
+            return {"ok": True, "insights_count": len(insights), "bias_count": len(data.get("bias_flags", []))}
+        except Exception as e:
+            return JSONResponse({"ok": False, "detail": str(e)[:200]}, status_code=500)
+
+    @app.post("/brain/end_interview")
+    async def _end_interview(request: Request):
+        """訪談結束 · Claude 整理：痛點 / 動機 / 假設驗證結果 / 跨訪談 insight cluster"""
+        path = "/lipsync_cache/shared_current_interview.json"
+        if not os.path.exists(path):
+            return {"ok": False, "detail": "no active interview"}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f).get("value", {})
+        except Exception as e:
+            return JSONResponse({"ok": False, "detail": str(e)[:200]}, status_code=500)
+
+        api_key = _resolve_anthropic_key()
+        if not api_key:
+            return {"ok": False, "detail": "anthropic key missing"}
+
+        transcript_str = "\n".join([
+            f"{t.get('speaker', '?')}: {t.get('content', '')}"
+            for t in data.get("transcript", [])
+        ])
+        insights_str = "\n".join([
+            f"[{i.get('type', '?')}] {i.get('content', '')}"
+            for i in data.get("insights", [])
+        ])
+
+        try:
+            from anthropic import Anthropic
+            cli = Anthropic(api_key=api_key)
+            prompt_user = (
+                f"[訪談資訊]\n"
+                f"主題: {data.get('topic', '')}\n"
+                f"Edward 假設: {data.get('hypothesis', '')}\n"
+                f"受訪者: {data.get('interviewee', '')}\n"
+                f"方法論: {data.get('method', '')}\n\n"
+                f"[即時捕到的 insights]\n{insights_str[:3000]}\n\n"
+                f"[完整對話]\n{transcript_str[:6000]}\n\n"
+                "你是 Sophie · 剛代 Edward 跑完這場需求訪談。請整理：\n\n"
+                "## 摘要\n(3-5 句蘇菲口吻給 Edward 聽)\n\n"
+                "## 核心痛點 (排序、最痛在前)\n(每條：痛點 + 出現幾次 + 對方原話)\n\n"
+                "## 真實動機 (5 Why 追到底的 emotional / social drive)\n\n"
+                "## Edward 假設驗證結果\n- 假設『X』→ 驗證 / 反駁 / 部分驗證 + 證據\n\n"
+                "## 反例 / 意外發現\n(對方說了什麼出乎 Edward 預期的)\n\n"
+                "## bias 警告 (討好 / 假設 / 編造的回答 · 別當真)\n\n"
+                "## 下一步建議\n(這場學到什麼 + 下次該問誰 / 問什麼)"
+            )
+            msg = cli.messages.create(
+                model="claude-sonnet-4-5",
+                max_tokens=2000,
+                system="你是 Sophie · Edward 個人 AI 特助 · 剛跑完需求訪談 · 用 zh-TW 整理研究 insight",
+                messages=[{"role": "user", "content": prompt_user}],
+            )
+            notes = msg.content[0].text if msg.content else ""
+
+            # 存進 interview archive
+            archive_path = f"/lipsync_cache/shared_interview_archive_{int(time.time())}.json"
+            archive_data = {
+                **data,
+                "ended_ts": time.time(),
+                "notes": notes,
+            }
+            with open(archive_path, "w", encoding="utf-8") as f:
+                json.dump({"key": f"interview_archive_{int(time.time())}", "value": archive_data, "ts": time.time()}, f, ensure_ascii=False)
+
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+
+            return {"ok": True, "notes": notes, "topic": data.get("topic", ""), "insights_count": len(data.get("insights", []))}
+        except Exception as e:
+            logger.exception("[brain] end_interview fail")
+            return JSONResponse({"ok": False, "detail": str(e)[:200]}, status_code=500)
