@@ -1290,6 +1290,14 @@
       });
     });
 
+    // v1.2.0h · expose ensureAuthThenStart 給 sophieOnSignIn 用 (sBtn.click() fallback 失效 · disabled btn 不 fire click)
+    window.__sophieStartConversation = function () {
+      ensureAuthThenStart().catch(function (err) {
+        log("post-signin ensureAuth fatal: " + (err && err.message));
+        showError("啟動失敗 · " + (err && err.message ? err.message : ""));
+      });
+    };
+
     function ensureAuthThenStart() {
       // 1. 先打 /auth/whoami · 200 = 已登入 → 直接 start
       return fetch("/auth/whoami", { credentials: "include", cache: "no-store" })
@@ -1319,10 +1327,23 @@
       startBtn.disabled = true;
       // v1.2.0g · 砍 stopPreCallRotation (rich pool 已砍)
       try {
-        localStream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: camOn ? { width: 640, height: 480 } : false
-        });
+        try {
+          localStream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: camOn ? { width: 640, height: 480 } : false
+          });
+        } catch (mediaErr) {
+          startBtn.disabled = false;
+          log("getUserMedia FAIL: " + mediaErr.name + " · " + mediaErr.message);
+          if (mediaErr.name === "NotAllowedError" || mediaErr.name === "PermissionDeniedError") {
+            showError("麥克風權限被擋 · 請到瀏覽器設定打開、再點 Start");
+          } else if (mediaErr.name === "NotFoundError") {
+            showError("找不到麥克風 · 確認手機 / 電腦麥克風有接好");
+          } else {
+            showError("麥克風啟動失敗 · " + mediaErr.message);
+          }
+          throw mediaErr;
+        }
         log("user media OK");
 
         peerConn = new RTCPeerConnection({
