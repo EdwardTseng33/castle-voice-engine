@@ -880,15 +880,9 @@
             // v0.9.0.3 · session.update 後立刻 trigger response.create 讓蘇菲主動講開頭招呼語
             setTimeout(function () {
               try {
-                dc.send(JSON.stringify({
-                  type: "response.create",
-                  response: { modalities: ["audio", "text"] }
-                }));
-                log("response.create sent (trigger opening greeting)");
-                // 同步 emit greeting 動畫 (不必等 GPT function call)
-                if (window.animPool && typeof window.animPool.playAction === "function") {
-                  window.animPool.playAction("greeting");
-                }
+                dc.send(JSON.stringify({ type: "response.create" }));
+                log("response.create sent (trigger opening greeting · no modalities param)");
+                // 不在 client 同步 emit greeting · GPT 會自己根據招呼語內容 function call · 避免閃頻雙觸發
               } catch (e) {
                 log("response.create send fail: " + e.message);
               }
