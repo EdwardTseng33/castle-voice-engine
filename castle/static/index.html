@@ -15,6 +15,8 @@
   <link rel="apple-touch-icon" href="/static/icon-192.png" />
   <link rel="preconnect" href="https://rsms.me/" />
   <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+  <!-- v1.2.0 · 訪客點 Start 才 lazy load GIS · auth.html 仍 keep async load (PWA shortcut) -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     :root {
       --bg: #000;
@@ -196,6 +198,147 @@
     @media (prefers-reduced-motion: reduce) {
       .version-modal-backdrop, .version-modal-panel { transition: opacity 0.01ms !important; transform: none !important; }
     }
+    /* v1.2.0 · 訪客邀請 modal + in-page Google 登入 modal */
+    .invite-modal, .signin-modal {
+      position: fixed; inset: 0; z-index: 110;
+      display: none;
+      align-items: center; justify-content: center;
+      padding: 24px; pointer-events: none;
+    }
+    .invite-modal.open, .signin-modal.open { display: flex; pointer-events: auto; }
+    .invite-modal-backdrop, .signin-modal-backdrop {
+      position: absolute; inset: 0;
+      background: rgba(0, 0, 0, 0.68);
+      -webkit-backdrop-filter: blur(20px) saturate(120%);
+      backdrop-filter: blur(20px) saturate(120%);
+      opacity: 0;
+      transition: opacity var(--motion-smooth) var(--easing);
+    }
+    .invite-modal.open .invite-modal-backdrop,
+    .signin-modal.open .signin-modal-backdrop { opacity: 1; }
+    .invite-modal-panel, .signin-modal-panel {
+      position: relative; width: 100%; max-width: 380px;
+      background: rgba(20, 20, 22, 0.85);
+      -webkit-backdrop-filter: blur(28px) saturate(140%);
+      backdrop-filter: blur(28px) saturate(140%);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 18px;
+      box-shadow:
+        0 24px 64px rgba(0, 0, 0, 0.5),
+        0 8px 16px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      display: flex; flex-direction: column; overflow: hidden;
+      opacity: 0; transform: translateY(8px) scale(0.98);
+      transition: opacity var(--motion-normal) var(--easing), transform var(--motion-normal) var(--easing);
+    }
+    .invite-modal.open .invite-modal-panel,
+    .signin-modal.open .signin-modal-panel {
+      opacity: 1; transform: translateY(0) scale(1);
+    }
+    .invite-header, .signin-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 22px 14px; flex-shrink: 0;
+    }
+    .invite-name {
+      font-family: "Georgia", "Source Han Serif TC", serif;
+      font-style: italic;
+      font-size: 22px;
+      color: var(--fg);
+      letter-spacing: 0.3px;
+    }
+    .invite-close {
+      width: 30px; height: 30px; border: 0; border-radius: 8px;
+      background: rgba(255,255,255,0.06); color: var(--fg-dim);
+      cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+      transition: background var(--motion-fast) var(--easing), color var(--motion-fast) var(--easing);
+    }
+    .invite-close:hover { background: rgba(255,255,255,0.14); color: var(--fg); }
+    .invite-body, .signin-body {
+      padding: 12px 28px 28px;
+      text-align: center;
+    }
+    .invite-tagline {
+      font-family: "Georgia", "Source Han Serif TC", serif;
+      font-style: italic;
+      font-size: 22px;
+      color: var(--fg);
+      margin-bottom: 16px;
+      line-height: 1.4;
+    }
+    .invite-explain {
+      color: var(--fg-dim);
+      font-size: 14px;
+      line-height: 1.65;
+      margin-bottom: 18px;
+      letter-spacing: 0.02em;
+    }
+    .invite-email-box {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 22px;
+      display: flex; flex-direction: column; gap: 4px;
+      text-align: left;
+    }
+    .invite-email-label {
+      color: var(--fg-fade);
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .invite-email-value {
+      color: var(--fg);
+      font-family: ui-monospace, "Cascadia Code", monospace;
+      font-size: 13px;
+      word-break: break-all;
+    }
+    .invite-contact {
+      display: inline-block;
+      color: var(--fg);
+      background: rgba(31, 166, 110, 0.18);
+      border: 1px solid rgba(31, 166, 110, 0.35);
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-family: ui-monospace, "Cascadia Code", monospace;
+      font-size: 13px;
+      text-decoration: none;
+      margin-bottom: 20px;
+      transition: background var(--motion-fast) var(--easing);
+    }
+    .invite-contact:hover { background: rgba(31, 166, 110, 0.30); }
+    .invite-back-btn {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.10);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--fg);
+      padding: 12px 20px;
+      border-radius: 10px;
+      font: inherit;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background var(--motion-fast) var(--easing);
+    }
+    .invite-back-btn:hover { background: rgba(255, 255, 255, 0.18); }
+    .signin-button-wrap {
+      display: flex; justify-content: center;
+      margin: 18px 0 12px;
+    }
+    .signin-loading {
+      color: var(--fg-dim);
+      font-size: 13px;
+      min-height: 18px;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .signin-loading.show { opacity: 1; }
+    @media (prefers-reduced-motion: reduce) {
+      .invite-modal-backdrop, .signin-modal-backdrop,
+      .invite-modal-panel, .signin-modal-panel {
+        transition: opacity 0.01ms !important; transform: none !important;
+      }
+    }
+
     .stage-canvas {
       flex: 1;
       position: relative;
@@ -516,7 +659,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.1.3</span>
+          <span class="vm-version">v1.2.0</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -525,6 +668,16 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.2.0</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>v1.0 GA · 訪客模式 ship · 不再強制前置登入頁</li>
+            <li>進站直接看蘇菲 idle 動畫 + UI · Start 點擊才觸發 Google 登入</li>
+            <li>未授權帳號 → 顯示邀請畫面 (告知請聯絡 Edward 開放)</li>
+            <li>API endpoints (sdp/camera/vision/memory/tavus) 仍守認證 · 訪客只看不能燒錢</li>
+            <li>auth.html 文案降溫 (拿掉鎖人字眼 / 保留 PWA shortcut 入口)</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.1.3</span><span class="vm-entry-date">2026-05-23</span></header>
           <ul class="vm-list">
             <li>視訊陪伴節律 · MediaPipe Pose + Hands 全本機真整合</li>
@@ -661,6 +814,67 @@
     </div>
   </div>
 
+  <!-- v1.2.0 · 訪客邀請畫面 modal (未授權帳號 Start 點擊後顯示) -->
+  <div class="invite-modal" id="inviteModal" role="dialog" aria-modal="true" aria-labelledby="inviteTitle" aria-hidden="true">
+    <div class="invite-modal-backdrop" id="inviteBackdrop"></div>
+    <div class="invite-modal-panel" role="document">
+      <header class="invite-header">
+        <span class="invite-name">蘇菲</span>
+        <button type="button" class="invite-close" id="inviteClose" aria-label="關閉">
+          <svg viewBox="0 0 24 24" aria-hidden="true" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </header>
+      <div class="invite-body">
+        <p class="invite-tagline" id="inviteTitle">這是 Edward 的個人 AI</p>
+        <p class="invite-explain">蘇菲現在還沒對外開放、需要 Edward 親自授權帳號才能使用。</p>
+        <div class="invite-email-box">
+          <span class="invite-email-label">您剛登入的帳號</span>
+          <span class="invite-email-value" id="inviteYourEmail">—</span>
+        </div>
+        <p class="invite-explain">若您與 Edward 認識、想試用蘇菲、請聯絡：</p>
+        <a class="invite-contact" id="inviteContact" href="mailto:edwardt0303@gmail.com">edwardt0303@gmail.com</a>
+        <button type="button" class="invite-back-btn" id="inviteBackBtn">回到櫥窗看看</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- v1.2.0 · in-page Google 登入 modal (Start 點擊 · 未登入時顯示) -->
+  <div class="signin-modal" id="signinModal" role="dialog" aria-modal="true" aria-labelledby="signinTitle" aria-hidden="true">
+    <div class="signin-modal-backdrop" id="signinBackdrop"></div>
+    <div class="signin-modal-panel" role="document">
+      <header class="signin-header">
+        <span class="invite-name">蘇菲</span>
+        <button type="button" class="invite-close" id="signinClose" aria-label="關閉">
+          <svg viewBox="0 0 24 24" aria-hidden="true" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </header>
+      <div class="signin-body">
+        <p class="invite-tagline" id="signinTitle">用 Google 登入開始</p>
+        <p class="invite-explain">蘇菲是 Edward 的個人 AI · 登入後驗證您的存取權限</p>
+        <div id="g_id_onload"
+             data-client_id="870408555328-dv80l5gs73os63r44e8ed79kndcoorbm.apps.googleusercontent.com"
+             data-callback="sophieOnSignIn"
+             data-auto_prompt="false"
+             data-context="signin">
+        </div>
+        <div class="g_id_signin signin-button-wrap"
+             data-type="standard"
+             data-shape="pill"
+             data-theme="filled_black"
+             data-text="signin_with"
+             data-size="large"
+             data-locale="zh_TW"
+             data-logo_alignment="left">
+        </div>
+        <p class="signin-loading" id="signinLoading">驗證中…</p>
+      </div>
+    </div>
+  </div>
+
   <script>
   (function () {
     var trigger = document.getElementById("versionTrigger");
@@ -692,6 +906,111 @@
         close();
       }
     });
+  })();
+  </script>
+
+  <script>
+  // v1.2.0 · 訪客邀請 modal + in-page 登入 modal 控制
+  (function () {
+    var inviteModal    = document.getElementById("inviteModal");
+    var inviteBackdrop = document.getElementById("inviteBackdrop");
+    var inviteClose    = document.getElementById("inviteClose");
+    var inviteBackBtn  = document.getElementById("inviteBackBtn");
+    var inviteEmailEl  = document.getElementById("inviteYourEmail");
+    var inviteContactEl = document.getElementById("inviteContact");
+
+    var signinModal    = document.getElementById("signinModal");
+    var signinBackdrop = document.getElementById("signinBackdrop");
+    var signinClose    = document.getElementById("signinClose");
+    var signinLoading  = document.getElementById("signinLoading");
+
+    function openInvite(yourEmail, contact) {
+      if (yourEmail) inviteEmailEl.textContent = yourEmail;
+      if (contact) {
+        inviteContactEl.textContent = contact;
+        inviteContactEl.setAttribute("href", "mailto:" + contact);
+      }
+      inviteModal.classList.add("open");
+      inviteModal.setAttribute("aria-hidden", "false");
+    }
+    function closeInvite() {
+      inviteModal.classList.remove("open");
+      inviteModal.setAttribute("aria-hidden", "true");
+    }
+    function openSignin() {
+      signinLoading.classList.remove("show");
+      signinModal.classList.add("open");
+      signinModal.setAttribute("aria-hidden", "false");
+    }
+    function closeSignin() {
+      signinModal.classList.remove("open");
+      signinModal.setAttribute("aria-hidden", "true");
+    }
+
+    inviteClose.addEventListener("click", closeInvite);
+    inviteBackdrop.addEventListener("click", closeInvite);
+    inviteBackBtn.addEventListener("click", closeInvite);
+
+    signinClose.addEventListener("click", closeSignin);
+    signinBackdrop.addEventListener("click", closeSignin);
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") {
+        if (inviteModal.classList.contains("open")) { e.stopPropagation(); closeInvite(); }
+        else if (signinModal.classList.contains("open")) { e.stopPropagation(); closeSignin(); }
+      }
+    });
+
+    // GIS callback · Google 登入完 → POST /auth/verify
+    window.sophieOnSignIn = function (response) {
+      signinLoading.classList.add("show");
+      fetch("/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credential: response.credential }),
+        credentials: "include",
+      })
+        .then(function (r) {
+          if (r.ok) {
+            // 200 · ok · 進通話 (cookie 已 set · 直接呼 startConversation)
+            return r.json().then(function () {
+              closeSignin();
+              if (typeof window.__sophieStartConversation === "function") {
+                window.__sophieStartConversation();
+              } else {
+                // fallback · 點 Start 按鈕模擬
+                var sBtn = document.getElementById("startBtn");
+                if (sBtn) sBtn.click();
+              }
+            });
+          }
+          // 403 · 未授權 · 顯示邀請畫面
+          return r.json().then(function (j) {
+            signinLoading.classList.remove("show");
+            closeSignin();
+            openInvite(j.your_email || "", j.contact || "edwardt0303@gmail.com");
+          });
+        })
+        ["catch"](function (e) {
+          signinLoading.classList.remove("show");
+          closeSignin();
+          // 網路錯 → 用既有 errBar 顯示
+          var errBar = document.getElementById("errBar");
+          if (errBar) {
+            errBar.textContent = "網路錯誤 · 請重試 (" + e.message + ")";
+            errBar.classList.add("show");
+            setTimeout(function () { errBar.classList.remove("show"); }, 6000);
+          }
+        });
+    };
+
+    // 把控制 method 暴露給 voice-lifecycle script 用
+    window.__sophieInvite = {
+      openSignin: openSignin,
+      closeSignin: closeSignin,
+      openInvite: openInvite,
+      closeInvite: closeInvite
+    };
   })();
   </script>
 
@@ -865,13 +1184,38 @@
       timerEl.textContent = "00:00";
     }
 
+    // v1.2.0 · 訪客模式 · Start 點擊先檢查 auth · 401 彈 GIS modal · 403 顯示邀請畫面
     startBtn.addEventListener("click", function () {
       askNotifPermissionOnce();
-      startConversation().catch(function (err) {
-        log("start err: " + (err && err.message));
+      ensureAuthThenStart().catch(function (err) {
+        log("ensureAuth fatal: " + (err && err.message));
         showError("啟動失敗 · " + (err && err.message ? err.message : ""));
       });
     });
+
+    function ensureAuthThenStart() {
+      // 1. 先打 /auth/whoami · 200 = 已登入 → 直接 start
+      return fetch("/auth/whoami", { credentials: "include", cache: "no-store" })
+        .then(function (r) {
+          if (r.ok) {
+            log("whoami OK · already signed in · proceed");
+            return startConversation().catch(function (err) {
+              log("start err: " + (err && err.message));
+              showError("啟動失敗 · " + (err && err.message ? err.message : ""));
+            });
+          }
+          // 401 = 未登入 · 彈 GIS modal · auth flow 走完再 startConversation
+          log("whoami 401 · open signin modal");
+          if (window.__sophieInvite && window.__sophieInvite.openSignin) {
+            window.__sophieInvite.openSignin();
+          }
+          return null;
+        })
+        ["catch"](function (e) {
+          log("whoami fetch fail: " + e.message);
+          showError("網路錯誤 · 請重試 (" + e.message + ")");
+        });
+    }
 
     async function startConversation() {
       if (shell.getAttribute("data-state") !== "idle") return;
@@ -1506,6 +1850,14 @@
     window.__sophie = {
       setState: setState,
       log: log
+    };
+
+    // v1.2.0 · GIS callback 登入成功後可直接呼啟動
+    window.__sophieStartConversation = function () {
+      startConversation().catch(function (err) {
+        log("start err (post-signin): " + (err && err.message));
+        showError("啟動失敗 · " + (err && err.message ? err.message : ""));
+      });
     };
   })();
   </script>

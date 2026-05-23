@@ -82,6 +82,8 @@
       transition: opacity 0.3s ease;
       text-align: center;
       max-width: 340px;
+      white-space: pre-line;
+      line-height: 1.55;
     }
     .err.show { opacity: 1; }
     .loading {
@@ -107,7 +109,7 @@
 <body>
   <div class="shell">
     <div class="name">蘇菲</div>
-    <div class="tagline">個人 AI 陪伴 · 請以 Edward 的 Google 帳號登入</div>
+    <div class="tagline">蘇菲 · 個人 AI 陪伴 · 用 Google 登入開始</div>
 
     <div class="login-card">
       <div id="g_id_onload"
@@ -126,7 +128,7 @@
            data-logo_alignment="left">
       </div>
       <div class="loading" id="loading">驗證中…</div>
-      <div class="login-hint">只有 Edward 個人 Google 帳號可進入</div>
+      <div class="login-hint">登入後將驗證您的存取權限</div>
     </div>
 
     <div class="err" id="err"></div>
@@ -155,9 +157,15 @@
           } else {
             return r.json().then(function (j) {
               loading.classList.remove("show");
-              err.textContent =
-                j.detail ||
-                "登入失敗 · 此 Google 帳號未在允許清單";
+              // v1.2.0 · 未授權時也顯示邀請文案 (有 contact field 就附上)
+              var msg = j.detail || "登入失敗";
+              if (j.contact) {
+                msg += "
+
+您的帳號 " + (j.your_email || "") + "
+請聯絡 " + j.contact + " 開放";
+              }
+              err.textContent = msg;
               err.classList.add("show");
             });
           }

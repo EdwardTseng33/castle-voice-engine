@@ -94,12 +94,27 @@ def fastapi_app():
     class AuthVerifyReq(BaseModel):
         credential: str
 
+    from castle.server.auth_middleware import verify_google_id_token_any, OWNER_CONTACT_EMAIL
+
     @fastapi_instance.post("/auth/verify")
     async def _auth_verify(req: AuthVerifyReq):
-        email = verify_google_id_token(req.credential)
+        # v1.2.0 訪客模式 · 解析 token 但只在 allow list 才簽 cookie · 不在 allow list 也告知對方 email
+        email, allowed = verify_google_id_token_any(req.credential)
         if not email:
+            # token 假 / 簽名錯 / email_verified=False → 真假冒、不告訴 contact 細節
             return JSONResponse(
-                {"ok": False, "detail": "此 Google 帳號未授權 · 只允許 Edward 本人"},
+                {"ok": False, "detail": "Google 驗證失敗 · 請重試"},
+                status_code=400,
+            )
+        if not allowed:
+            # 真實 Google 帳號但不在 allow list · 顯示邀請畫面用的 contact + 對方剛登入的 email
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "detail": "這是 Edward 的個人 AI 蘇菲 · 需 Edward 親自授權才能使用",
+                    "contact": OWNER_CONTACT_EMAIL,
+                    "your_email": email,
+                },
                 status_code=403,
             )
         signed = sign_email_cookie(email)
@@ -137,30 +152,27 @@ def fastapi_app():
 
         @fastapi_instance.get("/")
         async def _root(request: Request):
-            cookie = request.cookies.get(COOKIE_NAME)
-            email = verify_signed_cookie(cookie) if cookie else None
-            if email:
-                return RedirectResponse(url="/static/index.html")
-            return RedirectResponse(url="/static/auth.html")
+            # v1.2.0 訪客模式 · 一律 redirect 到 index.html
+            # auth.html 仍保留 (PWA shortcut / 老 bookmark) · 但不再強制 redirect
+            return RedirectResponse(url="/static/index.html")
 
         # v0.4.2 · 替 /static/* 加 no-cache header (確保 Edward 永遠拿最新版)
         # v0.9.6 · 加 Google OAuth gate (除 /static/auth.html 外 · 都需 cookie 認)
+        # v1.2.0 · 訪客模式 · /static/* 全公開 (UI shell / mp4 / sw.js / js / css) · 只 API endpoints 守認證
+        #          燒錢 / 涉互動 / 涉隱私 API：/sdp · /camera/* · /vision/* · /dispatch/* · /tavus/* · /memory/* · /session/* · /personas
+        #          (PUBLIC_PREFIX 已加 /static/ · is_public_path 直接放行 static/* + auth flow + health)
         @fastapi_instance.middleware("http")
         async def _cache_and_auth_middleware(request, call_next):
             path = request.url.path
 
-            # auth gate · skip public paths
+            # auth gate · skip public paths (含整個 /static/* · v1.2.0 訪客模式)
             if not is_public_path(path):
-                # /static/* (except auth.html 已在 PUBLIC_EXACT) · /camera/* · /vision/* · /dispatch/* · /tavus/* · /sdp · /personas etc
-                # /sdp 也守 · WebRTC handshake 必須認 · 防別人燒 OpenAI cost
+                # API endpoints (/sdp · /camera/* · /vision/* · /dispatch/* · /tavus/* · /memory/* · /session/* · /personas etc)
+                # /sdp 守 · WebRTC handshake 必須認 · 防別人燒 OpenAI cost
+                # /memory/* 守 · 防別人燒 Anthropic cost + 隱私
                 cookie = request.cookies.get(COOKIE_NAME)
                 email = verify_signed_cookie(cookie) if cookie else None
                 if not email:
-                    # auth.html 自己 / 圖片 / mp4 / js / css 全擋 · 沒 cookie 啥都看不到
-                    if path.startswith("/static/"):
-                        # 把 user redirect 到 auth.html
-                        return RedirectResponse(url="/static/auth.html")
-                    # API endpoints (sdp / camera / vision / dispatch / tavus / session)
                     return JSONResponse({"ok": False, "detail": "請先登入"}, status_code=401)
 
             resp = await call_next(request)

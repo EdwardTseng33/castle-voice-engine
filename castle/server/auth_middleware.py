@@ -28,6 +28,9 @@ ALLOWED_EMAILS = frozenset({
     "edwardt0303@gmail.com",
 })
 
+# v1.2.0 · 訪客被擋時顯示給對方 · 請聯絡 X 開放
+OWNER_CONTACT_EMAIL = "edwardt0303@gmail.com"
+
 COOKIE_NAME = "sophie_auth"
 COOKIE_MAX_AGE = 30 * 24 * 3600  # 30 days
 
@@ -48,12 +51,17 @@ PUBLIC_EXACT = frozenset({
     "/favicon.ico",
 })
 PUBLIC_PREFIX = (
-    "/auth/",  # /auth/verify · /auth/logout
+    "/auth/",   # /auth/verify · /auth/logout · /auth/whoami
+    "/static/", # v1.2.0 · 訪客模式 · 整個 static 公開 (UI / shell / mp4 / sw.js) · API endpoints 仍守
 )
 
 
-def verify_google_id_token(token_str: str) -> str | None:
-    """Verify Google ID token JWT · return email if valid + in allow list, else None."""
+def _decode_google_id_token(token_str: str) -> str | None:
+    """Decode + verify Google ID token JWT · return email (lower) if signature + email_verified pass, else None.
+
+    Not allow-list aware · use verify_google_id_token (allow-list strict) or
+    verify_google_id_token_any (訪客模式 · 返回對方 email 給邀請畫面 show).
+    """
     try:
         info = id_token.verify_oauth2_token(
             token_str,
@@ -73,12 +81,39 @@ def verify_google_id_token(token_str: str) -> str | None:
     if not email_verified:
         logger.warning("[auth] email not verified: %s", email)
         return None
+    return email or None
+
+
+def verify_google_id_token(token_str: str) -> str | None:
+    """Verify Google ID token JWT · return email if valid + in allow list, else None.
+
+    用於 server 端只想知道「這人是 Edward 嗎」· 不在 allow list 直接 None
+    (背景 / api / 不需返訪客 email 的場景).
+    """
+    email = _decode_google_id_token(token_str)
+    if not email:
+        return None
     if email not in ALLOWED_EMAILS:
         logger.warning("[auth] email not in allow list: %s", email)
         return None
-
     logger.info("[auth] Google verify OK · %s", email)
     return email
+
+
+def verify_google_id_token_any(token_str: str):
+    """v1.2.0 訪客模式 · return (email, allowed) or (None, False).
+
+    Token signature + email_verified 過 → 一律返 email · allowed 用 ALLOWED_EMAILS 判斷.
+    供 /auth/verify 在 403 時也能告知對方「您的 email 是 X · 請聯絡 Edward 開放」.
+    """
+    email = _decode_google_id_token(token_str)
+    if not email:
+        return (None, False)
+    if email in ALLOWED_EMAILS:
+        logger.info("[auth] Google verify OK (allowed) · %s", email)
+        return (email, True)
+    logger.warning("[auth] Google verify OK but not allowed · %s", email)
+    return (email, False)
 
 
 def sign_email_cookie(email: str) -> str:

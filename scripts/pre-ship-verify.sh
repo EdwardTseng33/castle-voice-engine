@@ -59,6 +59,43 @@ check_auth_gate() {
   fi
 }
 
+check_static_public() {
+  # v1.2.0 訪客模式 · /static/* 應公開 (沒 cookie 也 200)
+  local PATH_REL="$1"
+  local LABEL="$2"
+  local CODE=$(curl -s -o /dev/null -w '%{http_code}' "$URL$PATH_REL")
+  if [ "$CODE" = "200" ]; then
+    echo "✓ $LABEL · 訪客模式 (沒 cookie 也通) ($CODE)"
+  else
+    echo "✗ $LABEL · 沒 cookie 卻 $CODE (預期 200) · 訪客模式破 · BLOCKER"
+    FAIL=1
+  fi
+}
+
+check_api_gate() {
+  # v1.2.0 訪客模式 · API endpoints (/sdp /camera /vision /memory /tavus /session /personas) 仍守
+  # 沒 cookie 應 401 (擋下訪客 · 防別人燒 OpenAI / Anthropic cost + 隱私)
+  local PATH_REL="$1"
+  local LABEL="$2"
+  local METHOD="${3:-GET}"
+  local CODE
+  if [ "$METHOD" = "POST" ]; then
+    CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$URL$PATH_REL")
+  else
+    CODE=$(curl -s -o /dev/null -w '%{http_code}' "$URL$PATH_REL")
+  fi
+  if [ "$CODE" = "401" ]; then
+    echo "✓ $LABEL · API gate 守得住 ($CODE 未授權)"
+  elif [ "$CODE" = "200" ]; then
+    echo "✗ $LABEL · 沒 cookie 居然 200 通過 · API gate 漏洞 · BLOCKER (防燒錢/防隱私)"
+    FAIL=1
+  elif [ "$CODE" = "307" ] || [ "$CODE" = "302" ]; then
+    echo "⚠ $LABEL · 回 $CODE (預期 401 直接拒) · 可能 middleware 設定漏 · 請查"
+  else
+    echo "⚠ $LABEL · 沒 cookie 回 $CODE (預期 401) · 行為非預期"
+  fi
+}
+
 check_range() {
   local PATH_REL="$1"
   local LABEL="$2"
@@ -72,11 +109,21 @@ check_range() {
 }
 
 echo ""
-echo "[0/5] 公開端點 (auth gate 不擋)"
+echo "[0/5] 公開端點 (v1.2.0 訪客模式 · /static/* 全公開)"
 check_endpoint "/health" "/health"
-check_endpoint "/static/auth.html" "/static/auth.html (login page)"
-check_auth_gate "/static/index.html" "/static/index.html"
-check_auth_gate "/static/sophie-idle.mp4" "/static/sophie-idle.mp4"
+check_static_public "/static/auth.html" "/static/auth.html (login page)"
+check_static_public "/static/index.html" "/static/index.html"
+check_static_public "/static/sophie-idle.mp4" "/static/sophie-idle.mp4"
+check_static_public "/static/sw.js" "/static/sw.js"
+check_static_public "/static/manifest.json" "/static/manifest.json"
+
+echo ""
+echo "[0.5/5] API gate 守得住 (v1.2.0 訪客模式 · API 仍認證 · 防燒錢/防隱私)"
+check_api_gate "/sdp" "/sdp" POST
+check_api_gate "/camera/enable" "/camera/enable" POST
+check_api_gate "/vision/emotion_latest" "/vision/emotion_latest"
+check_api_gate "/memory/summarize" "/memory/summarize" POST
+check_api_gate "/tavus/start" "/tavus/start" POST
 
 echo ""
 echo "[1/5] 主介面檔 (帶 verify cookie)"

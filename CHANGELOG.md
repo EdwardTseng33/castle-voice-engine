@@ -5,6 +5,17 @@
 
 ---
 
+## v1.2.0 (v1.0 GA) · 2026-05-23
+- 訪客模式 ship · 不再強制前置登入頁、進站直接看蘇菲 idle 動畫 + UI
+- Start 點擊才觸發 Google 登入：whoami 200 → 進通話 · 401 → 彈 in-page GIS modal · 403 → 顯示邀請畫面
+- 邀請畫面 · 告知對方剛登入的 email + 「請聯絡 edwardt0303@gmail.com 開放」+ 回到櫥窗按鈕
+- middleware · /static/* 整段公開 (UI shell / mp4 / sw.js) · API endpoints (/sdp / /camera / /vision / /memory / /tavus / /session / /personas) 仍守 cookie 認證
+- auth_middleware.py · 新增 verify_google_id_token_any() 訪客模式雙軌 verify (allow list 過 / 未過 都回 email · 供邀請畫面 echo)
+- /auth/verify response · 403 時加 contact + your_email field · 400 (token 無效) 與 403 (未授權) 區分
+- auth.html · 拿掉「只有 Edward 個人 Google 帳號可進入」鎖人文案 · 保留 PWA shortcut 入口 + 未授權也顯示邀請文案
+- pre-ship-verify.sh 升級 · /static/index.html / /static/sophie-idle.mp4 預期 200 (公開了) · 新增 check_api_gate 驗 /sdp / /memory/health 沒 cookie 401
+- SW CACHE bump v1.1.3 → v1.2.0
+
 ## v1.1.2.1 · 2026-05-23
 - Anthropic API key resolver 4-name fallback · ANTHROPIC_API_KEY / ANTHROPIC_KEY / anthropic_key / ANTHROPIC 任一命中即用
 - Modal Secret env var 命名不對齊時優雅退到空摘要 · 蘇菲招呼語退到 v1.1.1 不阻塞通話
