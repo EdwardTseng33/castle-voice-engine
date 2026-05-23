@@ -77,7 +77,22 @@
   function IdleRotator() {
     this._paused = false;
     this._absent = false;  // v1.1.3
+    this._preCall = false; // v1.2.0b · pre-call (未 Start) 用 rich 池
   }
+  // v1.2.0b · 待機豐富動作池 · Edward 5/23「未 start 加幾組親親 / 撒嬌 / hello」
+  // 機率：55% idle / 12% stroke-hair / 10% greeting / 7% playful / 6% intimate-greeting
+  //       4% acknowledgement / 3% intimate-farewell / 3% happy
+  IdleRotator.prototype._pickPreCallRich = function () {
+    var r = Math.random();
+    if (r < 0.55) return IDLE_VARIANTS[Math.floor(Math.random() * IDLE_VARIANTS.length)];
+    if (r < 0.67) return "stroke-hair";
+    if (r < 0.77) return "greeting";
+    if (r < 0.84) return "playful";
+    if (r < 0.90) return "intimate-greeting";
+    if (r < 0.94) return "acknowledgement";
+    if (r < 0.97) return "intimate-farewell";
+    return "happy";
+  };
   IdleRotator.prototype.pickNext = function () {
     var h = new Date().getHours();
     var prob = _gestureProbForHour(h);
@@ -86,9 +101,16 @@
       if (Math.random() < ABSENT_GESTURE_PROB) return "stroke-hair";
       return IDLE_VARIANTS[Math.floor(Math.random() * IDLE_VARIANTS.length)];
     }
+    // v1.2.0b - pre-call rich rotation
+    if (this._preCall) {
+      return this._pickPreCallRich();
+    }
     if (Math.random() < prob) return "stroke-hair";
     return IDLE_VARIANTS[Math.floor(Math.random() * IDLE_VARIANTS.length)];
   };
+  // v1.2.0b · 通話前後切換 pre-call mode
+  IdleRotator.prototype.setPreCallMode = function (b) { this._preCall = !!b; };
+  IdleRotator.prototype.isPreCallMode = function () { return !!this._preCall; };
   IdleRotator.prototype.pickIdleOnly = function () {
     return IDLE_VARIANTS[Math.floor(Math.random() * IDLE_VARIANTS.length)];
   };
@@ -257,8 +279,9 @@
     var nextIdle = this.idleRotator.pickNext();
     var src = ANIMATION_POOL[nextIdle];
     try { this.video.src = src; } catch (e) {}
-    var isGesture = (nextIdle === "stroke-hair");
-    this.video.loop = !isGesture;
+    // v1.2.0b · idle 4 變體 loop · 其他 rich action (stroke-hair / greeting / playful / intimate-* / acknowledgement / happy) 都 play once 接 idle
+    var isLoop = (IDLE_VARIANTS.indexOf(nextIdle) !== -1);
+    this.video.loop = isLoop;
     this.video.muted = true;
     var p = this.video.play();
     if (p && p.then) { p["catch"](function () {}); }
@@ -268,7 +291,7 @@
       this._endHandler = null;
     }
     var self = this;
-    if (isGesture) {
+    if (!isLoop) {
       this._endHandler = function () {
         var idle = self.idleRotator.pickIdleOnly();
         self._playRaw(idle, true);
@@ -276,6 +299,36 @@
       this.video.addEventListener("ended", this._endHandler, { once: true });
     }
     this._log("returnToIdle -> " + nextIdle);
+  };
+
+  // v1.2.0b · pre-call 自動輪播 timer (Edward 5/23「未 start 加親親 / 撒嬌 / hello」)
+  AnimationPool.prototype.startPreCallRotation = function () {
+    if (this._preCallTimer) return;
+    this.idleRotator.setPreCallMode(true);
+    var self = this;
+    var schedule = function () {
+      self._preCallTimer = setTimeout(function () {
+        // 通話中 / speaking 中 / 已被 paused → 不主動切 (in-call 由 GPT event 驅動)
+        if (self.speakingCtrl.isActive() || self.idleRotator.isPaused()) {
+          schedule();
+          return;
+        }
+        // 走 _returnToIdle 走 pickNext (rich pool) · 含正確的 loop / ended handler 邏輯
+        self._returnToIdle();
+        schedule();
+      }, 10000 + Math.random() * 8000);  // 10-18s 隨機間隔
+    };
+    schedule();
+    this._log("preCallRotation start (rich pool · 親親 / 撒嬌 / hello)");
+  };
+
+  AnimationPool.prototype.stopPreCallRotation = function () {
+    if (this._preCallTimer) {
+      clearTimeout(this._preCallTimer);
+      this._preCallTimer = null;
+    }
+    this.idleRotator.setPreCallMode(false);
+    this._log("preCallRotation stop (back to normal idle)");
   };
 
   // v1.1.3 - force greeting (used when Edward returns from absent); bypasses 600s greeting cooldown

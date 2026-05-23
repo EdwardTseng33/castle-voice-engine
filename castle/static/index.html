@@ -307,6 +307,34 @@
       transition: background var(--motion-fast) var(--easing);
     }
     .invite-contact:hover { background: rgba(31, 166, 110, 0.30); }
+    /* v1.2.0b · 點一下複製 email 按鈕 (取代您剛登入的帳號框) */
+    .invite-contact-copy {
+      width: 100%;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      background: rgba(31, 166, 110, 0.18);
+      border: 1px solid rgba(31, 166, 110, 0.35);
+      color: var(--fg);
+      padding: 14px 18px;
+      border-radius: 10px;
+      font: inherit;
+      cursor: pointer;
+      margin-bottom: 16px;
+      transition: background var(--motion-fast) var(--easing);
+    }
+    .invite-contact-copy:hover, .invite-contact-copy:focus {
+      background: rgba(31, 166, 110, 0.30);
+    }
+    .invite-contact-email {
+      font-family: ui-monospace, "Cascadia Code", monospace;
+      font-size: 14px;
+      letter-spacing: 0.02em;
+      word-break: break-all;
+    }
+    .invite-contact-hint {
+      font-size: 11px;
+      color: var(--fg-fade);
+      letter-spacing: 0.4px;
+    }
     .invite-back-btn {
       width: 100%;
       background: rgba(255, 255, 255, 0.10);
@@ -828,13 +856,11 @@
       </header>
       <div class="invite-body">
         <p class="invite-tagline" id="inviteTitle">這是 Edward 的個人 AI</p>
-        <p class="invite-explain">蘇菲現在還沒對外開放、需要 Edward 親自授權帳號才能使用。</p>
-        <div class="invite-email-box">
-          <span class="invite-email-label">您剛登入的帳號</span>
-          <span class="invite-email-value" id="inviteYourEmail">—</span>
-        </div>
-        <p class="invite-explain">若您與 Edward 認識、想試用蘇菲、請聯絡：</p>
-        <a class="invite-contact" id="inviteContact" href="mailto:edwardt0303@gmail.com">edwardt0303@gmail.com</a>
+        <p class="invite-explain">通知 Edward 才能使用</p>
+        <button type="button" class="invite-contact-copy" id="inviteContactCopy" data-email="edwardt0303@gmail.com">
+          <span class="invite-contact-email">edwardt0303@gmail.com</span>
+          <span class="invite-contact-hint" id="inviteContactHint">點一下複製</span>
+        </button>
         <button type="button" class="invite-back-btn" id="inviteBackBtn">回到櫥窗看看</button>
       </div>
     </div>
@@ -914,8 +940,8 @@
     var inviteBackdrop = document.getElementById("inviteBackdrop");
     var inviteClose    = document.getElementById("inviteClose");
     var inviteBackBtn  = document.getElementById("inviteBackBtn");
-    var inviteEmailEl  = document.getElementById("inviteYourEmail");
-    var inviteContactEl = document.getElementById("inviteContact");
+    var inviteContactCopy = document.getElementById("inviteContactCopy");
+    var inviteContactHint = document.getElementById("inviteContactHint");
 
     var signinModal    = document.getElementById("signinModal");
     var signinBackdrop = document.getElementById("signinBackdrop");
@@ -923,13 +949,52 @@
     var signinLoading  = document.getElementById("signinLoading");
 
     function openInvite(yourEmail, contact) {
-      if (yourEmail) inviteEmailEl.textContent = yourEmail;
-      if (contact) {
-        inviteContactEl.textContent = contact;
-        inviteContactEl.setAttribute("href", "mailto:" + contact);
+      // v1.2.0b · 極簡邀請 · 拿掉「您剛登入的帳號」+ email 框 · 改成「點一下複製」按鈕
+      if (contact && inviteContactCopy) {
+        inviteContactCopy.setAttribute("data-email", contact);
+        var emailSpan = inviteContactCopy.querySelector(".invite-contact-email");
+        if (emailSpan) emailSpan.textContent = contact;
       }
+      if (inviteContactHint) inviteContactHint.textContent = "點一下複製";
       inviteModal.classList.add("open");
       inviteModal.setAttribute("aria-hidden", "false");
+    }
+
+    // 點擊複製 email
+    if (inviteContactCopy) {
+      inviteContactCopy.addEventListener("click", function () {
+        var email = inviteContactCopy.getAttribute("data-email") || "edwardt0303@gmail.com";
+        var done = function () {
+          if (inviteContactHint) {
+            inviteContactHint.textContent = "已複製 · 通知 Edward 開放";
+            setTimeout(function () {
+              if (inviteContactHint) inviteContactHint.textContent = "點一下複製";
+            }, 2500);
+          }
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(email).then(done).catch(function () {
+            // fallback
+            try {
+              var ta = document.createElement("textarea");
+              ta.value = email; document.body.appendChild(ta); ta.select();
+              document.execCommand("copy"); document.body.removeChild(ta);
+              done();
+            } catch (e) {
+              if (inviteContactHint) inviteContactHint.textContent = "複製失敗 · 手動複製 " + email;
+            }
+          });
+        } else {
+          try {
+            var ta2 = document.createElement("textarea");
+            ta2.value = email; document.body.appendChild(ta2); ta2.select();
+            document.execCommand("copy"); document.body.removeChild(ta2);
+            done();
+          } catch (e) {
+            if (inviteContactHint) inviteContactHint.textContent = "複製失敗 · 手動複製 " + email;
+          }
+        }
+      });
     }
     function closeInvite() {
       inviteModal.classList.remove("open");
@@ -1044,6 +1109,10 @@
       if (typeof AnimationPool === "function") {
         animPool = new AnimationPool(liveVideo);
         window.animPool = animPool;
+        // v1.2.0b · 未 Start 時自動輪播 rich pool (親親 / 撒嬌 / hello / acknowledgement / happy / playful)
+        if (typeof animPool.startPreCallRotation === "function") {
+          setTimeout(function () { animPool.startPreCallRotation(); }, 2500);
+        }
       } else {
         console.warn("[sophie] AnimationPool not loaded, fallback to native loop");
       }
@@ -1218,6 +1287,10 @@
     async function startConversation() {
       if (shell.getAttribute("data-state") !== "idle") return;
       startBtn.disabled = true;
+      // v1.2.0b · 通話開始 · 停 pre-call rich 輪播 · in-call 由 GPT event 驅動
+      if (animPool && typeof animPool.stopPreCallRotation === "function") {
+        try { animPool.stopPreCallRotation(); } catch (e) {}
+      }
       try {
         localStream = await navigator.mediaDevices.getUserMedia({
           audio: true,
@@ -1762,6 +1835,10 @@
       micBtn.setAttribute("aria-pressed", "true");
       camBtn.setAttribute("aria-pressed", "true");
       setState("idle");
+      // v1.2.0b · 通話結束 · 重啟 pre-call rich 輪播 (親親 / 撒嬌 / hello)
+      if (animPool && typeof animPool.startPreCallRotation === "function") {
+        try { animPool.startPreCallRotation(); } catch (e) {}
+      }
       // v1.1.2 · 通話結束自動摘要當日對話 + TTL cleanup (raw > 7 天 / summary > 30 天)
       try {
         if (window.ConversationMemory && window.ConversationMemory.summarizeDay) {
