@@ -5,6 +5,11 @@
 
 ---
 
+## v1.1.2.1 · 2026-05-23
+- Anthropic API key resolver 4-name fallback · ANTHROPIC_API_KEY / ANTHROPIC_KEY / anthropic_key / ANTHROPIC 任一命中即用
+- Modal Secret env var 命名不對齊時優雅退到空摘要 · 蘇菲招呼語退到 v1.1.1 不阻塞通話
+- Edward 一次性設 Modal Secret env var 名後啟用蘇菲完整 v1.1.2 記憶能力
+
 ## v1.1.2 · 2026-05-23
 - 記憶連續性 · IndexedDB 7 天對話 raw / 30 天蘇菲視角摘要
 - 後端 /memory/summarize stateless · Claude Haiku 摘要對話成 {summary, mood, promises}
