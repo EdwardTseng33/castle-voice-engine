@@ -469,7 +469,6 @@
     // video loop always playing (autoplay loop muted) · no voice-lifecycle.js
 
     var shell      = document.getElementById("shell");
-    var infoBtn    = document.getElementById("infoBtn");
     var startBtn   = document.getElementById("startBtn");
     var micBtn     = document.getElementById("micBtn");
     var camBtn     = document.getElementById("camBtn");
@@ -561,10 +560,6 @@
       startedAtMs = 0;
       timerEl.textContent = "00:00";
     }
-
-    infoBtn.addEventListener("click", function () {
-      logEl.classList.toggle("open");
-    });
 
     startBtn.addEventListener("click", function () {
       startConversation().catch(function (err) {
