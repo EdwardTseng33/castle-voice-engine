@@ -1571,10 +1571,12 @@
                   input: {
                     transcription: { model: "whisper-1" },
                     turn_detection: {
+                      // v1.2.0d · Edward 5/23 catch「對話遲鈍」· 加快 GPT 接話
+                      // silence_duration 800 → 450ms · GPT 偵到你停 450ms 就開始回 (原 800 太遲鈍)
                       type: "server_vad",
                       threshold: 0.5,
                       prefix_padding_ms: 300,
-                      silence_duration_ms: 800,
+                      silence_duration_ms: 450,
                       create_response: true
                     }
                   },
@@ -1601,16 +1603,22 @@
               }
             }));
             log("session.update sent (instr len=" + instructions.length + ", tools=1)");
-            // v0.9.0.3 · session.update 後立刻 trigger response.create 讓蘇菲主動講開頭招呼語
+            // v1.2.0d · Edward 5/23 catch「點 START 沒有開頭就講 HELLO」
+            // 600ms timeout 不可靠 (有時 session.updated 還沒回來) · 改成等 session.updated 事件後再 trigger
+            // window flag 給 dc message handler 抓
+            window.__sophiePendingGreeting = true;
+            // fallback: 1800ms 後若還沒 trigger 就強制 send (避免 session.updated 事件丟失永遠不講)
             setTimeout(function () {
-              try {
-                dc.send(JSON.stringify({ type: "response.create" }));
-                log("response.create sent (trigger opening greeting · no modalities param)");
-                // 不在 client 同步 emit greeting · GPT 會自己根據招呼語內容 function call · 避免閃頻雙觸發
-              } catch (e) {
-                log("response.create send fail: " + e.message);
+              if (window.__sophiePendingGreeting) {
+                try {
+                  dc.send(JSON.stringify({ type: "response.create" }));
+                  window.__sophiePendingGreeting = false;
+                  log("response.create sent (fallback timer · 1800ms)");
+                } catch (e) {
+                  log("response.create fallback send fail: " + e.message);
+                }
               }
-            }, 600);
+            }, 1800);
           } catch (e) {
             log("session.update send fail: " + e.message);
           }
@@ -1636,6 +1644,16 @@
             } else if (data.type === "session.created" || data.type === "session.updated" ||
                        data.type === "response.created" || data.type === "response.done") {
               log("OAI evt: " + data.type);
+              // v1.2.0d · session.updated 後立刻 trigger opening greeting · 確保 GPT 開頭就講 HELLO
+              if (data.type === "session.updated" && window.__sophiePendingGreeting) {
+                window.__sophiePendingGreeting = false;
+                try {
+                  dc.send(JSON.stringify({ type: "response.create" }));
+                  log("response.create sent (session.updated trigger)");
+                } catch (e) {
+                  log("response.create send fail: " + e.message);
+                }
+              }
             } else if (data.type === "response.audio.start" || data.type === "response.output_audio.start") {
               if (animPool && typeof animPool.startSpeaking === "function") {
                 animPool.startSpeaking();

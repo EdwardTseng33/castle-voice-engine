@@ -134,28 +134,37 @@
     this._active = false;
     this._phase = 0;
   }
+  // v1.2.0d · Edward 5/23 catch「講話一直閃黑頻」+「對話遲鈍」· 砍 phase 1 + 加 deferred idle (合併短句不切)
+  // start: 直接 speaking.mp4 loop (不切 with-gesture)
+  // stop: 不立刻切 idle · 1500ms 內若新 start 就維持 speaking loop (合併短句子間隔 · 不再多次切 src 黑頻)
   SpeakingController.prototype.start = function () {
-    // v1.2.0c · Edward 5/23 catch「閃頻沒對上動態」· 砍 8s breath pause 中斷
-    // 改成：phase 1 speaking-with-gesture (5s 帶手勢) → phase 2 speaking loop 永遠 (講完才 stop)
-    // 不再中間切 idle 1.5s · 通話中視覺一致 · GPT stop 才回 idle
+    // 清 deferred idle (如果在 1.5s 等待中、cancel)
+    if (this._idleDelay) { clearTimeout(this._idleDelay); this._idleDelay = null; }
+    if (this._active) {
+      // 已在 speaking loop · 不重新 set src · 直接續 (不閃黑)
+      this.pool._log("speaking continue (already active · no src reset)");
+      return;
+    }
     this._stopTimers();
     this._active = true;
-    this._phase = 1;
-    this.pool._playRaw("speaking-with-gesture", false);
-    var self = this;
-    this._t1 = setTimeout(function () {
-      if (!self._active) return;
-      self._phase = 2;
-      self.pool._playRaw("speaking", true);
-    }, 5000);
-    this.pool._log("speaking start (phase 1: with-gesture · phase 2 永久 loop · 不 breath pause)");
+    this._phase = 2;
+    this.pool._playRaw("speaking", true);
+    this.pool._log("speaking start (loop speaking.mp4 · no phase 1 · no breath pause)");
   };
   SpeakingController.prototype.stop = function () {
+    if (!this._active && !this._idleDelay) return;
     this._active = false;
     this._stopTimers();
-    var idle = this.pool.idleRotator.pickIdleOnly();
-    this.pool._playRaw(idle, true);
-    this.pool._log("speaking stop (return idle=" + idle + ")");
+    if (this._idleDelay) { clearTimeout(this._idleDelay); this._idleDelay = null; }
+    var self = this;
+    // v1.2.0d · 1500ms deferred idle · 短句子間隔不再切回 idle 再切回 speaking = 不黑頻
+    this._idleDelay = setTimeout(function () {
+      self._idleDelay = null;
+      if (self._active) return; // 又 start 了、不切 idle
+      var idle = self.pool.idleRotator.pickIdleOnly();
+      self.pool._playRaw(idle, true);
+      self.pool._log("speaking stop -> idle " + idle + " (1500ms no new audio)");
+    }, 1500);
   };
   SpeakingController.prototype._stopTimers = function () {
     if (this._t1) { clearTimeout(this._t1); this._t1 = null; }
