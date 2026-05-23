@@ -719,7 +719,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.7.1</span>
+          <span class="vm-version">v1.7.2</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -728,6 +728,15 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.7.2</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>蘇菲晨間 brief 上線 · 工作日早上 5-11 點開蘇菲 · 她直接整理今天</li>
+            <li>整合：時間 + 台北天氣 + 工作狀態 → Claude Sonnet 寫成蘇菲口吻 brief</li>
+            <li>週末 / 其他時段 → 維持原 v1.1.2 招呼語 (promise / mood reference)</li>
+            <li>沒 work_status 時 graceful fallback「今天想動什麼」</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.7.1</span><span class="vm-entry-date">2026-05-23</span></header>
           <ul class="vm-list">
             <li>真特助雛形 · 感知層 ship</li>
@@ -1647,12 +1656,39 @@
             window.SessionMemory.write(fallbackGreeting);
           }
 
-          // v1.1.2 · IndexedDB lookup async · resolve 後 send session.update (greeting decided)
-          var greetingPromise = (window.ConversationMemory && window.ConversationMemory.getRecentSummaries)
-            ? window.ConversationMemory.getRecentSummaries(7)
+          // v1.7.2 · 工作日早上 5-11 → 蘇菲晨間 brief (時間+天氣+工作狀態 by Claude)
+          // 其他時段 → v1.1.2 pickGreetingV2 (含 promise/mood 招呼)
+          var _nowD = new Date();
+          var _nowH = _nowD.getHours();
+          var _nowDay = _nowD.getDay();
+          var _isWorkdayMorning = (_nowH >= 5 && _nowH < 11) && (_nowDay !== 0) && (_nowDay !== 6);
+          var greetingPromise;
+          if (_isWorkdayMorning) {
+            greetingPromise = fetch("/brain/morning_brief", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: "{}",
+            })
+              .then(function (r) { return r.json(); })
+              .then(function (data) {
+                if (data && data.ok && data.brief) {
+                  log("[v1.7.2] morning_brief OK: " + data.brief.slice(0, 80));
+                  return data.brief;
+                }
+                return fallbackGreeting;
+              })
+              ["catch"](function (e) {
+                log("[v1.7.2] morning_brief fail: " + e.message);
+                return fallbackGreeting;
+              });
+          } else if (window.ConversationMemory && window.ConversationMemory.getRecentSummaries) {
+            greetingPromise = window.ConversationMemory.getRecentSummaries(7)
                 .then(function (recent) { return _pickGreetingV2(sessionCtx, recent); })
-                ["catch"](function () { return fallbackGreeting; })
-            : Promise.resolve(fallbackGreeting);
+                ["catch"](function () { return fallbackGreeting; });
+          } else {
+            greetingPromise = Promise.resolve(fallbackGreeting);
+          }
 
           // v1.1.2 · greetingPromise.then 把整段 session.update 包起來 (greeting 由 IndexedDB lookup 決定)
           greetingPromise.then(function (greeting) {

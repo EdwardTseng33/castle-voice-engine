@@ -300,3 +300,82 @@ def attach_brain_routes(app):
             return {"ok": True, "keys": keys, "total": len(keys)}
         except Exception as e:
             return JSONResponse({"ok": False, "detail": str(e)[:200]}, status_code=500)
+
+    # ===== v1.7.2 晨間簡報 · 蘇菲特助級早安整合 =====
+
+    @app.post("/brain/morning_brief")
+    async def _morning_brief(request: Request):
+        """整合時間 + 天氣 + 工作狀態 + 近期對話 → Claude 寫成蘇菲口吻 brief"""
+        from datetime import datetime
+        try:
+            import zoneinfo
+            now = datetime.now(zoneinfo.ZoneInfo("Asia/Taipei"))
+        except Exception:
+            now = datetime.now()
+
+        # 1. 時間
+        weekday_zh = ["週一","週二","週三","週四","週五","週六","週日"][now.weekday()]
+        is_weekend = now.weekday() >= 5
+        hour = now.hour
+
+        # 2. 天氣
+        weather_str = ""
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=8) as cli:
+                r = await cli.get("https://wttr.in/Taipei?format=j1&lang=zh-tw")
+                w = r.json().get("current_condition", [{}])[0]
+                desc_arr = w.get("lang_zh-tw", [{}])
+                desc = (desc_arr[0].get("value", "") if desc_arr else "") or w.get("weatherDesc", [{}])[0].get("value", "")
+                weather_str = f"台北 {w.get('temp_C','?')}°C 體感 {w.get('FeelsLikeC','?')}°C · {desc} · 濕度 {w.get('humidity','?')}%"
+        except Exception:
+            weather_str = "(天氣查不到)"
+
+        # 3. 工作狀態
+        work_summary = "目前沒看到工作狀態紀錄"
+        try:
+            ws_path = "/lipsync_cache/sophie_work_status.json"
+            if os.path.exists(ws_path):
+                with open(ws_path, "r", encoding="utf-8") as f:
+                    ws_data = json.load(f)
+                work_summary = ws_data.get("status_summary", str(ws_data)[:300])
+        except Exception:
+            pass
+
+        # 4. Claude 整合成 brief (蘇菲口吻 ≤ 80 字 · 純對話、不寫條列)
+        api_key = _resolve_anthropic_key()
+        if not api_key:
+            # graceful fallback · 沒 Claude 也能組基本 brief
+            brief = f"Edward 早 · 今天{weekday_zh}{'（週末）' if is_weekend else ''} · {weather_str} · {work_summary[:80]}"
+            return {"ok": True, "brief": brief, "fallback": True}
+
+        try:
+            from anthropic import Anthropic
+            client = Anthropic(api_key=api_key)
+            prompt_user = (
+                f"[時間] {now.strftime('%Y-%m-%d %H:%M')} · {weekday_zh}"
+                f"{' · 週末' if is_weekend else ''}\n"
+                f"[天氣] {weather_str}\n"
+                f"[工作狀態] {work_summary}\n\n"
+                "請把上面整理成 1 段蘇菲早安 brief、給 Edward 聽。"
+                "規則：≤ 100 字 / 純口語對話 / 不要條列 / 不要說「以下幾點」/ 直接像朋友早上跟你說話。"
+                "週末就放鬆一點、工作日就帶點推進感。"
+                "若工作狀態空、就先寒暄 + 問 Edward『今天想動什麼』。"
+            )
+            msg = client.messages.create(
+                model="claude-sonnet-4-5",
+                max_tokens=300,
+                system=(
+                    "你是 Sophie · Edward 個人特助。"
+                    "口吻：堅定 / 樸實 / 不矯飾 / 第一人稱『我』+『Edward / 你』。"
+                    "zh-TW 自然口語。"
+                ),
+                messages=[{"role": "user", "content": prompt_user}],
+            )
+            brief = msg.content[0].text if msg.content else ""
+            return {"ok": True, "brief": brief, "time": now.strftime("%H:%M"), "weekday": weekday_zh}
+        except Exception as e:
+            logger.exception("[brain] morning_brief fail")
+            # graceful fallback
+            brief = f"Edward 早 · 今天{weekday_zh} · {weather_str} · 今天想動什麼？"
+            return {"ok": True, "brief": brief, "fallback": True, "detail": str(e)[:200]}
