@@ -516,7 +516,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.1.1</span>
+          <span class="vm-version">v1.1.2</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -525,6 +525,16 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.1.2</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>記憶連續性 · IndexedDB 7 天對話 raw + 30 天蘇菲視角摘要</li>
+            <li>後端 /memory/summarize · Claude Haiku stateless 摘要 (summary / mood / promises)</li>
+            <li>pickGreetingV2 開場帶昨天 promise / mood reference · 不裝失憶</li>
+            <li>通話結束自動 summarizeDay · TTL 自動清 raw 7 天 / summary 30 天</li>
+            <li>隱私 · raw 對話只在 browser IndexedDB · 後端不存 · Sally / PII 紅線 inherit</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.1.1</span><span class="vm-entry-date">2026-05-23</span></header>
           <ul class="vm-list">
             <li>主動性升級 · 時間感知 + 歷史感知 + 環境感知</li>
@@ -668,6 +678,7 @@
   </script>
 
   <script src="/static/session-memory.js"></script>
+  <script src="/static/conversation-memory.js"></script>
   <script src="/static/animation-pool.js"></script>
 
   <script>
@@ -898,6 +909,17 @@
           peerConn.addTrack(t, localStream);
         });
 
+        // v1.1.2 · sessionId per (day + connection start)
+        // 用 today date + 上次 lastVisit ms · 同一日多次連線聚同 record / 跨日新 record
+        (function () {
+          var d = new Date();
+          var y = d.getFullYear();
+          var m = String(d.getMonth() + 1); if (m.length < 2) m = "0" + m;
+          var day = String(d.getDate()); if (day.length < 2) day = "0" + day;
+          var today = y + "-" + m + "-" + day;
+          window.__sophieSessionId = "s-" + today;  // 同日同 id 聚 turns / 跨日新 id
+        })();
+        log("sophie session id: " + window.__sophieSessionId);
         var dc = peerConn.createDataChannel("oai-events");
         dc.addEventListener("open", function () {
           log("dc open");
@@ -1023,18 +1045,44 @@
             }
             return pickFullGreeting(h, isWeekend, isMonday);
           }
-          // v1.1.1 · 讀 session memory 餵 ctx · 講完寫回
+          // v1.1.2 · 讀 session memory + IndexedDB conversation memory · 開場帶昨天 mood / promise reference
           var sessionCtx = (window.SessionMemory && window.SessionMemory.read)
             ? window.SessionMemory.read()
             : { lastVisit: null, totalSessions: 0, lastGreeting: null };
           log("session ctx: lastVisit=" + (sessionCtx.lastVisit ? sessionCtx.lastVisit.toISOString() : "null")
               + " totalSessions=" + sessionCtx.totalSessions);
-          var greeting = pickGreeting(sessionCtx);
-          log("greeting picked: " + greeting);
-          // 寫回 (totalSessions++ · lastVisit=now · lastGreeting=greeting)
-          if (window.SessionMemory && window.SessionMemory.write) {
-            window.SessionMemory.write(greeting);
+
+          // v1.1.2 · pickGreetingV2 with conversation memory · 30%/25% 機率用 promise / mood 招呼
+          function _pickGreetingV2(ctx, recent) {
+            if (!recent || recent.length === 0) return pickGreeting(ctx);
+            var lastDay = recent[0];
+            var promises = (lastDay && lastDay.promises) ? lastDay.promises : [];
+            if (promises.length > 0 && Math.random() < 0.30) {
+              var p = promises[Math.floor(Math.random() * promises.length)];
+              return "Edward · 上次說的 " + p + " · 我有記著";
+            }
+            var mood = lastDay && lastDay.mood;
+            if (mood === "tired" && Math.random() < 0.25) return "Edward · 昨天看你有點累 · 今天有歇到嗎";
+            if (mood === "accomplished" && Math.random() < 0.25) return "Edward · 接著昨天那股勁";
+            if (mood === "stressed" && Math.random() < 0.20) return "Edward · 昨天那件事有放下嗎";
+            if (mood === "happy" && Math.random() < 0.20) return "Edward · 昨天笑得開 · 今天也是嗎";
+            return pickGreeting(ctx);
           }
+
+          var fallbackGreeting = pickGreeting(sessionCtx);  // v1.1.1 同步保底
+          if (window.SessionMemory && window.SessionMemory.write) {
+            window.SessionMemory.write(fallbackGreeting);
+          }
+
+          // v1.1.2 · IndexedDB lookup async · resolve 後 send session.update (greeting decided)
+          var greetingPromise = (window.ConversationMemory && window.ConversationMemory.getRecentSummaries)
+            ? window.ConversationMemory.getRecentSummaries(7)
+                .then(function (recent) { return _pickGreetingV2(sessionCtx, recent); })
+                ["catch"](function () { return fallbackGreeting; })
+            : Promise.resolve(fallbackGreeting);
+
+          // v1.1.2 · greetingPromise.then 把整段 session.update 包起來 (greeting 由 IndexedDB lookup 決定)
+          greetingPromise.then(function (greeting) {
 
           var baseInstr = window.__sophieInstructions ||
             "You are Sophie, the warm Mandarin companion. Always respond in Traditional Chinese (zh-TW). Keep replies short and conversational.";
@@ -1105,6 +1153,14 @@
           } catch (e) {
             log("session.update send fail: " + e.message);
           }
+          })["catch"](function (gErr) {
+            log("greetingPromise chain fail: " + (gErr && gErr.message));
+          }).then(function () {
+            // v1.1.2 · 把蘇菲招呼語當第一個 sophie turn 寫進 IndexedDB · 也起 cleanup TTL
+            try {
+              if (window.ConversationMemory && window.ConversationMemory.cleanup) window.ConversationMemory.cleanup();
+            } catch (e) {}
+          });
         });
         dc.addEventListener("error", function (ev) {
           log("dc error: " + (ev.error ? ev.error.message : "unknown"));
@@ -1133,12 +1189,26 @@
               if (sophieTextBuffer && sophieTextBuffer.length > 0) {
                 lastSophieText = sophieTextBuffer;
                 sophieTextBuffer = "";
+                // v1.1.2 · sophie turn 寫進 IndexedDB
+                try {
+                  if (window.ConversationMemory && window.ConversationMemory.recordTurn && window.__sophieSessionId && lastSophieText) {
+                    window.ConversationMemory.recordTurn(window.__sophieSessionId, "sophie", lastSophieText);
+                  }
+                } catch (e) {}
               }
             } else if (data.type === "response.audio_transcript.delta" || data.type === "response.output_audio_transcript.delta") {
               // v1.1.0 · 累積 transcript chunk · 餵桌面通知 body
               if (typeof data.delta === "string") {
                 sophieTextBuffer += data.delta;
               }
+            } else if (data.type === "conversation.item.input_audio_transcription.completed") {
+              // v1.1.2 · user turn 寫進 IndexedDB · whisper-1 transcribe 完成的 user 語音文字
+              try {
+                var userText = data.transcript || "";
+                if (window.ConversationMemory && window.ConversationMemory.recordTurn && window.__sophieSessionId && userText.trim()) {
+                  window.ConversationMemory.recordTurn(window.__sophieSessionId, "user", userText);
+                }
+              } catch (e) {}
             } else if (data.type === "vision.emotion" || data.type === "vp.vision.emotion") {
               try {
                 var vState = data.state || (data.payload && data.payload.state);
@@ -1277,6 +1347,17 @@
       micBtn.setAttribute("aria-pressed", "true");
       camBtn.setAttribute("aria-pressed", "true");
       setState("idle");
+      // v1.1.2 · 通話結束自動摘要當日對話 + TTL cleanup (raw > 7 天 / summary > 30 天)
+      try {
+        if (window.ConversationMemory && window.ConversationMemory.summarizeDay) {
+          window.ConversationMemory.summarizeDay().then(function (rec) {
+            log("memory summarize result: " + (rec ? rec.mood + " / " + rec.promises.length + " promises" : "empty"));
+          });
+        }
+        if (window.ConversationMemory && window.ConversationMemory.cleanup) {
+          window.ConversationMemory.cleanup();
+        }
+      } catch (e) {}
     }
 
     micBtn.addEventListener("click", function () {

@@ -70,11 +70,13 @@ def fastapi_app():
     from castle.server.camera_endpoints import attach_camera_routes
     from castle.server.dispatch_endpoints import attach_dispatch_routes
     from castle.server.tavus_endpoints import attach_tavus_routes
+    from castle.server.memory_endpoints import attach_memory_routes  # v1.1.2 IndexedDB summary backend
 
     attach_realtime_routes(fastapi_instance)
     attach_camera_routes(fastapi_instance)
     attach_dispatch_routes(fastapi_instance)  # v0.3.0 Phase 2 後半段: castle dispatch + phase2/status
     attach_tavus_routes(fastapi_instance)  # v0.3.2 Phase 3.2: Tavus CVI 即時對話 video
+    attach_memory_routes(fastapi_instance)  # v1.1.2 Phase 3.3: 記憶連續性 (Claude Haiku 摘要 · 後端 stateless)
 
     # v0.9.6 Google OAuth 認證 (Edward 5/23 拍板)
     from fastapi import Request

@@ -5,6 +5,15 @@
 
 ---
 
+## v1.1.2 · 2026-05-23
+- 記憶連續性 · IndexedDB 7 天對話 raw / 30 天蘇菲視角摘要
+- 後端 /memory/summarize stateless · Claude Haiku 摘要對話成 {summary, mood, promises}
+- 開場招呼語升級 pickGreetingV2 · 帶昨天 promise / mood reference 不裝失憶
+- 通話結束自動 summarizeDay(today) + TTL cleanup (raw > 7 天 / summary > 30 天)
+- 隱私 · raw 對話只在 browser IndexedDB · 後端不存 · Sally / PII 紅線 inherit prompt 層
+- 5/min/email rate limit · ANTHROPIC_API_KEY from Modal Secret
+- SW CACHE bump v1.1.1 → v1.1.2 (+ conversation-memory.js precache)
+
 ## v1.1.1 · 2026-05-23
 - 主動性升級 · 時間感知 + 歷史感知 + 環境感知
 - 招呼語三層 fallback：同 session 30 分鐘內回來 = 接續 / 同日重訪 = 短招呼 / 跨日 = 完整池
