@@ -108,6 +108,94 @@
       color: var(--fg);
       letter-spacing: 0.3px;
     }
+    .version-trigger {
+      background: transparent;
+      border: 0;
+      padding: 4px;
+      cursor: pointer;
+      color: rgba(255, 255, 255, 0.45);
+      display: inline-flex;
+      align-items: center;
+      transition: color var(--motion-fast) var(--easing), transform var(--motion-fast) var(--easing);
+    }
+    .version-trigger:hover { color: rgba(255, 255, 255, 0.92); transform: scale(1.1); }
+    .version-trigger:active { transform: scale(0.95); }
+    .version-trigger:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; border-radius: 50%; }
+
+    .version-modal {
+      position: fixed; inset: 0; z-index: 100;
+      display: none;
+      align-items: center; justify-content: center;
+      padding: 24px; pointer-events: none;
+    }
+    .version-modal.open { display: flex; pointer-events: auto; }
+    .version-modal-backdrop {
+      position: absolute; inset: 0;
+      background: rgba(0, 0, 0, 0.62);
+      -webkit-backdrop-filter: blur(16px) saturate(120%);
+      backdrop-filter: blur(16px) saturate(120%);
+      opacity: 0;
+      transition: opacity var(--motion-smooth) var(--easing);
+    }
+    .version-modal.open .version-modal-backdrop { opacity: 1; }
+    .version-modal-panel {
+      position: relative; width: 100%; max-width: 420px;
+      max-height: min(78vh, 640px);
+      background: rgba(20, 20, 22, 0.78);
+      -webkit-backdrop-filter: blur(28px) saturate(140%);
+      backdrop-filter: blur(28px) saturate(140%);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 8px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08);
+      display: flex; flex-direction: column; overflow: hidden;
+      opacity: 0; transform: translateY(8px) scale(0.98);
+      transition: opacity var(--motion-normal) var(--easing), transform var(--motion-normal) var(--easing);
+    }
+    .version-modal.open .version-modal-panel { opacity: 1; transform: translateY(0) scale(1); }
+    .vm-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 22px 14px; flex-shrink: 0;
+    }
+    .vm-title { font-size: 17px; font-weight: 500; color: var(--fg); display: flex; align-items: baseline; gap: 10px; }
+    .vm-name { font-family: "Georgia", serif; font-style: italic; font-weight: 400; }
+    .vm-version { font-family: ui-monospace, monospace; font-size: 13px; color: var(--fg-dim); letter-spacing: 0.02em; }
+    .vm-close {
+      width: 32px; height: 32px; border: 0; border-radius: 8px;
+      background: rgba(255,255,255,0.06); color: var(--fg-dim);
+      cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+      transition: background var(--motion-fast) var(--easing), color var(--motion-fast) var(--easing);
+    }
+    .vm-close:hover { background: rgba(255,255,255,0.14); color: var(--fg); }
+    .vm-close svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; }
+    .vm-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.18) 20%, rgba(255,255,255,0.18) 80%, transparent 100%);
+      margin: 0 22px; flex-shrink: 0;
+    }
+    .vm-body { padding: 18px 22px 6px; overflow-y: auto; flex: 1; }
+    .vm-body::-webkit-scrollbar { width: 6px; }
+    .vm-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+    .vm-entry { margin-bottom: 18px; }
+    .vm-entry:last-child { margin-bottom: 12px; }
+    .vm-entry-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+    .vm-entry-ver { font-family: ui-monospace, monospace; font-size: 12px; color: var(--fg); font-weight: 600; }
+    .vm-entry-latest .vm-entry-ver { color: var(--green-hi); }
+    .vm-entry-date { font-size: 11px; color: var(--fg-fade); letter-spacing: 0.04em; }
+    .vm-list { list-style: none; padding-left: 0; }
+    .vm-list li { font-size: 13px; line-height: 1.55; color: var(--fg-dim); padding: 2px 0 2px 14px; position: relative; }
+    .vm-list li::before { content: "·"; position: absolute; left: 4px; color: var(--fg-fade); font-weight: 600; }
+    .vm-footer {
+      padding: 12px 22px 18px; text-align: center; flex-shrink: 0;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .vm-powered { font-size: 10px; color: var(--fg-fade); letter-spacing: 0.6px; text-transform: uppercase; }
+    @media (orientation: portrait) and (max-width: 600px) {
+      .version-modal { padding: 16px; }
+      .version-modal-panel { max-height: min(82vh, 600px); border-radius: 14px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .version-modal-backdrop, .version-modal-panel { transition: opacity 0.01ms !important; transform: none !important; }
+    }
     .stage-canvas {
       flex: 1;
       position: relative;
@@ -366,6 +454,13 @@
     <header class="top">
       <div class="name-block">
         <span class="name">蘇菲</span>
+        <button type="button" class="version-trigger" id="versionTrigger" aria-label="版本資訊與更新紀錄" aria-haspopup="dialog" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="16" x2="12" y2="12"/>
+            <line x1="12" y1="8" x2="12.01" y2="8"/>
+          </svg>
+        </button>
       </div>
     </header>
 
@@ -435,6 +530,101 @@
     </footer>
 
   </div>
+
+  <div class="version-modal" id="versionModal" role="dialog" aria-modal="true" aria-labelledby="vmTitle" aria-hidden="true">
+    <div class="version-modal-backdrop" id="vmBackdrop"></div>
+    <div class="version-modal-panel" role="document">
+      <header class="vm-header">
+        <h2 class="vm-title" id="vmTitle">
+          <span class="vm-name">蘇菲</span>
+          <span class="vm-version">v0.9.0</span>
+        </h2>
+        <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </header>
+      <div class="vm-divider" aria-hidden="true"></div>
+      <div class="vm-body">
+        <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v0.9.0</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>17 支動畫池 ship · 待機 4 變體輪播 + 撥頭髮隨機插入</li>
+            <li>GPT 講話智能 3 階段（5s 內帶手部 / 5-15s 基本 / >15s 每 8s 待機呼吸）</li>
+            <li>GPT 10 種情緒分析自動觸發（高興 / 原來如此 / 對不起 / 親密類等）</li>
+            <li>視訊偵測 4 種表情同步（笑 / 皺眉 / 累 / 驚訝）</li>
+            <li>砍右下無功能水印</li>
+            <li>加版本資訊圖示（你正在看的這個）</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v0.8.2</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>修瀏覽器內背景小程式擋 mp4 分段下載 critical bug</li>
+            <li>砍 video 舊版假圖 poster fallback</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v0.7.2</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>純黑 Duix 範式 + 兩個狀態簡化（待機 / 通話中）</li>
+            <li>Inter sans-serif 字型 + Lucide SVG 圖示</li>
+            <li>桌面 / 手機 app 圖示（一鍵安裝）</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v0.7.1</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>修聽不到 bug（OpenAI 5/23 規範變動同步）</li>
+            <li>9:16 直式手機滿屏</li>
+            <li>Vidu AI 高解析自然轉頭 loop 替換</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v0.7</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>三層架構上線（聽 Breeze ASR / 說 GPT realtime / 嘴 MuseTalk）</li>
+            <li>Modal A10G 自家後台 ≈ $66/月嘴對齊層</li>
+            <li>Sally 6 歲紅線守則雙層防護</li>
+          </ul>
+        </article>
+      </div>
+      <footer class="vm-footer"><span class="vm-powered">Powered by 城堡</span></footer>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    var trigger = document.getElementById("versionTrigger");
+    var modal = document.getElementById("versionModal");
+    var backdrop = document.getElementById("vmBackdrop");
+    var closeBtn = document.getElementById("vmClose");
+    var panel = modal.querySelector(".version-modal-panel");
+    var lastFocused = null;
+    function open() {
+      lastFocused = document.activeElement;
+      modal.classList.add("open");
+      modal.setAttribute("aria-hidden", "false");
+      trigger.setAttribute("aria-expanded", "true");
+      setTimeout(function () { closeBtn.focus(); }, 50);
+    }
+    function close() {
+      modal.classList.remove("open");
+      modal.setAttribute("aria-hidden", "true");
+      trigger.setAttribute("aria-expanded", "false");
+      if (lastFocused && lastFocused.focus) lastFocused.focus();
+    }
+    trigger.addEventListener("click", open);
+    closeBtn.addEventListener("click", close);
+    backdrop.addEventListener("click", close);
+    panel.addEventListener("click", function (e) { e.stopPropagation(); });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && modal.classList.contains("open")) {
+        e.stopPropagation();
+        close();
+      }
+    });
+  })();
+  </script>
 
   <script src="/static/animation-pool.js"></script>
 
