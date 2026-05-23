@@ -20,6 +20,8 @@
   <style>
     :root {
       --bg: #000;
+      /* v1.9.1 · Sophie 影片主色橘 · 切影片時 fallback 顯這色不顯黑 (修黑頻) */
+      --sophie-warm: #C95B2E;
       --fg: rgba(255, 255, 255, 0.96);
       --fg-dim: rgba(255, 255, 255, 0.62);
       --fg-fade: rgba(255, 255, 255, 0.30);
@@ -67,7 +69,8 @@
     html, body {
       height: 100%;
       overflow: hidden;
-      background: var(--bg);
+      /* v1.9.1 · body 底色配合 Sophie 主色橘 · iPhone Safari PWA status bar 區域 = 同色滿版 */
+      background: var(--sophie-warm);
       font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text",
                    "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei",
                    sans-serif;
@@ -82,7 +85,8 @@
       width: 100vw;
       height: 100vh;
       height: 100dvh;
-      background: var(--bg);
+      /* v1.9.1 · shell 底色改 Sophie 主色橘 · 配合 viewport-fit=cover + safe-area = 滿到 status bar */
+      background: var(--sophie-warm);
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -402,6 +406,8 @@
       align-items: center;
       justify-content: center;
       overflow: hidden;
+      /* v1.9.1 · stage 底色 Sophie 主色橘 · video 載入空檔不閃黑 */
+      background: var(--sophie-warm);
     }
     .live-video {
       position: absolute;
@@ -409,12 +415,14 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
-      background: var(--bg);
+      /* v1.9.1 · video 自己 transparent · src 切換 fallback = 顯露後面 stage-canvas 橘色 · 不再閃黑 */
+      background: transparent;
       opacity: 1;
-      /* v1.2.0g · 砍雙緩衝、回單 video · src 切換時 150ms opacity fade 隱黑頻 */
-      transition: opacity 150ms ease-out;
+      /* v1.2.0g · 砍雙緩衝、回單 video · src 切換時 opacity fade 隱黑頻 */
+      /* v1.9.1 · 切換期 opacity 0.85 (不要降太低、否則整張縱使是橘色也會看到 dip) */
+      transition: opacity 120ms ease-out;
     }
-    .live-video.is-switching { opacity: 0.3; }
+    .live-video.is-switching { opacity: 0.85; }
     .bottom {
       position: absolute;
       bottom: 0; left: 0; right: 0;
@@ -655,6 +663,7 @@
         muted
         loop
         preload="auto"
+        poster="/static/sophie-portrait.png"
         src="/static/sophie-idle.mp4"
       ></video>
       <audio class="live-audio" id="liveAudio" autoplay playsinline></audio>
@@ -719,7 +728,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.9.0</span>
+          <span class="vm-version">v1.9.1</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -728,6 +737,18 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.1</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>核心體驗 hotfix · Edward 截圖戳破「沒滿版 + 講話又黑頻」回頭修</li>
+            <li>黑頻 root cause: video 元素底色 #000 · 切影片瞬間露出純黑</li>
+            <li>修法: video 底色改 transparent · stage / shell / body 全改 Sophie 主色橘 #C95B2E</li>
+            <li>切影片 fade 改成 opacity 0.85 (原 0.3 太低、橘色也會看到 dip)</li>
+            <li>加 poster=sophie-portrait.png · 第一幀沒到前先顯 Sophie 照片不顯空白</li>
+            <li>iPhone Safari PWA status bar 區域 = 同色滿版 · 不再看到黑邊</li>
+            <li>停一切 v2.x 新功能 · 核心體驗不穩 = 全部新功能白搭</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.0</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>感知層 4 訊號 ship · 最大短板補強 0.5 → 1.5/3</li>
