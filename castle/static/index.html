@@ -725,7 +725,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.9.9</span>
+          <span class="vm-version">v1.9.10</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -734,6 +734,17 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.10</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>SW 自動更新 · 不再卡舊版 cache · Edward 不用刷兩次</li>
+            <li>Edward 怒言「Start 點了沒反應 + 都是問題的成品」後立 QA SOP</li>
+            <li>偵測到新 SW 安裝完 → 自動 postMessage SKIP_WAITING + reload</li>
+            <li>controllerchange → 自動 reload 拿最新 HTML</li>
+            <li>Ship-pre QA SOP 寫死 docs/ship-pre-qa-sop.md · 5 Gate 必過</li>
+            <li>違反 = self-catch + 累積到第 3 次升 persona rebuild</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.9</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>修 v1.9.8 整個畫面 crash · Chrome MCP 抓到 SyntaxError</li>
@@ -2758,12 +2769,37 @@
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", function () {
         navigator.serviceWorker.register("/static/sw.js", { scope: "/static/" })
-          .then(function () { log("sw registered"); })
+          .then(function (reg) {
+            log("sw registered");
+            // v1.9.10 · 自動偵測 SW 更新、有新版立刻 activate (不用 Edward 刷兩次)
+            try {
+              reg.update();
+              reg.addEventListener("updatefound", function () {
+                var nw = reg.installing;
+                if (!nw) return;
+                nw.addEventListener("statechange", function () {
+                  if (nw.state === "installed" && navigator.serviceWorker.controller) {
+                    log("[sw] new version installed · reloading...");
+                    // 通知 new SW skipWaiting 並 reload
+                    try { nw.postMessage && nw.postMessage({ type: "SKIP_WAITING" }); } catch (e) {}
+                    setTimeout(function () { window.location.reload(); }, 300);
+                  }
+                });
+              });
+            } catch (e) {}
+          })
           .catch(function (err) { log("sw fail: " + err.message); });
+        // v1.9.10 · controllerchange = 新 SW 接管 · 立刻 reload 拿最新 HTML
+        navigator.serviceWorker.addEventListener("controllerchange", function () {
+          if (window.__sophieReloaded) return;
+          window.__sophieReloaded = true;
+          log("[sw] controller changed · reload");
+          setTimeout(function () { window.location.reload(); }, 200);
+        });
       });
     }
 
-    log("Voice Path v1.9.3 ready - dual-layer crossfade + idle keep-alive - 2026-05-24");
+    log("Voice Path v1.9.10 ready - SW auto-update + QA-strict ship - 2026-05-24");
 
     // ===== v1.9.7 · 單 video 保活 (砍雙層、只剩底層 idle) =====
     (function setupVideoKeepAlive() {

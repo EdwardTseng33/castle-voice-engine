@@ -2,7 +2,7 @@
 // Voice Path v1.1.2.1 Service Worker
 // 待機 shell offline-first · realtime / breeze / musetalk 永遠 network-first 不 cache
 // v1.1.0 baseline · push notification handler + background sync handler (framework only · server 端 push 尚未 build)
-const CACHE_VERSION = 'v1.9.9';
+const CACHE_VERSION = 'v1.9.10';
 const CACHE_NAME = 'sophie-' + CACHE_VERSION;
 
 // 不 precache mp4 (5MB+ · 阻塞 install) · video element 自己 streaming load 即可
@@ -35,6 +35,13 @@ self.addEventListener('install', function (event) {
     })
   );
   self.skipWaiting();
+});
+
+// v1.9.10 · 收到 SKIP_WAITING 訊息立刻啟用新版 (讓 page reload 拿到新 SW)
+self.addEventListener('message', function (event) {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('activate', function (event) {
