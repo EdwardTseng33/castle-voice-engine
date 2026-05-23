@@ -1679,16 +1679,25 @@
                   log("response.create send fail: " + e.message);
                 }
               }
-            } else if (data.type === "response.audio.start" || data.type === "response.output_audio.start") {
-              if (animPool && typeof animPool.startSpeaking === "function") {
+              // v1.3.1 · response.created 時 reset speaking trigger flag (每次新回應重新等第一個 audio delta)
+              if (data.type === "response.created") {
+                window.__sophieSpeakingTriggered = false;
+              }
+            } else if (data.type === "response.audio.delta" || data.type === "response.output_audio.delta") {
+              // v1.3.1 CRITICAL FIX · OpenAI Realtime 不 emit *.start · 改聽第一個 audio delta trigger startSpeaking
+              // 前版聽 response.audio.start = 永不 fire = video 永遠停 idle = Edward 看到「嘴沒動」根本原因
+              if (!window.__sophieSpeakingTriggered && animPool && typeof animPool.startSpeaking === "function") {
+                window.__sophieSpeakingTriggered = true;
                 animPool.startSpeaking();
-                log("audio.start -> startSpeaking");
+                log("audio.delta first chunk -> startSpeaking · video 切 sophie-speaking.mp4");
               }
             } else if (data.type === "response.audio.done" || data.type === "response.output_audio.done" || data.type === "response.audio_transcript.done") {
               if (animPool && typeof animPool.stopSpeaking === "function") {
                 animPool.stopSpeaking();
                 log("audio.done -> stopSpeaking");
               }
+              // v1.3.1 · reset trigger flag (下次回應重新等)
+              window.__sophieSpeakingTriggered = false;
               // v1.1.0 · flush transcript buffer 進 lastSophieText
               if (sophieTextBuffer && sophieTextBuffer.length > 0) {
                 lastSophieText = sophieTextBuffer;
