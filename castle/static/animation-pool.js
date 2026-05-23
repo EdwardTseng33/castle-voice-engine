@@ -12,8 +12,7 @@
     "idle-3": "/static/sophie-idle-3.mp4",
     "idle-4": "/static/sophie-idle-4.mp4",
     "stroke-hair": "/static/sophie-stroke-hair.mp4",
-    "speaking": "/static/sophie-speaking.mp4",
-    "speaking-with-gesture": "/static/sophie-speaking-with-gesture.mp4",
+    /* v1.9.8 · 移除 speaking / speaking-with-gesture · 改由 idle + lipsync 命中 mp4 處理 */
     "task-received": "/static/sophie-task-received.mp4",
     "task-handoff": "/static/sophie-task-handoff.mp4",
     "happy": "/static/sophie-happy.mp4",
