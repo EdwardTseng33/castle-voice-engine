@@ -164,16 +164,26 @@
     this._stopTimers();
     if (this._idleDelay) { clearTimeout(this._idleDelay); this._idleDelay = null; }
     var self = this;
-    // 250ms 兜底句子間隔 · 期間若新 start 直接 cancel
     this._idleDelay = setTimeout(function () {
       self._idleDelay = null;
       if (self._active) return;
       try {
         var sp = document.getElementById("liveVideoSpeaking");
-        if (sp) sp.classList.remove("is-active");
+        if (sp) {
+          sp.classList.remove("is-active");
+          // v1.9.6 · 若 lipsync mid-play 被打斷、reset 回通用 speaking.mp4 loop
+          var currSrc = sp.currentSrc || sp.src || "";
+          if (currSrc.indexOf("/lipsync/") !== -1) {
+            sp.src = "/static/sophie-speaking.mp4";
+            sp.loop = true;
+            sp.muted = true;
+            var p = sp.play();
+            if (p && p["catch"]) p["catch"](function () {});
+          }
+        }
       } catch (e) {}
       self.pool.currentState = "idle";
-      self.pool._log("speaking stop (crossfade out · idle 永遠在底層 · 完全不切 src)");
+      self.pool._log("speaking stop (crossfade out · 若 lipsync 中斷 reset 回通用)");
     }, 250);
   };
   SpeakingController.prototype._stopTimers = function () {

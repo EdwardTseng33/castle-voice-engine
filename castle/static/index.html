@@ -745,7 +745,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.9.5</span>
+          <span class="vm-version">v1.9.6</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -754,6 +754,17 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.6</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>嘴對齊 100 句重接上 · Edward catch「沒對到生成的對嘴動態」</li>
+            <li>v1.9.2 為修黑頻把 lipsync 整個關掉 · 那 $43 投資沒在用</li>
+            <li>新架構：lipsync 命中走 speaking 上層 · 底層 idle 不動</li>
+            <li>切片時上層 opacity 0.75 隱載入空檔 (100ms transition)</li>
+            <li>lipsync 播完 onended 切回通用 speaking.mp4 loop</li>
+            <li>蘇菲停話時若 lipsync 中斷 · reset 回通用 speaking 不卡狀態</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.5</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>徹底清掉舊照片三道保險 · Edward catch「v1.9.4 還是會閃舊照片」</li>
@@ -2379,11 +2390,60 @@
               if (typeof data.delta === "string") {
                 sophieTextBuffer += data.delta;
               }
-              // v1.9.2 · lipsync 暫停 (會壓掉底層 idle loop 破壞雙層架構)
-              // TODO v1.9.3+ · 重做 lipsync 走 speaking 上層 + 兜底 idle 不斷
-              // v1.5.0 原邏輯保留 reference 在 git log fb3e98b
-              if (false && window.PhraseMatcher && !window.__sophiePhraseMatched && sophieTextBuffer.length >= 5) {
-                // disabled
+              // v1.9.6 · 嘴對齊重新接上 · 走 speaking 上層 · 底層 idle 不動
+              // 蘇菲講話累積 5+ 字 · phrase-matcher 命中 · 把上層 speaking src 切到對應 lipsync mp4
+              if (window.PhraseMatcher && !window.__sophiePhraseMatched && sophieTextBuffer.length >= 5) {
+                var match = window.PhraseMatcher.findMatching(sophieTextBuffer);
+                if (match) {
+                  window.__sophiePhraseMatched = true;
+                  try {
+                    var spLayer = document.getElementById('liveVideoSpeaking');
+                    if (spLayer) {
+                      // 切 src 前 opacity 稍降 100ms 隱 src 切換 1-2 幀
+                      spLayer.style.transition = "opacity 100ms ease-out";
+                      spLayer.style.opacity = "0.75";
+                      setTimeout(function () {
+                        try {
+                          spLayer.src = match.phrase.mp4_url;
+                          spLayer.loop = false;
+                          spLayer.muted = true;
+                          var p = spLayer.play();
+                          if (p && p["catch"]) p["catch"](function () {});
+                          // canplay 後立刻 opacity 回 1
+                          var onReady = function () {
+                            spLayer.removeEventListener("canplay", onReady);
+                            spLayer.style.transition = "";
+                            spLayer.style.opacity = "";
+                          };
+                          spLayer.addEventListener("canplay", onReady, { once: true });
+                          // 100ms 兜底
+                          setTimeout(function () {
+                            spLayer.style.transition = "";
+                            spLayer.style.opacity = "";
+                          }, 600);
+                          // 嘴對齊播完 → 切回通用 speaking.mp4 loop
+                          spLayer.onended = function () {
+                            try {
+                              spLayer.src = "/static/sophie-speaking.mp4";
+                              spLayer.loop = true;
+                              spLayer.muted = true;
+                              var pp = spLayer.play();
+                              if (pp && pp["catch"]) pp["catch"](function () {});
+                            } catch (e) {}
+                            spLayer.onended = null;
+                          };
+                          log("[LIPSYNC HIT] " + match.phrase.sentence + " (dist=" + match.distance + ")");
+                        } catch (innerE) {
+                          log("[LIPSYNC] inner switch fail: " + innerE.message);
+                          spLayer.style.transition = "";
+                          spLayer.style.opacity = "";
+                        }
+                      }, 100);
+                    }
+                  } catch (e) {
+                    log("[LIPSYNC] switch fail: " + e.message);
+                  }
+                }
               }
             } else if (data.type === "conversation.item.input_audio_transcription.completed") {
               // v1.1.2 · user turn 寫進 IndexedDB · whisper-1 transcribe 完成的 user 語音文字
