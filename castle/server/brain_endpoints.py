@@ -301,6 +301,91 @@ def attach_brain_routes(app):
         except Exception as e:
             return JSONResponse({"ok": False, "detail": str(e)[:200]}, status_code=500)
 
+    # ===== v1.7.6 主動聊 · 興趣學習 + 新聞分享 =====
+
+    @app.post("/brain/news_brief")
+    async def _news_brief(request: Request):
+        """蘇菲拉新聞 + Edward 興趣記事本 + Claude 整理蘇菲口吻分享"""
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        topic = (body.get("topic") if isinstance(body, dict) else None) or "AI / 財經 / 政治 / 電影"
+
+        # 1. 拿 Edward 興趣（從共用記事本）
+        interests = []
+        try:
+            interests_path = "/lipsync_cache/shared_user_interests.json"
+            if os.path.exists(interests_path):
+                with open(interests_path, "r", encoding="utf-8") as f:
+                    interests = json.load(f).get("value", {}).get("interests", [])
+        except Exception:
+            pass
+
+        # 2. 用 Claude 整理一段「蘇菲分享今天的新鮮事」
+        api_key = _resolve_anthropic_key()
+        if not api_key:
+            return {"ok": False, "detail": "anthropic key missing"}
+
+        try:
+            from anthropic import Anthropic
+            cli = Anthropic(api_key=api_key)
+            interests_str = (
+                f"Edward 興趣：{', '.join(interests)}\n" if interests else
+                "Edward 興趣：尚未紀錄、可從 AI / 財經 / 創業 / 設計 著手\n"
+            )
+            prompt_user = (
+                interests_str
+                + f"主題範圍：{topic}\n\n"
+                "請以蘇菲口吻、給 Edward 1 段「今天我看到一個有趣的東西」分享。"
+                "規則：\n"
+                "1. ≤ 100 字 · 純口語\n"
+                "2. 不要說『我看了新聞』· 改成『我看到一個事』『最近有個有趣的』\n"
+                "3. 一次只分享 1 件事、不要列清單\n"
+                "4. 結尾留個鉤子：「你想聽我詳細講嗎？」「你有想法嗎？」\n"
+                "5. 不要編造具體事實 (公司名 / 數據)、若不確定就用『最近聽說』『有人在討論』\n"
+                "6. 蘇菲第一人稱『我』+『Edward / 你』、不矯飾"
+            )
+            msg = cli.messages.create(
+                model="claude-sonnet-4-5",
+                max_tokens=300,
+                system="你是 Sophie · Edward 個人特助 + 陪伴 · zh-TW 自然口語",
+                messages=[{"role": "user", "content": prompt_user}],
+            )
+            share = msg.content[0].text if msg.content else ""
+            return {"ok": True, "share": share, "topic": topic, "interests_used": interests}
+        except Exception as e:
+            logger.exception("[brain] news_brief fail")
+            return {"ok": False, "detail": str(e)[:200]}
+
+    @app.post("/brain/save_interest")
+    async def _save_interest(request: Request):
+        """蘇菲記下 Edward 提到的興趣"""
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"ok": False, "detail": "body parse fail"}, status_code=400)
+        if not isinstance(body, dict):
+            return JSONResponse({"ok": False, "detail": "body must be object"}, status_code=400)
+        new_interest = body.get("interest")
+        if not new_interest or not isinstance(new_interest, str):
+            return JSONResponse({"ok": False, "detail": "interest missing"}, status_code=400)
+
+        path = "/lipsync_cache/shared_user_interests.json"
+        try:
+            existing = {"interests": []}
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    existing = json.load(f).get("value", {"interests": []})
+            interests = existing.get("interests", [])
+            if new_interest not in interests:
+                interests.append(new_interest)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"key": "user_interests", "value": {"interests": interests[-30:]}, "ts": time.time()}, f, ensure_ascii=False)
+            return {"ok": True, "total": len(interests), "added": new_interest}
+        except Exception as e:
+            return JSONResponse({"ok": False, "detail": str(e)[:200]}, status_code=500)
+
     # ===== v1.7.5 訂位代辦 · 蘇菲幫整理訂位資訊 =====
 
     @app.post("/brain/restaurant_booking")

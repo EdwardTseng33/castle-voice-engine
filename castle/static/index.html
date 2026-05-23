@@ -719,7 +719,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.8.2</span>
+          <span class="vm-version">v1.7.6</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -728,6 +728,16 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.7.6</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>主動聊新聞 + 興趣學 ship · 蘇菲分享當天有趣事 + 記 Edward 興趣</li>
+            <li>news_brief 工具 · Claude 寫蘇菲口吻分享 + 從共用記事本拉興趣</li>
+            <li>save_interest 工具 · Edward 提到任何興趣蘇菲自動記下 (累積到記事本)</li>
+            <li>自治紀律 SOP 落檔 (docs/sophie-autonomous-mode-sop.md)</li>
+            <li>OAuth setup guides 預寫 (docs/v1.7.3-1.7.4-1.8.3-setup-guides.md)</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.8.2</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>同步翻譯模式 ship · 跨國對話真即時口譯 (Edward ↔ 外國人雙向翻)</li>
@@ -1884,6 +1894,29 @@
                       },
                       required: ["restaurant", "when", "party_size"]
                     }
+                  },
+                  {
+                    type: "function",
+                    name: "news_brief",
+                    description: "蘇菲分享 1 個今天的新鮮事 (AI / 財經 / 政治 / 電影 / 書 / 社群)。Edward 說「分享一下」「最近有什麼有趣的」「主動聊一下」時、或蘇菲偵測冷場時主動呼叫。會用 Edward 興趣記事本生個性化內容。",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        topic: { type: "string", description: "主題範圍 (例 AI / 財經 / 電影) · 預設廣泛" }
+                      }
+                    }
+                  },
+                  {
+                    type: "function",
+                    name: "save_interest",
+                    description: "Edward 提到他喜歡 / 在看 / 關注的東西時、蘇菲悄悄記下。例 Edward 說『我最近在看雲端情人』『最近研究 AI agent』、就 save_interest('雲端情人')、save_interest('AI agent')。讓蘇菲學 Edward 興趣、之後 news_brief 用上。",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        interest: { type: "string", description: "Edward 提到的興趣 / 主題 / 電影 / 書名" }
+                      },
+                      required: ["interest"]
+                    }
                   }
                 ]
               }
@@ -2072,7 +2105,7 @@
                 } else if (
                   fnName === "ask_claude" || fnName === "dispatch_howl" || fnName === "dispatch_code" ||
                   fnName === "get_time_context" || fnName === "get_weather" || fnName === "get_work_status" ||
-                  fnName === "restaurant_booking"
+                  fnName === "restaurant_booking" || fnName === "news_brief" || fnName === "save_interest"
                 ) {
                   // v1.6.0 · Brain layer · 派工到後端
                   // v1.7.1 · 加感知層 (time / weather / work_status)
@@ -2110,8 +2143,11 @@
                       } else if (fnName === "get_work_status") {
                         output = result.status_summary || JSON.stringify(result);
                       } else if (fnName === "restaurant_booking") {
-                        // brief + google search link · 蘇菲口頭講 brief、連結會存進記事本
                         output = (result.brief || "訂位資料整理完") + " · Google 搜訂位連結: " + (result.google_search || "");
+                      } else if (fnName === "news_brief") {
+                        output = result.share || "我今天還沒看到什麼特別有趣的";
+                      } else if (fnName === "save_interest") {
+                        output = "好 · 我記下了 " + (result.added || "");
                       } else {
                         output = JSON.stringify(result).slice(0, 500);
                       }
