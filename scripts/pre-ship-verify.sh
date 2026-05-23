@@ -65,7 +65,21 @@ echo "$HTML" | grep -q "蘇菲" && echo "✓ HTML 含蘇菲名" || { echo "✗ H
 echo "$HTML" | grep -q "sophie-idle.mp4" && echo "✓ HTML video src=sophie-idle.mp4" || { echo "✗ HTML video src 錯"; FAIL=1; }
 echo "$HTML" | grep -q "sophie-portrait.png" && { echo "✗ HTML 還有 poster=sophie-portrait.png (v0.8.1 已砍 · 應該不存在)"; FAIL=1; } || echo "✓ HTML 無舊 poster fallback"
 echo "$HTML" | grep -q "animation-pool.js" && echo "✓ HTML mount animation-pool.js" || { echo "✗ HTML 缺 animation-pool.js script"; FAIL=1; }
-echo "$HTML" | grep -q "Sophie · AI Companion" && echo "✓ HTML 含新 watermark" || echo "⚠ HTML 缺 Sophie · AI Companion watermark (女巫 v0.7.3 spec 待 implement OK)"
+echo "$HTML" | grep -q "versionTrigger" && echo "✓ HTML 含版本資訊 i 圖示 (v0.7.3 info modal)" || echo "⚠ HTML 缺 versionTrigger"
+
+echo ""
+echo "[5/5] 紀律 · changelog 同步檢查 (Edward 5/23 17:50 catch)"
+# 抓最近 3 個 git commit 版本標籤
+RECENT_COMMITS=$(cd "C:/Users/Administrator/Claude/castle-voice-engine" 2>/dev/null && git log --oneline -10 | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?' | sort -u | head -3)
+HTML_VERSIONS=$(echo "$HTML" | grep -oE 'class="vm-entry-ver">v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?<' | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?' | head -5)
+for VER in $RECENT_COMMITS; do
+  if echo "$HTML_VERSIONS" | grep -q "^$VER\$"; then
+    echo "✓ Changelog 含 $VER"
+  else
+    echo "⚠ Changelog 缺 $VER (commit 有但 modal 沒同步 · 須更新版本資訊彈窗)"
+    FAIL=1
+  fi
+done
 
 echo ""
 echo "==========================================="

@@ -515,7 +515,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v0.9.0</span>
+          <span class="vm-version">v0.9.0.4</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -524,14 +524,40 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v0.9.0.4</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>修 OpenAI 新規範 response.modalities 報錯</li>
+            <li>修畫面閃頻（砍 client 端 greeting 雙觸發）</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v0.9.0.3</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>開頭招呼語：5 時段 × 5 句池 = 25 種變體</li>
+            <li>Start 點下蘇菲主動講第一句 + greeting 揮手動畫</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v0.9.0.2</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>砍 in-call「視訊為預錄迎賓」字幕（用過知道不必再說）</li>
+            <li>音訊補強：volume=1.0 + 解除靜音 + 點畫面解鎖 fallback</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v0.9.0.1</span><span class="vm-entry-date">2026-05-23</span></header>
+          <ul class="vm-list">
+            <li>砍右下「Sophie · AI Companion」純裝飾水印</li>
+            <li>左上加版本資訊 ⓘ 圖示（你正在看的這個）取代</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v0.9.0</span><span class="vm-entry-date">2026-05-23</span></header>
           <ul class="vm-list">
             <li>17 支動畫池 ship · 待機 4 變體輪播 + 撥頭髮隨機插入</li>
             <li>GPT 講話智能 3 階段（5s 內帶手部 / 5-15s 基本 / >15s 每 8s 待機呼吸）</li>
             <li>GPT 10 種情緒分析自動觸發（高興 / 原來如此 / 對不起 / 親密類等）</li>
             <li>視訊偵測 4 種表情同步（笑 / 皺眉 / 累 / 驚訝）</li>
-            <li>砍右下無功能水印</li>
-            <li>加版本資訊圖示（你正在看的這個）</li>
           </ul>
         </article>
         <article class="vm-entry">
