@@ -157,14 +157,15 @@
     this._stopTimers();
     if (this._idleDelay) { clearTimeout(this._idleDelay); this._idleDelay = null; }
     var self = this;
-    // v1.2.0d · 1500ms deferred idle · 短句子間隔不再切回 idle 再切回 speaking = 不黑頻
+    // v1.3.3 · Edward 5/23「講 2 秒嘴 5 秒」catch · deferred 1500ms → 250ms
+    // 蘇菲講完立刻切待機 · 不再「嘴動超出聲音 3 秒」· 250ms 兜底句子間隔閃黑
     this._idleDelay = setTimeout(function () {
       self._idleDelay = null;
       if (self._active) return; // 又 start 了、不切 idle
       var idle = self.pool.idleRotator.pickIdleOnly();
       self.pool._playRaw(idle, true);
-      self.pool._log("speaking stop -> idle " + idle + " (1500ms no new audio)");
-    }, 1500);
+      self.pool._log("speaking stop -> idle " + idle + " (250ms no new audio)");
+    }, 250);
   };
   SpeakingController.prototype._stopTimers = function () {
     if (this._t1) { clearTimeout(this._t1); this._t1 = null; }
