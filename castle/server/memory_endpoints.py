@@ -112,9 +112,18 @@ def _parse_json_loose(text: str) -> dict[str, Any] | None:
 _FALLBACK = {"summary": "", "mood": "neutral", "promises": []}
 
 
+def _resolve_anthropic_key() -> str | None:
+    """Modal secret env var naming 不一定是 ANTHROPIC_API_KEY · 試常見 4 名 fallback."""
+    for name in ("ANTHROPIC_API_KEY", "ANTHROPIC_KEY", "anthropic_key", "ANTHROPIC"):
+        v = os.environ.get(name, "").strip()
+        if v:
+            return v
+    return None
+
+
 def _call_claude_haiku(turns: list[Turn]) -> dict[str, Any]:
     """Call Claude Haiku · return parsed dict or _FALLBACK on any error."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = _resolve_anthropic_key()
     if not api_key:
         logger.warning("[memory] ANTHROPIC_API_KEY missing - returning fallback")
         return dict(_FALLBACK)
@@ -177,7 +186,7 @@ def attach_memory_routes(app):
     async def _memory_health():
         return {
             "ok": True,
-            "anthropic_key": bool(os.environ.get("ANTHROPIC_API_KEY")),
+            "anthropic_key": bool(_resolve_anthropic_key()),
             "debug_raw": _DEBUG_RAW,
             "rate_limit_per_min": _RATE_LIMIT_PER_MIN,
         }
