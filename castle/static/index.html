@@ -418,7 +418,7 @@
       background: transparent;
     }
     /* v1.9.7 · 砍雙層回單 · idle 永遠在 · 命中 lipsync 才切片 · 切片時 opacity 0.75 隱載入空檔 */
-    .live-video.is-switching { opacity: 0.75; transition: opacity 100ms ease-out; }
+    .live-video.is-switching { opacity: 1; transition: none; }
     .bottom {
       position: absolute;
       bottom: 0; left: 0; right: 0;
@@ -725,7 +725,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v2.0.1</span>
+          <span class="vm-version">v2.0.2</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -734,6 +734,14 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v2.0.2</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>穩定單片源模式: 暫停 idle/action/speaking MP4 互切 · 先根除閃頻</li>
+            <li>講話動態改走音量微縮放 + 亮度反應 · 不再靠切影片製造動態</li>
+            <li>保留 AvatarDirector / lipsync adapter 入口 · 下一步接 compositor 無縫切換</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v2.0.1</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>結構收斂: AvatarDirector 提前初始化 · AnimationPool 初始 idle 也走 Director</li>
@@ -1485,11 +1493,11 @@
   })();
   </script>
 
-  <script src="/static/session-memory.js?v=2.0.1"></script>
-  <script src="/static/conversation-memory.js?v=2.0.1"></script>
-  <script src="/static/avatar-director.js?v=2.0.1"></script>
-  <script src="/static/animation-pool.js?v=2.0.1"></script>
-  <script src="/static/phrase-matcher.js?v=2.0.1"></script>
+  <script src="/static/session-memory.js?v=2.0.2"></script>
+  <script src="/static/conversation-memory.js?v=2.0.2"></script>
+  <script src="/static/avatar-director.js?v=2.0.2"></script>
+  <script src="/static/animation-pool.js?v=2.0.2"></script>
+  <script src="/static/phrase-matcher.js?v=2.0.2"></script>
 
   <script>
   (function () {
@@ -1514,6 +1522,9 @@
     var micIcon    = document.getElementById("micIcon");
     var camIcon    = document.getElementById("camIcon");
     var avatarDirector = null;
+    window.__sophieStableSingleVideo = true;
+    window.__sophieEnableAvatarIdleRotation = false;
+    window.__sophieEnableAvatarActions = false;
     window.__sophieEnableLipsync = false;
 
     try {
@@ -1537,7 +1548,7 @@
         window.animPool = animPool;
         // v1.3.5 · 重啟未 Start 待機豐富輪播 · 砍掉情緒反應類 (適合訪客場景)
         // 65% idle / 15% stroke-hair / 12% playful / 8% greeting · 14-22s 隨機切
-        if (typeof animPool.startPreCallRotation === "function") {
+        if (window.__sophieEnableAvatarIdleRotation === true && typeof animPool.startPreCallRotation === "function") {
           setTimeout(function () { animPool.startPreCallRotation(); }, 3000);
         }
         // v1.5.0 · 預載嘴對齊預錄 100 句 manifest (fuzzy match 用)
@@ -1833,7 +1844,7 @@
       // v1.9.12 · 修進通話閃頻 · 強制切回 idle.mp4 (避免 stroke-hair / playful 等 pre-call 狀態進通話時切換)
       try {
         var v = document.getElementById('liveVideo');
-        if (v && v.currentSrc && v.currentSrc.indexOf('/sophie-idle.mp4') === -1) {
+        if (!window.__sophieStableSingleVideo && v && v.currentSrc && v.currentSrc.indexOf('/sophie-idle.mp4') === -1) {
           if (window.__sophieAvatarDirector && window.__sophieAvatarDirector.playIdle) {
             window.__sophieAvatarDirector.playIdle('/static/sophie-idle.mp4', 'call-start-reset');
             log('[v2.0.0] 進通話請 AvatarDirector 切回 sophie-idle.mp4');
@@ -2914,7 +2925,7 @@
       // v1.9 感知層 · 通話結束 mic inactive
       try { if (window.__sophieSetMicActive) window.__sophieSetMicActive(false); } catch (e) {}
       // v1.3.5 · 通話結束 · 重啟待機豐富輪播
-      if (animPool && typeof animPool.startPreCallRotation === "function") {
+      if (window.__sophieEnableAvatarIdleRotation === true && animPool && typeof animPool.startPreCallRotation === "function") {
         try { animPool.startPreCallRotation(); } catch (e) {}
       }
       // v1.1.2 · 通話結束自動摘要當日對話 + TTL cleanup (raw > 7 天 / summary > 30 天)
@@ -3003,7 +3014,7 @@
       });
     }
 
-    log("Voice Path v2.0.1 ready - AvatarDirector owns visual flow, lipsync gated - 2026-05-24");
+    log("Voice Path v2.0.2 ready - stable single-video mode, no MP4 source switching - 2026-05-24");
 
     // ===== v1.9.7 · 單 video 保活 (砍雙層、只剩底層 idle) =====
     (function setupVideoKeepAlive() {

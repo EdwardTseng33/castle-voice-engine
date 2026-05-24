@@ -148,6 +148,11 @@
     this._active = true;
     this._phase = 2;
     this.pool.currentState = "speaking";
+    if (window.__sophieStableSingleVideo === true) {
+      window.__sophieVisualMode = "speaking";
+      this.pool._log("speaking start · stable single-video mode, no src switch");
+      return;
+    }
     // v1.9.15 · lipsync 已鎖 · 不動 video
     if (window.__sophieLipsyncActive || window.__sophieVisualMode === "lipsync") {
       this.pool._log("speaking start · skip src switch (lipsync 鎖住)");
@@ -190,6 +195,12 @@
     this._active = false;
     this._stopTimers();
     if (this._idleDelay) { clearTimeout(this._idleDelay); this._idleDelay = null; }
+    if (window.__sophieStableSingleVideo === true) {
+      window.__sophieVisualMode = "idle";
+      this.pool.currentState = "idle";
+      this.pool._log("speaking stop · stable single-video mode, no src switch");
+      return;
+    }
     var self = this;
     this._idleDelay = setTimeout(function () {
       self._idleDelay = null;
@@ -335,6 +346,11 @@
   };
 
   AnimationPool.prototype._playRaw = function (state, loop) {
+    if (global.__sophieStableSingleVideo === true) {
+      this.currentState = state || this.currentState;
+      this._log("_playRaw skipped · stable single-video mode: " + state);
+      return;
+    }
     var src = ANIMATION_POOL[state];
     if (!src) { this._log("_playRaw missing: " + state); return; }
     if (this._endHandler) {
@@ -420,6 +436,10 @@
   };
 
   AnimationPool.prototype.playAction = function (state) {
+    if (global.__sophieEnableAvatarActions !== true) {
+      this._log("playAction skipped · disabled for anti-flicker stable mode: " + state);
+      return;
+    }
     if (state === "idle") return;
     if (IDLE_VARIANTS.indexOf(state) !== -1) return;
     if (!ANIMATION_POOL[state]) {
@@ -442,6 +462,11 @@
   };
 
   AnimationPool.prototype._returnToIdle = function () {
+    if (global.__sophieStableSingleVideo === true) {
+      this.currentState = "idle";
+      this._log("returnToIdle skipped · stable single-video mode");
+      return;
+    }
     var nextIdle = this.idleRotator.pickNext();
     var isLoop = (IDLE_VARIANTS.indexOf(nextIdle) !== -1);
     this._playRaw(nextIdle, isLoop);
@@ -458,6 +483,10 @@
 
   // v1.2.0b · pre-call 自動輪播 timer (Edward 5/23「未 start 加親親 / 撒嬌 / hello」)
   AnimationPool.prototype.startPreCallRotation = function () {
+    if (global.__sophieEnableAvatarIdleRotation !== true) {
+      this._log("preCallRotation skipped · disabled for anti-flicker stable mode");
+      return;
+    }
     if (this._preCallTimer) return;
     this.idleRotator.setPreCallMode(true);
     var self = this;
