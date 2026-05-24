@@ -725,7 +725,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v2.0.5</span>
+          <span class="vm-version">v2.0.6</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -734,6 +734,14 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v2.0.6</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>修對嘴測試: lipsync 結束後正確釋放 Director 鎖 · 可切回 idle</li>
+            <li>lipsync_test 預設連播 3 次 · phrase_074 太短也看得出來</li>
+            <li>重播同一支 lipsync 片會 reset currentTime · 不再停在結尾</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v2.0.5</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>去口頭禪: 降低「我懂 / 我在 / 收到」權重 · 同場對話避免重複</li>
@@ -1517,11 +1525,11 @@
   })();
   </script>
 
-  <script src="/static/session-memory.js?v=2.0.5"></script>
-  <script src="/static/conversation-memory.js?v=2.0.5"></script>
-  <script src="/static/avatar-director.js?v=2.0.5"></script>
-  <script src="/static/animation-pool.js?v=2.0.5"></script>
-  <script src="/static/phrase-matcher.js?v=2.0.5"></script>
+  <script src="/static/session-memory.js?v=2.0.6"></script>
+  <script src="/static/conversation-memory.js?v=2.0.6"></script>
+  <script src="/static/avatar-director.js?v=2.0.6"></script>
+  <script src="/static/animation-pool.js?v=2.0.6"></script>
+  <script src="/static/phrase-matcher.js?v=2.0.6"></script>
 
   <script>
   (function () {
@@ -1799,10 +1807,17 @@
       if (!id) return;
       if (id.indexOf("phrase_") !== 0) id = "phrase_" + id;
       var url = "/lipsync/" + id + ".mp4";
-      setTimeout(function () {
-        log("[LIPSYNC TEST] " + url);
-        playLipsyncVisual(url, "url-test", "URL TEST", false);
-      }, 1200);
+      var repeat = parseInt(qs.get("lipsync_repeat") || "3", 10);
+      if (!isFinite(repeat) || repeat < 1) repeat = 1;
+      repeat = Math.min(repeat, 5);
+      for (var i = 0; i < repeat; i++) {
+        (function (idx) {
+          setTimeout(function () {
+            log("[LIPSYNC TEST] " + url + " · " + (idx + 1) + "/" + repeat);
+            playLipsyncVisual(url, "url-test-" + (idx + 1), "URL TEST", false);
+          }, 1600 + idx * 1900);
+        })(i);
+      }
     }
 
     function showError(msg) {
@@ -3062,7 +3077,7 @@
       });
     }
 
-    log("Voice Path v2.0.5 ready - reduced catchphrases, natural conversation prompt - 2026-05-24");
+    log("Voice Path v2.0.6 ready - lipsync end release fixed, natural conversation prompt - 2026-05-24");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();

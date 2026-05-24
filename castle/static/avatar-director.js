@@ -1,5 +1,5 @@
 // castle/static/avatar-director.js
-// Voice Path v2.0.5 · single-owner avatar visual runtime.
+// Voice Path v2.0.6 · single-owner avatar visual runtime.
 (function (global) {
   "use strict";
 
@@ -26,6 +26,7 @@
     this._endHandler = null;
     this._readyHandler = null;
     this._timeout = null;
+    this._endTimeout = null;
     global.__sophieVisualMode = "idle";
     global.__sophieLipsyncActive = false;
   }
@@ -43,6 +44,10 @@
     if (this._timeout) {
       clearTimeout(this._timeout);
       this._timeout = null;
+    }
+    if (this._endTimeout) {
+      clearTimeout(this._endTimeout);
+      this._endTimeout = null;
     }
   };
 
@@ -96,6 +101,10 @@
       v.autoplay = true;
       v.setAttribute("preload", "auto");
 
+      if (sameSrc && mode === "lipsync") {
+        try { v.currentTime = Math.max(0, req.currentTime || 0); } catch (e) {}
+      }
+
       if (typeof req.currentTime === "number" && req.currentTime > 0) {
         var seekOnMeta = function () {
           try {
@@ -107,6 +116,49 @@
           } catch (e) {}
         }.bind(this);
         v.addEventListener("loadedmetadata", seekOnMeta, { once: true });
+      }
+
+      var finished = false;
+      var finishPlayback = function (source) {
+        if (finished || seq !== this._seq) return;
+        finished = true;
+        if (mode === "lipsync") {
+          global.__sophieLipsyncActive = false;
+          if (this.mode === "lipsync") {
+            this.mode = "idle";
+            this.owner = "lipsync-ended";
+            this.priority = PRIORITY.idle;
+            global.__sophieVisualMode = "idle";
+          }
+        }
+        if (this._endTimeout) {
+          clearTimeout(this._endTimeout);
+          this._endTimeout = null;
+        }
+        this.log("end " + mode + " · " + (req.label || src) + " · via=" + source);
+        if (typeof req.onEnded === "function") req.onEnded();
+      }.bind(this);
+
+      var armLipsyncEndTimeout = function () {
+        if (mode !== "lipsync" || seq !== this._seq) return;
+        if (this._endTimeout) clearTimeout(this._endTimeout);
+        var dur = 0;
+        var cur = 0;
+        try {
+          dur = isFinite(v.duration) ? v.duration : 0;
+          cur = isFinite(v.currentTime) ? v.currentTime : 0;
+        } catch (e) {}
+        var ms = dur > 0 ? Math.max(900, Math.ceil((dur - cur) * 1000) + 600) : 3500;
+        this._endTimeout = setTimeout(function () {
+          finishPlayback("timeout");
+        }, ms);
+      }.bind(this);
+      if (mode === "lipsync") {
+        if (v.readyState >= 1) {
+          setTimeout(armLipsyncEndTimeout, 0);
+        } else {
+          v.addEventListener("loadedmetadata", armLipsyncEndTimeout, { once: true });
+        }
       }
 
       this._readyHandler = function () {
@@ -122,10 +174,7 @@
 
       this._endHandler = function () {
         if (seq !== this._seq) return;
-        if (mode === "lipsync") {
-          global.__sophieLipsyncActive = false;
-        }
-        if (typeof req.onEnded === "function") req.onEnded();
+        finishPlayback("ended");
       }.bind(this);
       v.addEventListener("ended", this._endHandler, { once: true });
 
