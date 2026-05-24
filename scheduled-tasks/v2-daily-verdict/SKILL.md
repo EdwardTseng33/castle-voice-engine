@@ -20,25 +20,52 @@
 
 ```
 tool: chrome_navigate
-url: https://castle-voice-engine-castle-app--fastapi-app.modal.run/?debug=1
+url: https://edwardt0303--castle-voice-engine-fastapi-app.modal.run/?debug=1
 ```
 
 等 `window.__sophieCompositorReady === true` 出現在 console（最多 15s）。
 
-### Step 2 · Dev bypass header 進站
+### Step 2 · OAuth gate 解 + Dev bypass 進站（4 步驟）
 
-確認 `/dev/health` 可通：
+**前提環境變數**：Modal secret `castle-dev-bypass` 必須設定以下兩個值，缺一 cron 會 401：
+- `CASTLE_DEV_BYPASS_TOKEN` — dev bypass token（從 Modal secret manager 取，不在此明文）
+- `DEV_BYPASS_ENABLED=1` — 卡西法修 dev flag 後此值必為 1，否則 bypass endpoint 關閉
 
+**4 步驟進站流程**：
+
+**Step 2-1** · 從 Modal secret manager 取 `CASTLE_DEV_BYPASS_TOKEN`（cron runner 環境注入，不 hardcode）
+
+**Step 2-2** · 打 `/auth/whoami` 帶 bypass header，觸發 cookie set 副作用：
+
+```javascript
+// CASTLE_DEV_BYPASS_TOKEN 由 cron runner 從 Modal secret 取得後注入
+// 此處用環境變數參照，不寫明文
+fetch('https://edwardt0303--castle-voice-engine-fastapi-app.modal.run/auth/whoami', {
+  headers: {
+    'X-Castle-Dev-Bypass': window.__ENV_CASTLE_DEV_BYPASS_TOKEN || ''
+  },
+  credentials: 'include'
+}).then(r => r.json()).then(d => {
+  console.log('[AUTH WHOAMI]', JSON.stringify(d));
+  // 副作用：server 回 Set-Cookie: castle_session=<short-lived signed cookie>
+  // 後續 navigation 帶 cookie 自動進站，不需再帶 header
+});
 ```
-tool: chrome_execute_javascript
-code: |
-  fetch('/dev/health', {
-    headers: { 'X-Castle-Dev-Bypass': '06c87b230ad966219137a5d7c005266f' }
-  }).then(r => r.json()).then(d => console.log('[DEV HEALTH]', JSON.stringify(d)));
+
+**Step 2-3** · 確認 `/dev/health` 可通（cookie 已 set，此步驟不帶 bypass header）：
+
+```javascript
+fetch('https://edwardt0303--castle-voice-engine-fastapi-app.modal.run/dev/health', {
+  credentials: 'include'
+}).then(r => r.json()).then(d => console.log('[DEV HEALTH]', JSON.stringify(d)));
 ```
 
 預期: `{"ok": true, "mode": "dev", ...}`  
-若 403 → abort 當天 cron，寫 `castle/qa/v2-daily-verdict-{DATE}.md` 標 DEV_BYPASS_FAIL。
+若 401/403 → abort 當天 cron，寫 `castle/qa/v2-daily-verdict-{DATE}.md` 標 DEV_BYPASS_FAIL。
+
+**Step 2-4** · 後續所有 endpoint 呼叫帶 `credentials: 'include'`，cookie 自動附帶，不重複帶 header。
+
+> token 參照：Modal secret `castle-dev-bypass` · 環境變數 `CASTLE_DEV_BYPASS_TOKEN` · 從 Modal secret manager 取，不 hardcode 進 markdown。
 
 ### Step 3 · POST /dev/simulate_realtime 跑 5 輪 e2e 對話
 
@@ -53,13 +80,13 @@ code: |
 | 5 | OK, I understand. Let me handle this. | 英文句測試 |
 
 ```javascript
-// 輪次範例 (重複 5 次不同 utterance)
-fetch('/dev/simulate_realtime', {
+// cookie 已由 Step 2 設好，帶 credentials: 'include' 即可，不帶明文 token
+fetch('https://edwardt0303--castle-voice-engine-fastapi-app.modal.run/dev/simulate_realtime', {
   method: 'POST',
   headers: {
-    'Content-Type': 'application/json',
-    'X-Castle-Dev-Bypass': '06c87b230ad966219137a5d7c005266f'
+    'Content-Type': 'application/json'
   },
+  credentials: 'include',
   body: JSON.stringify({ expected_utterance: '我懂你的感受' })
 }).then(r => {
   // SSE stream · 讀完等 sim.done
