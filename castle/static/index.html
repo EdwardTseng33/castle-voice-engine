@@ -725,7 +725,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.9.16</span>
+          <span class="vm-version">v1.9.17</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -734,6 +734,14 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.17</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>緊急止血: 關閉 900ms lipsync kick · 不再沒命中也硬切 phrase_074</li>
+            <li>保留播放主控權鎖與句庫起手 · 只在 PhraseMatcher 真命中時切 lipsync</li>
+            <li>目標: 先恢復穩定不閃頻 · 下一步改 Avatar Director 架構</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.16</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>霍爾 round 4 verdict · 正常對話沒命中 100 句 manifest · 所以只走 speaking fallback</li>
@@ -1453,10 +1461,10 @@
   })();
   </script>
 
-  <script src="/static/session-memory.js?v=1.9.16"></script>
-  <script src="/static/conversation-memory.js?v=1.9.16"></script>
-  <script src="/static/animation-pool.js?v=1.9.16"></script>
-  <script src="/static/phrase-matcher.js?v=1.9.16"></script>
+  <script src="/static/session-memory.js?v=1.9.17"></script>
+  <script src="/static/conversation-memory.js?v=1.9.17"></script>
+  <script src="/static/animation-pool.js?v=1.9.17"></script>
+  <script src="/static/phrase-matcher.js?v=1.9.17"></script>
 
   <script>
   (function () {
@@ -1688,6 +1696,9 @@
     }
 
     function scheduleLipsyncKick(reason) {
+      // v1.9.17 emergency rollback: forced kick caused visible flicker.
+      // Keep the function as a no-op so existing call sites stay harmless.
+      return;
       clearLipsyncKick();
       window.__sophieLipsyncKickTimer = setTimeout(function () {
         window.__sophieLipsyncKickTimer = null;
@@ -2934,7 +2945,7 @@
       });
     }
 
-    log("Voice Path v1.9.16 ready - lipsync starter + visual kick - 2026-05-24");
+    log("Voice Path v1.9.17 ready - kick disabled, stable visual owner - 2026-05-24");
 
     // ===== v1.9.7 · 單 video 保活 (砍雙層、只剩底層 idle) =====
     (function setupVideoKeepAlive() {
