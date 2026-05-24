@@ -725,7 +725,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.9.18</span>
+          <span class="vm-version">v2.0.0</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -734,6 +734,14 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v2.0.0</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>V2 Avatar Runtime 地基 · 新增 AvatarDirector 單一畫面主控權</li>
+            <li>speaking / idle / action 先改由 Director 統一切換 · 不再各自搶 video.src</li>
+            <li>lipsync 仍暫停 · 等 Director 穩定後再接真即時嘴型</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.18</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>緊急穩定模式: 暫停所有 lipsync mp4 切片 · 先完全停止閃頻</li>
@@ -1469,10 +1477,11 @@
   })();
   </script>
 
-  <script src="/static/session-memory.js?v=1.9.18"></script>
-  <script src="/static/conversation-memory.js?v=1.9.18"></script>
-  <script src="/static/animation-pool.js?v=1.9.18"></script>
-  <script src="/static/phrase-matcher.js?v=1.9.18"></script>
+  <script src="/static/session-memory.js?v=2.0.0"></script>
+  <script src="/static/conversation-memory.js?v=2.0.0"></script>
+  <script src="/static/avatar-director.js?v=2.0.0"></script>
+  <script src="/static/animation-pool.js?v=2.0.0"></script>
+  <script src="/static/phrase-matcher.js?v=2.0.0"></script>
 
   <script>
   (function () {
@@ -1496,6 +1505,7 @@
     var logEl      = document.getElementById("log");
     var micIcon    = document.getElementById("micIcon");
     var camIcon    = document.getElementById("camIcon");
+    var avatarDirector = null;
 
     // v0.8 · 4-state animation pool init
     var animPool = null;
@@ -1624,6 +1634,23 @@
         logEl.textContent += "[" + ts + "] " + msg + "\n";
         logEl.scrollTop = logEl.scrollHeight;
       }
+    }
+
+    try {
+      if (typeof AvatarDirector === "function") {
+        avatarDirector = new AvatarDirector(liveVideo, {
+          log: function (msg) { log("[AvatarDirector] " + msg); }
+        });
+        window.avatarDirector = avatarDirector;
+        window.__sophieAvatarDirector = avatarDirector;
+        if (animPool) {
+          animPool.director = avatarDirector;
+          log("AvatarDirector linked to AnimationPool");
+        }
+        log("AvatarDirector init OK");
+      }
+    } catch (e) {
+      log("AvatarDirector init fail: " + e.message);
     }
 
     function clearLipsyncKick() {
@@ -1794,6 +1821,10 @@
       try {
         var v = document.getElementById('liveVideo');
         if (v && v.currentSrc && v.currentSrc.indexOf('/sophie-idle.mp4') === -1) {
+          if (window.__sophieAvatarDirector && window.__sophieAvatarDirector.playIdle) {
+            window.__sophieAvatarDirector.playIdle('/static/sophie-idle.mp4', 'call-start-reset');
+            log('[v2.0.0] 進通話請 AvatarDirector 切回 sophie-idle.mp4');
+          } else {
           v.classList.add('is-switching');
           v.src = '/static/sophie-idle.mp4';
           v.loop = true;
@@ -1804,6 +1835,7 @@
           v.addEventListener('canplay', onR, { once: true });
           setTimeout(function () { v.classList.remove('is-switching'); }, 500);
           log('[v1.9.12] 進通話強制切回 sophie-idle.mp4 · 避免閃頻');
+          }
         }
       } catch (e) {}
       try {
@@ -2956,7 +2988,7 @@
       });
     }
 
-    log("Voice Path v1.9.18 ready - lipsync paused for stable visual - 2026-05-24");
+    log("Voice Path v2.0.0 ready - AvatarDirector structural runtime - 2026-05-24");
 
     // ===== v1.9.7 · 單 video 保活 (砍雙層、只剩底層 idle) =====
     (function setupVideoKeepAlive() {

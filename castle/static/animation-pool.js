@@ -154,6 +154,11 @@
       return;
     }
     window.__sophieVisualMode = "speaking";
+    if (this.pool.director && this.pool.director.playSpeaking) {
+      this.pool.director.playSpeaking("/static/sophie-speaking.mp4", "speaking-start");
+      this.pool._log("speaking start -> AvatarDirector");
+      return;
+    }
     try {
       var v = this.pool.video;
       if (v) {
@@ -194,6 +199,13 @@
         self.pool._log("speaking stop deferred · lipsync 已接管");
         return;
       }
+      if (self.pool.director && self.pool.director.playIdle) {
+        self.pool.director.playIdle("/static/sophie-idle.mp4", "speaking-stop");
+        window.__sophieVisualMode = "idle";
+        self.pool.currentState = "idle";
+        self.pool._log("speaking stop -> AvatarDirector idle");
+        return;
+      }
       try {
         var v = self.pool.video;
         if (v) {
@@ -227,6 +239,7 @@
     if (!videoEl) { console.warn("[animPool] no video element supplied"); return; }
     // v1.2.0g · 砍 double buffer · 回單 video 簡潔架構
     this.video = videoEl;
+    this.director = global.__sophieAvatarDirector || global.avatarDirector || null;
     this.currentState = "idle";
     this.frequencyGuard = new FrequencyGuard();
     this.idleRotator = new IdleRotator();
@@ -328,6 +341,18 @@
       this.video.removeEventListener("ended", this._endHandler);
       this._endHandler = null;
     }
+    if (this.director && this.director.play) {
+      var mode = (IDLE_VARIANTS.indexOf(state) !== -1 || state === "idle") ? "idle" : "action";
+      this.director.play({
+        mode: mode,
+        src: src,
+        loop: !!loop,
+        owner: "animation-pool",
+        label: state
+      });
+      this.currentState = state;
+      return;
+    }
     // v1.2.0g · src 切換時短暫 opacity 0.3 隱黑頻 (transition 150ms)
     var self = this;
     var sameSrc = false;
@@ -358,6 +383,12 @@
   AnimationPool.prototype._initIdle = function () {
     var idle = this.idleRotator.pickIdleOnly();
     var src = ANIMATION_POOL[idle];
+    if (this.director && this.director.playIdle) {
+      this.director.playIdle(src, "init-idle");
+      this.currentState = idle;
+      this._log("idle init OK via AvatarDirector src=" + idle);
+      return;
+    }
     try {
       if (this.video.getAttribute("src") !== src) { this.video.src = src; }
     } catch (e) {}
