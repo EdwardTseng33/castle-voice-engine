@@ -41,7 +41,7 @@ from fastapi import Request  # module-level import · 防 from __future__ import
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
-    .apt_install("libgl1", "libglib2.0-0")
+    .apt_install("libgl1", "libglib2.0-0", "ffmpeg")  # v3.3b · ffmpeg 給 musetalk audio 轉檔
     .pip_install_from_requirements("requirements.txt")
     .add_local_dir("castle", remote_path="/root/castle")
 )

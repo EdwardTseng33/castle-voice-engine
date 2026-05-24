@@ -1179,3 +1179,191 @@ def attach_brain_routes(app):
         except Exception as e:
             logger.exception("[brain] end_interview fail")
             return JSONResponse({"ok": False, "detail": str(e)[:200]}, status_code=500)
+
+    # ===== v3.3b · MuseTalk Lipsync endpoint (Phase 3 端到端) =====
+    # 蘇菲講話 audio → MuseTalk → 對嘴 mp4 · 動畫狀態用 emit_animation_state 觸發
+    @app.post("/brain/musetalk_generate")
+    async def _musetalk_generate(request: Request):
+        """生成對嘴 mp4 · 接受 16kHz PCM WAV bytes + reference_state"""
+        from fastapi.responses import Response
+        try:
+            body = await request.body()
+            audio_bytes = body
+            reference_state = request.query_params.get("reference_state", "idle")
+            fps = int(request.query_params.get("fps", "25"))
+        except Exception as e:
+            return JSONResponse({"ok": False, "detail": f"body parse fail: {e}"}, status_code=400)
+
+        if not audio_bytes or len(audio_bytes) < 100:
+            return JSONResponse({"ok": False, "detail": "audio body too small"}, status_code=400)
+
+        try:
+            import modal
+            MuseTalkRunner = modal.Cls.from_name(
+                "castle-voice-engine-musetalk-poc", "MuseTalkRunner"
+            )
+            runner = MuseTalkRunner()
+            result = runner.generate_video_chunk.remote(
+                audio_pcm_bytes=audio_bytes,
+                fps=fps,
+                reference_state=reference_state,
+            )
+            if "error" in result:
+                return JSONResponse(
+                    {"ok": False, "detail": result["error"]}, status_code=500
+                )
+            mp4_bytes = result.get("video_bytes", b"")
+            if not mp4_bytes:
+                return JSONResponse({"ok": False, "detail": "empty mp4"}, status_code=500)
+            logger.info(
+                "[brain] musetalk_generate · state=%s · audio=%dB · mp4=%dB · frames=%s",
+                reference_state, len(audio_bytes), len(mp4_bytes), result.get("frame_count"),
+            )
+            return Response(
+                content=mp4_bytes,
+                media_type="video/mp4",
+                headers={
+                    "X-Sophie-Reference-State": reference_state,
+                    "X-Sophie-Frame-Count": str(result.get("frame_count", 0)),
+                    "X-Sophie-Duration-S": str(result.get("duration_s", 0)),
+                },
+            )
+        except Exception as e:
+            logger.exception("[brain] musetalk_generate fail")
+            return JSONResponse({"ok": False, "detail": str(e)[:300]}, status_code=500)
+
+    # ===== v0.7 P2.1 · MuseTalk keep-alive (cold-start hide via snapshot pre-warm) =====
+    # 開頁時瀏覽器 fire-and-forget 打這條 · castle backend 用 modal SDK 觸發 runner.warm()
+    # → Modal 偵測流量 → snapshot restore 在 background 跑 · Edward 開始講話時 GPU 已熱
+    # · 不曝 MUSETALK_AUTH_TOKEN 給瀏覽器（走 Modal SDK auth · castle session cookie 保護）
+    # · runner.warm() 是 idempotent metadata-only call · 60s scaledown_window 內第二次幾乎 NOP
+    @app.get("/brain/musetalk_keepalive")
+    async def _musetalk_keepalive():
+        """Fire-and-forget keep-alive ping · pre-warms MuseTalk GPU container via Modal snapshot."""
+        try:
+            import modal
+            MuseTalkRunner = modal.Cls.from_name(
+                "castle-voice-engine-musetalk-poc", "MuseTalkRunner"
+            )
+            runner = MuseTalkRunner()
+            # spawn = fire-and-forget · don't block client on restore latency
+            runner.warm.spawn()
+            return JSONResponse({"ok": True, "action": "warm_spawned"})
+        except Exception as e:
+            # Soft fail · keep-alive ping 失敗不該擾用戶 · 回 200 + warning let frontend stay silent
+            logger.warning("[brain] musetalk_keepalive soft-fail: %s", str(e)[:200])
+            return JSONResponse({"ok": False, "detail": str(e)[:200], "soft_fail": True}, status_code=200)
+
+    # ===== v0.7 P2 . Phase 1 . MuseTalk chunked streaming endpoint (calcifer 2026-05-24) =====
+    # Streams fMP4 fragments as multipart/mixed for MediaSource API on the frontend.
+    # Each chunk = 12 frames @ 25fps = 0.48s (whisper hop aligned).
+    # Modal runner.generate_video_chunk_streaming.remote_gen(...) drives the per-chunk yield.
+    # Old /brain/musetalk_generate kept untouched as fallback (full-mp4 single response).
+    @app.post("/brain/musetalk_generate_streaming")
+    async def _musetalk_generate_streaming(request: Request):
+        """Streaming chunked fMP4 generator.
+
+        Body: raw audio bytes (16kHz mono float32 WAV).
+        Query:
+            reference_state: idle / greeting / etc (default idle)
+            fps: int (default 25)
+            chunk_frames: int (default 12 . 0.48s @ 25fps)
+        Response: multipart/mixed; boundary=castlefmp4
+        """
+        from fastapi.responses import StreamingResponse
+
+        try:
+            body = await request.body()
+            audio_bytes = body
+            reference_state = request.query_params.get("reference_state", "idle")
+            fps = int(request.query_params.get("fps", "25"))
+            chunk_frames = int(request.query_params.get("chunk_frames", "12"))
+        except Exception as e:
+            return JSONResponse({"ok": False, "detail": f"body parse fail: {e}"}, status_code=400)
+
+        if not audio_bytes or len(audio_bytes) < 100:
+            return JSONResponse({"ok": False, "detail": "audio body too small"}, status_code=400)
+
+        BOUNDARY = "castlefmp4"
+        # Build multipart envelope pieces using explicit CRLF (RFC 2046 .  do not let Python source CR/LF mangle these).
+        CRLF = chr(13) + chr(10)
+
+        async def stream_iter():
+            import modal
+            try:
+                MuseTalkRunner = modal.Cls.from_name(
+                    "castle-voice-engine-musetalk-poc", "MuseTalkRunner"
+                )
+                runner = MuseTalkRunner()
+                seg_count = 0
+                total_frames = 0
+                for chunk in runner.generate_video_chunk_streaming.remote_gen(
+                    audio_pcm_bytes=audio_bytes,
+                    fps=fps,
+                    reference_state=reference_state,
+                    chunk_frames=chunk_frames,
+                    container_fmt="fmp4",
+                ):
+                    if "error" in chunk:
+                        logger.error("[brain] streaming chunk error: %s", chunk.get("error"))
+                        err_body = (chunk.get("error") or "unknown").encode("utf-8")
+                        envelope = (
+                            "--" + BOUNDARY + CRLF
+                            + "Content-Type: text/plain; charset=utf-8" + CRLF
+                            + "X-Castle-Error: 1" + CRLF
+                            + "Content-Length: " + str(len(err_body)) + CRLF
+                            + CRLF
+                        ).encode("ascii")
+                        yield envelope + err_body + CRLF.encode("ascii")
+                        break
+
+                    seg_bytes = chunk.get("fmp4_bytes", b"")
+                    seq = int(chunk.get("seq", 0))
+                    frame_count = int(chunk.get("frame_count", 0))
+                    is_first = 1 if chunk.get("is_first") else 0
+                    is_last = 1 if chunk.get("is_last") else 0
+                    pts_offset = float(chunk.get("pts_offset_s", 0.0))
+                    headers = (
+                        "--" + BOUNDARY + CRLF
+                        + "Content-Type: video/mp4" + CRLF
+                        + "X-Castle-Seq: " + str(seq) + CRLF
+                        + "X-Castle-Frame-Count: " + str(frame_count) + CRLF
+                        + "X-Castle-Is-First: " + str(is_first) + CRLF
+                        + "X-Castle-Is-Last: " + str(is_last) + CRLF
+                        + "X-Castle-Pts-Offset-S: " + f"{pts_offset:.3f}" + CRLF
+                        + "Content-Length: " + str(len(seg_bytes)) + CRLF
+                        + CRLF
+                    ).encode("ascii")
+                    yield headers + seg_bytes + CRLF.encode("ascii")
+                    seg_count += 1
+                    total_frames += frame_count
+
+                # Final boundary terminator (RFC 2046)
+                yield ("--" + BOUNDARY + "--" + CRLF).encode("ascii")
+                logger.info(
+                    "[brain] musetalk_generate_streaming DONE . state=%s . segs=%d . frames=%d . audio=%dB",
+                    reference_state, seg_count, total_frames, len(audio_bytes),
+                )
+            except Exception as e:
+                logger.exception("[brain] musetalk_generate_streaming fail mid-stream")
+                err_body = str(e)[:300].encode("utf-8")
+                envelope = (
+                    "--" + BOUNDARY + CRLF
+                    + "Content-Type: text/plain; charset=utf-8" + CRLF
+                    + "X-Castle-Error: 1" + CRLF
+                    + "Content-Length: " + str(len(err_body)) + CRLF
+                    + CRLF
+                ).encode("ascii")
+                yield envelope + err_body + CRLF.encode("ascii")
+                yield ("--" + BOUNDARY + "--" + CRLF).encode("ascii")
+
+        return StreamingResponse(
+            stream_iter(),
+            media_type="multipart/mixed; boundary=" + BOUNDARY,
+            headers={
+                "X-Sophie-Streaming": "1",
+                "X-Sophie-Chunk-Frames": str(chunk_frames),
+                "X-Sophie-Fps": str(fps),
+                "Cache-Control": "no-store",
+            },
+        )

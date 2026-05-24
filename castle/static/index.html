@@ -1530,10 +1530,18 @@
   <script src="/static/avatar-director.js?v=2.0.6"></script>
   <script src="/static/animation-pool.js?v=2.0.6"></script>
   <script src="/static/phrase-matcher.js?v=2.0.6"></script>
+  <script src="/static/musetalk-streaming.js?v=2.0.6"></script>
 
   <script>
   (function () {
     "use strict";
+
+    // v0.7 P2.1 · MuseTalk keep-alive · fire-and-forget pre-warm GPU container on page load
+    // · 開頁 → 打 castle backend → modal SDK 觸發 runner.warm.spawn() · Edward 開講時 GPU 已熱
+    // · catch all → silent fail (keep-alive 不影響用戶體驗) · errors logged server-side
+    try {
+      fetch("/brain/musetalk_keepalive", { method: "GET", credentials: "include", cache: "no-store" }).catch(function () {});
+    } catch (e) { /* fire-and-forget · ignore */ }
 
     // v0.8 · 4 state animation pool (idle + speaking + task-received + task-handoff) · Edward 2026-05-23 spec
     // state="idle" (load) <-> state="in-call" (start clicked) · no intermediate state · no timeout

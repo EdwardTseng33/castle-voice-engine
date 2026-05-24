@@ -108,6 +108,10 @@ MUSETALK_VOLUME = modal.Volume.from_name("musetalk-weights", create_if_missing=T
     secrets=[MUSETALK_AUTH_TOKEN_SECRET, HF_SECRET],
     volumes={"/weights": MUSETALK_VOLUME},
     min_containers=0,
+    # v0.7 P2.1 attempt 1 (2026-05-24 calcifer): enable_memory_snapshot=True tried · NO-GO
+    # Modal memory snapshot does NOT support GPU state in 1.4.2 · cold-start stayed 74s (no improvement)
+    # Reverted per Edward P2.1 red-line: snapshot fail → revert immediately, do not push.
+    # See lesson_2026-05-24_modal-snapshot-gpu-not-supported.md (to be written)
 )
 class MuseTalkRunner:
     """MuseTalk lipsync inference · cold-start ~5-8s once weights cached."""
@@ -306,74 +310,164 @@ class MuseTalkRunner:
         self.weight_dtype = None
         self.timesteps = None
 
-        sophie_path = "/weights/assets/sophie-portrait-original.png"
-        if os.path.exists(sophie_path):
-            try:
-                import torch
-                import cv2
-                import copy
-                import numpy as np
-                from musetalk.utils.preprocessing import get_landmark_and_bbox, coord_placeholder
-                from musetalk.utils.face_parsing import FaceParsing
-                from transformers import WhisperModel
+        # v3.3 (2026-05-24) · Phase 3a · dynamic reference loading
+        # 預設預載 idle (待機動畫 · 解 Edward「短 audio + 長講話動畫」問題)
+        # 其他 16 個 state · lazy load on first request · cache in self.references
+        self.references = {}  # state -> {coord_list_cycle, frame_list_cycle, input_latent_list_cycle}
 
-                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-                self.weight_dtype = self.unet.model.dtype
-                self.timesteps = torch.tensor([0], device=device)
+        try:
+            import torch
+            import cv2
+            import copy
+            import numpy as np
+            from musetalk.utils.preprocessing import get_landmark_and_bbox, coord_placeholder
+            from musetalk.utils.face_parsing import FaceParsing
+            from transformers import WhisperModel
 
-                # Move models to device + dtype
-                self.pe = self.pe.to(device)
-                self.vae.vae = self.vae.vae.to(device)
-                self.unet.model = self.unet.model.to(device)
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.weight_dtype = self.unet.model.dtype
+            self.timesteps = torch.tensor([0], device=device)
+            self._device = device
 
-                # Whisper encoder for downstream get_whisper_chunk
-                self.whisper = WhisperModel.from_pretrained("/weights/whisper")
-                self.whisper = self.whisper.to(device=device, dtype=self.weight_dtype).eval()
-                self.whisper.requires_grad_(False)
-                print("[MuseTalk] Whisper encoder loaded", flush=True)
+            # Move models to device + dtype
+            self.pe = self.pe.to(device)
+            self.vae.vae = self.vae.vae.to(device)
+            self.unet.model = self.unet.model.to(device)
 
-                # Face parsing for v15 blending (jaw mode default)
-                self.fp = FaceParsing(left_cheek_width=90, right_cheek_width=90)
-                print("[MuseTalk] FaceParsing initialized", flush=True)
+            # Whisper encoder for downstream get_whisper_chunk
+            self.whisper = WhisperModel.from_pretrained("/weights/whisper")
+            self.whisper = self.whisper.to(device=device, dtype=self.weight_dtype).eval()
+            self.whisper.requires_grad_(False)
+            print("[MuseTalk] Whisper encoder loaded", flush=True)
 
-                # Landmark + bbox (single image -> coord_list len 1, frame_list len 1)
-                # MuseTalk v15: extra_margin=10 default
-                coord_list, frame_list = get_landmark_and_bbox([sophie_path], 0)  # positional upperbondrange=0
-                print(f"[MuseTalk] Sophie landmark+bbox extracted: coord_list={len(coord_list)} frame_list={len(frame_list)}", flush=True)
-                if not coord_list or coord_list[0] == coord_placeholder:
-                    print("[MuseTalk] WARN Sophie face detection returned placeholder bbox; skip latent cache", flush=True)
-                else:
-                    extra_margin = 10
-                    input_latent_list = []
-                    new_coord_list = []
-                    for bbox, frame in zip(coord_list, frame_list):
-                        if bbox == coord_placeholder:
-                            new_coord_list.append(bbox)
-                            continue
-                        x1, y1, x2, y2 = bbox
-                        y2 = min(y2 + extra_margin, frame.shape[0])
-                        new_coord_list.append([x1, y1, x2, y2])
-                        crop_frame = frame[y1:y2, x1:x2]
-                        crop_frame = cv2.resize(crop_frame, (256, 256), interpolation=cv2.INTER_LANCZOS4)
-                        latents = self.vae.get_latents_for_unet(crop_frame)
-                        input_latent_list.append(latents)
+            # Face parsing for v15 blending (jaw mode default)
+            self.fp = FaceParsing(left_cheek_width=90, right_cheek_width=90)
+            print("[MuseTalk] FaceParsing initialized", flush=True)
 
-                    # Cycle so we always have a frame even when audio_chunk_count > 1
-                    self.sophie_frame_list_cycle = frame_list + frame_list[::-1]
-                    self.sophie_coord_list_cycle = new_coord_list + new_coord_list[::-1]
-                    self.sophie_input_latent_list_cycle = input_latent_list + input_latent_list[::-1]
-                    self.sophie_ready = True
-                    print(f"[MuseTalk] Sophie reference ready (latents={len(input_latent_list)}, cycle={len(self.sophie_frame_list_cycle)})", flush=True)
-            except Exception as e:
-                import traceback
-                print(f"[MuseTalk] Sophie precompute FAILED: {type(e).__name__}: {e}", flush=True)
-                print(traceback.format_exc(), flush=True)
-                # Do not crash cold start; health endpoint will report sophie_reference_cached=False
-        else:
-            print(f"[MuseTalk] Sophie portrait not found at {sophie_path}; precompute skipped", flush=True)
+            # 預載 default reference (idle · 最常用)
+            self._load_reference("idle")
+            if "idle" in self.references:
+                self.sophie_ready = True
+                # legacy alias · 給原 generate_video_chunk 用 (Phase 3b 才會 refactor 完整動態)
+                ref = self.references["idle"]
+                self.sophie_frame_list_cycle = ref["frame_list_cycle"]
+                self.sophie_coord_list_cycle = ref["coord_list_cycle"]
+                self.sophie_input_latent_list_cycle = ref["input_latent_list_cycle"]
+                print(f"[MuseTalk] default reference 'idle' ready", flush=True)
+            else:
+                print(f"[MuseTalk] WARN default reference 'idle' failed to load", flush=True)
+        except Exception as e:
+            import traceback
+            print(f"[MuseTalk] precompute FAILED: {type(e).__name__}: {e}", flush=True)
+            print(traceback.format_exc(), flush=True)
 
         elapsed = round(time.time() - t0, 1)
         print(f"[MuseTalk] ready in {elapsed}s (sophie_ready={self.sophie_ready})", flush=True)
+
+
+    def _load_reference(self, state: str):
+        """Lazy-load reference video frames + bbox + latents for given state.
+        state: idle / greeting / happy / apologetic / speaking / etc.
+        falls back to idle if state file not found.
+        Caches result in self.references[state].
+        """
+        import os
+        if state in self.references:
+            return self.references[state]
+        import cv2
+        import torch
+        from musetalk.utils.preprocessing import get_landmark_and_bbox, coord_placeholder
+
+        ref_path = f"/weights/assets/references/{state}.mp4"
+        if not os.path.exists(ref_path):
+            if state == "idle":
+                # 完全沒 idle 也 fallback 到 static png
+                if os.path.exists("/weights/assets/sophie-reference.png"):
+                    print(f"[MuseTalk] state '{state}' video missing, using static image fallback", flush=True)
+                    return self._load_from_paths(state, ["/weights/assets/sophie-reference.png"])
+                return None
+            print(f"[MuseTalk] state '{state}' video not found, fallback to idle", flush=True)
+            return self._load_reference("idle")
+
+        # v3.3.1 · 修 Edward catch「動畫加速 + 重複動作」
+        # 不 step 抽稀 (保原速) · 直接抽全部 frames (上限 200 ~ 8 秒 @ 25fps)
+        cap = cv2.VideoCapture(ref_path)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        max_frames = min(total_frames, 200)  # 上限 200 (避免太長 OOM)
+        tmp_dir = f"/tmp/sophie_ref_{state}"
+        os.makedirs(tmp_dir, exist_ok=True)
+        paths = []
+        for i in range(max_frames):
+            ret, frame = cap.read()
+            if not ret:
+                break
+            p = f"{tmp_dir}/frame_{i:04d}.png"
+            cv2.imwrite(p, frame)
+            paths.append(p)
+        cap.release()
+        print(f"[MuseTalk] state '{state}' extracted {len(paths)} frames (保原速 · 不抽稀)", flush=True)
+        return self._load_from_paths(state, paths)
+
+    def _load_from_paths(self, state: str, paths: list):
+        """Run face detection + latent precompute on given image paths."""
+        import cv2
+        from musetalk.utils.preprocessing import get_landmark_and_bbox, coord_placeholder
+        coord_list, frame_list = get_landmark_and_bbox(paths, 0)
+        if not coord_list or coord_list[0] == coord_placeholder:
+            print(f"[MuseTalk] state '{state}' face detection failed", flush=True)
+            return None
+        extra_margin = 10
+        input_latent_list = []
+        new_coord_list = []
+        for bbox, frame in zip(coord_list, frame_list):
+            if bbox == coord_placeholder:
+                new_coord_list.append(bbox)
+                continue
+            x1, y1, x2, y2 = bbox
+            y2 = min(y2 + extra_margin, frame.shape[0])
+            new_coord_list.append([x1, y1, x2, y2])
+            crop_frame = frame[y1:y2, x1:x2]
+            crop_frame = cv2.resize(crop_frame, (256, 256), interpolation=cv2.INTER_LANCZOS4)
+            latents = self.vae.get_latents_for_unet(crop_frame)
+            input_latent_list.append(latents)
+        # v3.3.2 · Edward 提案 · 動作類 = 「情緒一次 + 接 idle loop」
+        # 避免 freeze 末幀只動嘴 10 秒、避免動作重複播
+        # 可 loop 類 · ping-pong cycle (待機 / 撥頭髮自然 loop)
+        # 動作類 · 動作做完 + 接 idle ping-pong loop (身體律動不斷)
+        LOOPABLE_STATES = {"idle", "idle-2", "idle-3", "idle-4", "stroke-hair", "speaking"}
+        if state in LOOPABLE_STATES:
+            frame_list_cycle = frame_list + frame_list[::-1]
+            coord_list_cycle = new_coord_list + new_coord_list[::-1]
+            input_latent_list_cycle = input_latent_list + input_latent_list[::-1]
+            cycle_mode = "ping-pong loop"
+        else:
+            # 動作類 · 情緒做完接 idle (Edward 5/24 提案 · 不卡末幀)
+            idle_ref = self.references.get("idle")
+            if idle_ref is None:
+                # idle 還沒載 · fallback 凍結末幀 (保險)
+                tail_pad = 200
+                frame_list_cycle = frame_list + [frame_list[-1]] * tail_pad
+                coord_list_cycle = new_coord_list + [new_coord_list[-1]] * tail_pad
+                input_latent_list_cycle = input_latent_list + [input_latent_list[-1]] * tail_pad
+                cycle_mode = "forward + freeze (idle not cached)"
+            else:
+                # 動作一次 + idle ping-pong loop 接力
+                idle_f = idle_ref["frame_list_cycle"]
+                idle_c = idle_ref["coord_list_cycle"]
+                idle_l = idle_ref["input_latent_list_cycle"]
+                frame_list_cycle = frame_list + idle_f
+                coord_list_cycle = new_coord_list + idle_c
+                input_latent_list_cycle = input_latent_list + idle_l
+                cycle_mode = f"action({len(frame_list)}f) + idle loop({len(idle_f)}f)"
+
+        ref = {
+            "frame_list_cycle": frame_list_cycle,
+            "coord_list_cycle": coord_list_cycle,
+            "input_latent_list_cycle": input_latent_list_cycle,
+        }
+        self.references[state] = ref
+        print(f"[MuseTalk] state '{state}' cached (latents={len(input_latent_list)} cycle={len(ref['frame_list_cycle'])} mode={cycle_mode})", flush=True)
+        return ref
 
     @modal.method()
     def warm(self):
@@ -385,13 +479,21 @@ class MuseTalkRunner:
         }
 
     @modal.method()
-    def generate_video_chunk(self, audio_pcm_bytes: bytes, fps: int = 25):
+    def generate_video_chunk(self, audio_pcm_bytes: bytes, fps: int = 25, reference_state: str = "idle"):
+        # v3.3 Phase 3a · reference_state 動態切換 (idle / greeting / happy / apologetic / 等)
         # Phase 7a (2026-05-23 calcifer): full pipeline ported from scripts/inference.py.
-        # PCM bytes -> wav -> get_audio_feature -> whisper_chunks -> datagen -> unet+vae -> blend -> ffmpeg mp4.
         import os, io, time, tempfile, subprocess, copy
         import numpy as np
         import torch, cv2, soundfile as sf
         from tqdm import tqdm
+
+        # v3.3 · 動態切換 reference state
+        ref = self._load_reference(reference_state)
+        if ref:
+            self.sophie_frame_list_cycle = ref["frame_list_cycle"]
+            self.sophie_coord_list_cycle = ref["coord_list_cycle"]
+            self.sophie_input_latent_list_cycle = ref["input_latent_list_cycle"]
+            print(f"[MuseTalk gen] reference_state='{reference_state}' loaded", flush=True)
 
         if not self.sophie_ready:
             return {"error": "sophie reference not cached", "video_bytes": b"", "frame_count": 0, "fps": fps}
@@ -459,9 +561,10 @@ class MuseTalkRunner:
 
             tmp_silent = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False).name
             tmp_final = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False).name
+            # v3.0 (2026-05-24) · 修新版蘇菲照片 941x1672 寬度奇數 · x264 要偶數 · 加 scale trunc
             cmd_v = ["ffmpeg","-y","-v","warning","-r",str(fps),"-f","image2",
                      "-i",f"{tmp_frames_dir}/%08d.png","-vcodec","libx264",
-                     "-vf","format=yuv420p","-crf","18",tmp_silent]
+                     "-vf","scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p","-crf","18",tmp_silent]
             r1 = subprocess.run(cmd_v, capture_output=True, text=True, timeout=120)
             if r1.returncode != 0:
                 print(f"[MuseTalk gen] ffmpeg v stderr: {r1.stderr[-500:]}", flush=True)
@@ -479,6 +582,237 @@ class MuseTalkRunner:
             print(f"[MuseTalk gen] mp4 ready: {len(mp4_bytes)/1024:.1f} KB, elapsed={(time.time()-t0):.2f}s", flush=True)
 
             return {"video_bytes": mp4_bytes, "frame_count": len(res_frame_list), "fps": fps, "duration_s": len(audio_arr)/sr}
+        finally:
+            try:
+                os.unlink(tmp_wav)
+            except Exception:
+                pass
+
+    # ---------------------------------------------------------------
+    # v0.7 P2 . Phase 1 . chunked streaming helpers (calcifer 2026-05-24)
+    # ---------------------------------------------------------------
+    # Design (verified by prev agent run a295d10a23926fb0c . Edward GO):
+    #   - chunk = 12 frames @ 25fps = 0.48s (whisper hop align)
+    #   - container = fMP4 (fragmented mp4 . MediaSource API friendly)
+    #   - first segment carries init box (empty_moov)
+    #   - PTS continuity via -output_ts_offset (seq * 0.48)
+    #   - share reference cache + unet + vae (do not rebuild)
+    #   - keep batch_size=2 (A10G OOM red-line)
+    # The old generate_video_chunk() is kept untouched as fallback path.
+
+    def _slice_audio(self, audio_arr, sr, seq, chunk_frames, fps):
+        """Sample-level slice of float32 PCM audio for one chunk."""
+        import numpy as np
+        samples_per_chunk = int(round(sr * chunk_frames / fps))
+        start = seq * samples_per_chunk
+        end = start + samples_per_chunk
+        if start >= len(audio_arr):
+            return np.zeros((0,), dtype=audio_arr.dtype)
+        return audio_arr[start:end]
+
+    def _blend_frames(self, seg_res_frames, seg_idx_start):
+        """Blend a list of unet-decoded face crops back onto reference frames."""
+        import copy
+        import cv2
+        import numpy as np
+        from musetalk.utils.blending import get_image
+
+        out = []
+        cyc_coord = self.sophie_coord_list_cycle
+        cyc_frame = self.sophie_frame_list_cycle
+        for j, res_frame in enumerate(seg_res_frames):
+            abs_i = seg_idx_start + j
+            bbox = cyc_coord[abs_i % len(cyc_coord)]
+            ori_frame = copy.deepcopy(cyc_frame[abs_i % len(cyc_frame)])
+            x1, y1, x2, y2 = bbox
+            try:
+                res_frame_resized = cv2.resize(res_frame.astype(np.uint8), (x2 - x1, y2 - y1))
+            except Exception as resize_err:
+                print(f"[MuseTalk stream] resize fail abs_i={abs_i}: {resize_err}", flush=True)
+                continue
+            combine_frame = get_image(ori_frame, res_frame_resized, [x1, y1, x2, y2], mode="jaw", fp=self.fp)
+            out.append(combine_frame)
+        return out
+
+    def _encode_fragment(self, seg_blended, seg_audio, sr, fps, seq, emit_init):
+        """Encode one blended chunk + its audio slice as a fMP4 fragment."""
+        import os, tempfile, subprocess, cv2
+        import numpy as np
+        import soundfile as sf
+
+        if not seg_blended:
+            return b""
+
+        frame_dir = tempfile.mkdtemp(prefix=f"musetalk_seg_{seq:04d}_")
+        try:
+            for j, fr in enumerate(seg_blended):
+                cv2.imwrite(f"{frame_dir}/{str(j).zfill(8)}.png", fr)
+
+            audio_wav = os.path.join(frame_dir, "seg.wav")
+            if seg_audio is not None and len(seg_audio) > 0:
+                sf.write(audio_wav, seg_audio, sr, subtype="PCM_16")
+            else:
+                pad = np.zeros((int(sr * len(seg_blended) / fps),), dtype=np.float32)
+                sf.write(audio_wav, pad, sr, subtype="PCM_16")
+
+            out_path = os.path.join(frame_dir, f"seg_{seq:04d}.m4s")
+            offset_s = seq * (len(seg_blended) / fps)
+            frag_duration_us = str(int(round(len(seg_blended) / fps * 1_000_000)))
+
+            cmd = [
+                "ffmpeg", "-y", "-v", "warning",
+                "-r", str(fps), "-f", "image2",
+                "-i", f"{frame_dir}/%08d.png",
+                "-i", audio_wav,
+                "-output_ts_offset", str(offset_s),
+                "-vcodec", "libx264",
+                "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p",
+                "-crf", "18",
+                "-c:a", "aac",
+                "-shortest",
+                "-movflags", "+frag_keyframe+empty_moov+default_base_moof+separate_moof",
+                "-frag_duration", frag_duration_us,
+                "-f", "mp4",
+                out_path,
+            ]
+            _ = emit_init  # unused in phase 1 (every fmp4 seg carries init box anyway)
+
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            if r.returncode != 0:
+                print(f"[MuseTalk stream] ffmpeg seg {seq} stderr: {r.stderr[-400:]}", flush=True)
+                raise RuntimeError(f"ffmpeg seg {seq} encode failed rc={r.returncode}")
+
+            with open(out_path, "rb") as f:
+                data = f.read()
+            return data
+        finally:
+            try:
+                import shutil
+                shutil.rmtree(frame_dir, ignore_errors=True)
+            except Exception:
+                pass
+
+    @modal.method()
+    def generate_video_chunk_streaming(self, audio_pcm_bytes: bytes, fps: int = 25,
+                                       reference_state: str = "idle", chunk_frames: int = 12,
+                                       container_fmt: str = "fmp4"):
+        """Streaming generator . yields one fMP4 fragment per chunk_frames.
+
+        Yields dict with keys: seq, fmp4_bytes, frame_count, is_first, is_last, pts_offset_s.
+        Shares reference cache + unet + vae with generate_video_chunk(). batch_size=2 red-line.
+        Old generate_video_chunk() preserved as fallback.
+        """
+        import os, io, time, tempfile, copy
+        import numpy as np
+        import torch, cv2, soundfile as sf
+
+        if container_fmt != "fmp4":
+            raise ValueError(f"container_fmt={container_fmt!r} not supported in phase 1 (fmp4 only)")
+
+        ref = self._load_reference(reference_state)
+        if ref:
+            self.sophie_frame_list_cycle = ref["frame_list_cycle"]
+            self.sophie_coord_list_cycle = ref["coord_list_cycle"]
+            self.sophie_input_latent_list_cycle = ref["input_latent_list_cycle"]
+            print(f"[MuseTalk stream] reference_state={reference_state!r} loaded", flush=True)
+
+        if not self.sophie_ready:
+            yield {
+                "seq": 0, "fmp4_bytes": b"", "frame_count": 0,
+                "is_first": True, "is_last": True, "pts_offset_s": 0.0,
+                "error": "sophie reference not cached",
+            }
+            return
+
+        from musetalk.utils.utils import datagen
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        audio_arr, sr = sf.read(io.BytesIO(audio_pcm_bytes), dtype="float32")
+        if sr != 16000:
+            raise ValueError(f"Expected 16kHz PCM, got {sr}Hz")
+
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_wav_f:
+            tmp_wav = tmp_wav_f.name
+        sf.write(tmp_wav, audio_arr, sr, subtype="PCM_16")
+        print(f"[MuseTalk stream] wav dumped ({len(audio_arr)/sr:.2f}s . chunk_frames={chunk_frames})", flush=True)
+
+        try:
+            t0 = time.time()
+            whisper_input_features, librosa_length = self.audio_processor.get_audio_feature(
+                tmp_wav, weight_dtype=self.weight_dtype
+            )
+            whisper_chunks = self.audio_processor.get_whisper_chunk(
+                whisper_input_features, device, self.weight_dtype, self.whisper, librosa_length,
+                fps=fps, audio_padding_length_left=2, audio_padding_length_right=2,
+            )
+            video_num = len(whisper_chunks)
+            total_chunks = int(np.ceil(video_num / chunk_frames))
+            print(f"[MuseTalk stream] audio features: frames={video_num} chunks={total_chunks} feat_ms={(time.time()-t0)*1000:.0f}", flush=True)
+
+            batch_size = 2
+            gen = datagen(whisper_chunks=whisper_chunks,
+                          vae_encode_latents=self.sophie_input_latent_list_cycle,
+                          batch_size=batch_size, delay_frame=0, device=str(device))
+
+            buffered = []
+            seq = 0
+            emitted_frames = 0
+
+            t1 = time.time()
+            for whisper_batch, latent_batch in gen:
+                audio_feature_batch = self.pe(whisper_batch.to(device))
+                latent_batch = latent_batch.to(device=device, dtype=self.unet.model.dtype)
+                pred_latents = self.unet.model(latent_batch, self.timesteps,
+                                               encoder_hidden_states=audio_feature_batch).sample
+                pred_latents = pred_latents.to(device=device, dtype=self.vae.vae.dtype)
+                recon = self.vae.decode_latents(pred_latents)
+                for res_frame in recon:
+                    buffered.append(res_frame)
+                del pred_latents, recon, audio_feature_batch
+                torch.cuda.empty_cache()
+
+                while len(buffered) >= chunk_frames:
+                    seg = buffered[:chunk_frames]
+                    buffered = buffered[chunk_frames:]
+                    seg_blended = self._blend_frames(seg, emitted_frames)
+                    seg_audio = self._slice_audio(audio_arr, sr, seq, chunk_frames, fps)
+                    seg_bytes = self._encode_fragment(
+                        seg_blended, seg_audio, sr, fps, seq, emit_init=(seq == 0)
+                    )
+                    pts_offset = seq * (chunk_frames / fps)
+                    is_last_now = (emitted_frames + len(seg_blended) >= video_num) and (len(buffered) == 0)
+                    yield {
+                        "seq": seq,
+                        "fmp4_bytes": seg_bytes,
+                        "frame_count": len(seg_blended),
+                        "is_first": (seq == 0),
+                        "is_last": is_last_now,
+                        "pts_offset_s": pts_offset,
+                    }
+                    seq += 1
+                    emitted_frames += len(seg_blended)
+
+            if buffered:
+                seg_blended = self._blend_frames(buffered, emitted_frames)
+                seg_audio = self._slice_audio(audio_arr, sr, seq, chunk_frames, fps)
+                seg_bytes = self._encode_fragment(
+                    seg_blended, seg_audio, sr, fps, seq, emit_init=(seq == 0)
+                )
+                pts_offset = seq * (chunk_frames / fps)
+                yield {
+                    "seq": seq,
+                    "fmp4_bytes": seg_bytes,
+                    "frame_count": len(seg_blended),
+                    "is_first": (seq == 0),
+                    "is_last": True,
+                    "pts_offset_s": pts_offset,
+                }
+                seq += 1
+                emitted_frames += len(seg_blended)
+                buffered = []
+
+            print(f"[MuseTalk stream] DONE chunks={seq} frames={emitted_frames} unet+blend+mux_total={(time.time()-t1)*1000:.0f}ms e2e={(time.time()-t0):.2f}s", flush=True)
         finally:
             try:
                 os.unlink(tmp_wav)
