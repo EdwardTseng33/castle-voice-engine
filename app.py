@@ -60,6 +60,7 @@ lipsync_volume = modal.Volume.from_name("sophie-lipsync-cache", create_if_missin
         modal.Secret.from_name("openai"),
         modal.Secret.from_name("anthropic-key"),
         modal.Secret.from_name("tavus"),  # v0.3.2 Phase 3.2 Tavus CVI 即時對話
+        modal.Secret.from_name("castle-dev-bypass"),  # v2.x · dev bypass header + DEV_BYPASS_ENABLED env (cron Path B + dev_endpoints 3 gate)
     ],
     volumes={"/lipsync_cache": lipsync_volume},  # v1.5.0 · 100 句嘴對齊 mp4
 )
