@@ -725,7 +725,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.9.15</span>
+          <span class="vm-version">v1.9.16</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -734,6 +734,15 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.16</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>霍爾 round 4 verdict · 正常對話沒命中 100 句 manifest · 所以只走 speaking fallback</li>
+            <li>刀 1: prompt 加 lipsync 起手句庫 · 每次回覆第一短句優先用預錄句</li>
+            <li>刀 2: audio 已開始 900ms 仍沒命中 → 播 phrase_074 當 lipsync kick · 驗證播放主鏈路</li>
+            <li>刀 3: lipsync 播放封裝成同一個 visual owner · hit / kick 都走同一路徑</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.15</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>霍爾 round 3 verdict · 鎖播放主控權 · 對嘴 clip 不再被搶</li>
@@ -1444,10 +1453,10 @@
   })();
   </script>
 
-  <script src="/static/session-memory.js?v=1.9.15"></script>
-  <script src="/static/conversation-memory.js?v=1.9.15"></script>
-  <script src="/static/animation-pool.js?v=1.9.15"></script>
-  <script src="/static/phrase-matcher.js?v=1.9.15"></script>
+  <script src="/static/session-memory.js?v=1.9.16"></script>
+  <script src="/static/conversation-memory.js?v=1.9.16"></script>
+  <script src="/static/animation-pool.js?v=1.9.16"></script>
+  <script src="/static/phrase-matcher.js?v=1.9.16"></script>
 
   <script>
   (function () {
@@ -1599,6 +1608,93 @@
         logEl.textContent += "[" + ts + "] " + msg + "\n";
         logEl.scrollTop = logEl.scrollHeight;
       }
+    }
+
+    function clearLipsyncKick() {
+      if (window.__sophieLipsyncKickTimer) {
+        clearTimeout(window.__sophieLipsyncKickTimer);
+        window.__sophieLipsyncKickTimer = null;
+      }
+    }
+
+    function playLipsyncVisual(mp4Url, label, reason, alignToAudio) {
+      clearLipsyncKick();
+      window.__sophiePhraseMatched = true;
+      window.__sophieLipsyncActive = true;
+      window.__sophieVisualMode = "lipsync";
+      try {
+        var v = document.getElementById("liveVideo");
+        if (!v) return false;
+        v.classList.add("is-switching");
+        v.src = mp4Url;
+        v.loop = false;
+        v.muted = true;
+        var elapsedSec = window.__sophieAudioStartTs ? (Date.now() - window.__sophieAudioStartTs) / 1000 : 0;
+        var onLoaded = function () {
+          v.removeEventListener("loadedmetadata", onLoaded);
+          try {
+            if (alignToAudio !== false && elapsedSec > 0 && v.duration > 0) {
+              v.currentTime = Math.min(elapsedSec, Math.max(0, v.duration - 0.3));
+            }
+          } catch (e) {}
+        };
+        v.addEventListener("loadedmetadata", onLoaded, { once: true });
+        v.addEventListener("playing", function onPlaying() {
+          v.removeEventListener("playing", onPlaying);
+          log("[LIPSYNC PLAYING] " + label + " · src=" + (v.currentSrc || v.src));
+        }, { once: true });
+        v.addEventListener("error", function onErr() {
+          v.removeEventListener("error", onErr);
+          log("[LIPSYNC ERROR] " + label + " · src=" + mp4Url);
+        }, { once: true });
+        var p = v.play();
+        if (p && p["catch"]) p["catch"](function (err) {
+          log("[LIPSYNC PLAY FAIL] " + (err && err.message ? err.message : "unknown"));
+        });
+        var onReady = function () {
+          v.removeEventListener("canplay", onReady);
+          v.classList.remove("is-switching");
+        };
+        v.addEventListener("canplay", onReady, { once: true });
+        setTimeout(function () { v.classList.remove("is-switching"); }, 600);
+        v.onended = function () {
+          window.__sophieLipsyncActive = false;
+          window.__sophieVisualMode = window.__sophieResponseActive ? "speaking" : "idle";
+          try {
+            var nextSrc = window.__sophieResponseActive
+              ? "/static/sophie-speaking.mp4"
+              : "/static/sophie-idle.mp4";
+            v.classList.add("is-switching");
+            v.src = nextSrc;
+            v.loop = true;
+            v.muted = true;
+            var pp = v.play();
+            if (pp && pp["catch"]) pp["catch"](function () {});
+            var onReady2 = function () {
+              v.removeEventListener("canplay", onReady2);
+              v.classList.remove("is-switching");
+            };
+            v.addEventListener("canplay", onReady2, { once: true });
+            setTimeout(function () { v.classList.remove("is-switching"); }, 600);
+          } catch (e) {}
+          v.onended = null;
+        };
+        log("[LIPSYNC " + reason + "] " + label + " · elapsed " + elapsedSec.toFixed(2) + "s");
+        return true;
+      } catch (e) {
+        log("[LIPSYNC] switch fail: " + e.message);
+        return false;
+      }
+    }
+
+    function scheduleLipsyncKick(reason) {
+      clearLipsyncKick();
+      window.__sophieLipsyncKickTimer = setTimeout(function () {
+        window.__sophieLipsyncKickTimer = null;
+        if (!window.__sophieResponseActive) return;
+        if (window.__sophiePhraseMatched || window.__sophieLipsyncActive || window.__sophieVisualMode === "lipsync") return;
+        playLipsyncVisual("/lipsync/phrase_074.mp4", "我懂", "KICK " + reason, false);
+      }, 900);
     }
 
     function showError(msg) {
@@ -1982,8 +2078,9 @@
             "\n- 即時狀態 (在不在電腦前/通話/專注) → get_perception · 每場 2-3 次上限不亂呼叫";
           var brainDirective = "\n\n[派工] 短話自己答 · 需要深度思考/規劃/判斷 → ask_claude 派 Claude · 不要硬腦補。";
           var animDirective = "\n\n[動畫] 根據對話情緒呼叫 emit_animation_state(state) · 每次回覆最多 1 個 · 自然判斷:greeting / task-received / happy / acknowledgement / apologetic / resigned / task-handoff / playful / intimate-greeting / intimate-farewell。";
+          var lipsyncDirective = "\n\n[嘴型對齊 V1.5] 為了讓 Avatar 對嘴片段能接上，每次回覆的第一個短句，優先從這個句庫挑一句完整照念，不改字、不加字，再接你的自然回答: 我懂 / 收到 我來 / 好 交給我 / 沒問題 / Edward 我在 / 我聽著 / 你說 我接著 / 我在 不用急 / 這樣可以嗎 / Edward 你想先聊哪個 / 晚安 Edward。";
           var greetingDirective = "\n\n[Opening Greeting] 連線一建立、你的第一句話必須是: 「" + greeting + "」(不可改寫、不可前後加字、自然語氣念出來。念完才開始正常對話。)";
-          var instructions = baseInstr + perceptionDirective + brainDirective + animDirective + greetingDirective;
+          var instructions = baseInstr + perceptionDirective + brainDirective + animDirective + lipsyncDirective + greetingDirective;
           try {
             dc.send(JSON.stringify({
               type: "session.update",
@@ -2312,6 +2409,7 @@
               window.__sophieAudioStartTs = Date.now();
               window.__sophieLipsyncActive = false;
               animPool.startSpeaking();
+              scheduleLipsyncKick(t);
               log("[FORCE] " + t + " · audio ts " + window.__sophieAudioStartTs);
             }
             // 含 audio + done = stopSpeaking
@@ -2345,6 +2443,7 @@
               }
               // v1.3.1 · response.created 時 reset speaking trigger flag (每次新回應重新等第一個 audio delta)
               if (data.type === "response.created") {
+                clearLipsyncKick();
                 window.__sophieSpeakingTriggered = false;
                 window.__sophiePhraseMatched = false;
                 window.__sophieResponseActive = true;
@@ -2354,6 +2453,7 @@
                 window.__sophieVisualMode = "speaking";
               }
               if (data.type === "response.done") {
+                clearLipsyncKick();
                 // v1.9.12 · response 結束 · 清標記
                 window.__sophieResponseActive = false;
               }
@@ -2365,6 +2465,7 @@
                 window.__sophieAudioStartTs = Date.now();
                 window.__sophieLipsyncActive = false;
                 animPool.startSpeaking();
+                scheduleLipsyncKick(data.type);
                 log("audio.delta first chunk -> startSpeaking · audio ts " + window.__sophieAudioStartTs);
               }
             } else if (data.type === "response.audio.done" || data.type === "response.output_audio.done") {
@@ -2374,6 +2475,7 @@
                 animPool.stopSpeaking();
                 log("audio.done -> stopSpeaking");
               }
+              clearLipsyncKick();
               // v1.3.1 · reset trigger flag (下次回應重新等)
               window.__sophieSpeakingTriggered = false;
               // v1.1.0 · flush transcript buffer 進 lastSophieText
@@ -2397,64 +2499,7 @@
               if (window.PhraseMatcher && !window.__sophiePhraseMatched && sophieTextBuffer.length >= 1) {
                 var match = window.PhraseMatcher.findMatching(sophieTextBuffer);
                 if (match) {
-                  window.__sophiePhraseMatched = true;
-                  // v1.9.15 · 霍爾刀 3 · 設視覺鎖 · 阻止 stopSpeaking 搶 video
-                  window.__sophieLipsyncActive = true;
-                  window.__sophieVisualMode = "lipsync";
-                  try {
-                    var v = document.getElementById('liveVideo');
-                    if (v) {
-                      v.classList.add("is-switching");
-                      v.src = match.phrase.mp4_url;
-                      v.loop = false;
-                      v.muted = true;
-                      // 霍爾刀 3 · audio 已開始 N ms · lipsync clip 從 N/1000 秒開始 (避免晚半拍)
-                      var elapsedSec = window.__sophieAudioStartTs ? (Date.now() - window.__sophieAudioStartTs) / 1000 : 0;
-                      var onLoaded = function () {
-                        v.removeEventListener("loadedmetadata", onLoaded);
-                        try {
-                          if (elapsedSec > 0 && v.duration > 0) {
-                            v.currentTime = Math.min(elapsedSec, Math.max(0, v.duration - 0.3));
-                          }
-                        } catch (e) {}
-                      };
-                      v.addEventListener("loadedmetadata", onLoaded, { once: true });
-                      var p = v.play();
-                      if (p && p["catch"]) p["catch"](function () {});
-                      var onReady = function () {
-                        v.removeEventListener("canplay", onReady);
-                        v.classList.remove("is-switching");
-                      };
-                      v.addEventListener("canplay", onReady, { once: true });
-                      setTimeout(function () { v.classList.remove("is-switching"); }, 600);
-                      // v1.9.15 · 霍爾刀 4 · lipsync onended 是唯一能決定下一個畫面的地方
-                      v.onended = function () {
-                        window.__sophieLipsyncActive = false;
-                        window.__sophieVisualMode = window.__sophieResponseActive ? "speaking" : "idle";
-                        try {
-                          var nextSrc = window.__sophieResponseActive
-                            ? "/static/sophie-speaking.mp4"
-                            : "/static/sophie-idle.mp4";
-                          v.classList.add("is-switching");
-                          v.src = nextSrc;
-                          v.loop = true;
-                          v.muted = true;
-                          var pp = v.play();
-                          if (pp && pp["catch"]) pp["catch"](function () {});
-                          var onReady2 = function () {
-                            v.removeEventListener("canplay", onReady2);
-                            v.classList.remove("is-switching");
-                          };
-                          v.addEventListener("canplay", onReady2, { once: true });
-                          setTimeout(function () { v.classList.remove("is-switching"); }, 600);
-                        } catch (e) {}
-                        v.onended = null;
-                      };
-                      log("[LIPSYNC HIT] " + match.phrase.sentence + " · elapsed " + elapsedSec.toFixed(2) + "s");
-                    }
-                  } catch (e) {
-                    log("[LIPSYNC] switch fail: " + e.message);
-                  }
+                  playLipsyncVisual(match.phrase.mp4_url, match.phrase.sentence, "HIT", true);
                 }
               }
             } else if (data.type === "conversation.item.input_audio_transcription.completed") {
@@ -2889,7 +2934,7 @@
       });
     }
 
-    log("Voice Path v1.9.11 ready - SW conservative · 不 auto reload 干擾影片 - 2026-05-24");
+    log("Voice Path v1.9.16 ready - lipsync starter + visual kick - 2026-05-24");
 
     // ===== v1.9.7 · 單 video 保活 (砍雙層、只剩底層 idle) =====
     (function setupVideoKeepAlive() {
