@@ -81,3 +81,6 @@ edward_speaker_profile.bin
 # Phase 7a (calcifer 2026-05-23): PoC artifacts directory · runtime outputs default ignored
 # but commit Phase 7a evidence explicitly via git add -f for Edward visual review
 out/
+
+# v2.x compositor · approval files runtime artifact
+castle/qa/edward-approved-*.ok
