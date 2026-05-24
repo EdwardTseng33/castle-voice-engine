@@ -725,7 +725,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.9.14</span>
+          <span class="vm-version">v1.9.15</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -734,11 +734,23 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.15</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>霍爾 round 3 verdict · 鎖播放主控權 · 對嘴 clip 不再被搶</li>
+            <li>真兇:lipsync 命中切片後 250ms · stopSpeaking 又把 video 切回 idle/speaking</li>
+            <li>刀 1:stopSpeaking 加硬保護 · lipsync active 時 return · 不動 video</li>
+            <li>刀 2:audio_transcript.done 不觸發 stopSpeaking (文字 done ≠ 視覺停)</li>
+            <li>刀 3:lipsync 命中設視覺鎖 __sophieVisualMode = "lipsync"</li>
+            <li>刀 4:只有 lipsync clip 的 onended 能決定下一個畫面</li>
+            <li>response.created reset 視覺鎖 · 上輪中斷不影響本輪</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.14</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>霍爾 round 2 verdict · 5 刀 · 修 v1.9.13 漏抓的真實 bug</li>
             <li>刀 1: audio 時間戳補設到 [FORCE] 分支 (v1.9.13 寫錯分支 elapsedSec 永遠 0)</li>
-            <li>刀 2: script tag 加 ?v=1.9.14 版本參數 (避免 stale JS cache)</li>
+            <li>刀 2: script tag 加 ?v=1.9.15 版本參數 (避免 stale JS cache)</li>
             <li>刀 3: SW 對所有 .js 改 network-first (QA 期間)</li>
             <li>刀 4: response.created 清空 sophieTextBuffer (避免上輪殘留干擾)</li>
             <li>刀 5: PhraseMatcher 加 substring + early prefix match (長句早命中)</li>
@@ -1432,10 +1444,10 @@
   })();
   </script>
 
-  <script src="/static/session-memory.js?v=1.9.14"></script>
-  <script src="/static/conversation-memory.js?v=1.9.14"></script>
-  <script src="/static/animation-pool.js?v=1.9.14"></script>
-  <script src="/static/phrase-matcher.js?v=1.9.14"></script>
+  <script src="/static/session-memory.js?v=1.9.15"></script>
+  <script src="/static/conversation-memory.js?v=1.9.15"></script>
+  <script src="/static/animation-pool.js?v=1.9.15"></script>
+  <script src="/static/phrase-matcher.js?v=1.9.15"></script>
 
   <script>
   (function () {
@@ -2334,12 +2346,12 @@
               // v1.3.1 · response.created 時 reset speaking trigger flag (每次新回應重新等第一個 audio delta)
               if (data.type === "response.created") {
                 window.__sophieSpeakingTriggered = false;
-                // v1.5.0 · reset phrase match flag · 每次新回應重新 fuzzy match
                 window.__sophiePhraseMatched = false;
-                // v1.9.12 · 標記 response in progress · 避免雙聲音
                 window.__sophieResponseActive = true;
-                // v1.9.14 · 霍爾刀 4 · 清空 transcript buffer · 避免上一輪殘留干擾本輪 lipsync 命中
                 sophieTextBuffer = "";
+                // v1.9.15 · 霍爾刀 3 · reset 視覺鎖 (上輪可能 lipsync 中斷沒清乾淨)
+                window.__sophieLipsyncActive = false;
+                window.__sophieVisualMode = "speaking";
               }
               if (data.type === "response.done") {
                 // v1.9.12 · response 結束 · 清標記
@@ -2355,7 +2367,9 @@
                 animPool.startSpeaking();
                 log("audio.delta first chunk -> startSpeaking · audio ts " + window.__sophieAudioStartTs);
               }
-            } else if (data.type === "response.audio.done" || data.type === "response.output_audio.done" || data.type === "response.audio_transcript.done") {
+            } else if (data.type === "response.audio.done" || data.type === "response.output_audio.done") {
+              // v1.9.15 · 霍爾刀 2 · 砍掉 response.audio_transcript.done · 它只是文字完成 ≠ 視覺可停
+              // 文字 done 早於 audio done 觸發 stopSpeaking 會打斷 lipsync
               if (animPool && typeof animPool.stopSpeaking === "function") {
                 animPool.stopSpeaking();
                 log("audio.done -> stopSpeaking");
@@ -2384,7 +2398,9 @@
                 var match = window.PhraseMatcher.findMatching(sophieTextBuffer);
                 if (match) {
                   window.__sophiePhraseMatched = true;
-                  window.__sophieLipsyncActive = true;  // 阻止 speaking fallback 覆蓋
+                  // v1.9.15 · 霍爾刀 3 · 設視覺鎖 · 阻止 stopSpeaking 搶 video
+                  window.__sophieLipsyncActive = true;
+                  window.__sophieVisualMode = "lipsync";
                   try {
                     var v = document.getElementById('liveVideo');
                     if (v) {
@@ -2411,9 +2427,10 @@
                       };
                       v.addEventListener("canplay", onReady, { once: true });
                       setTimeout(function () { v.classList.remove("is-switching"); }, 600);
-                      // lipsync 播完 → 若 audio 還在 → 切 speaking fallback · 否則 idle
+                      // v1.9.15 · 霍爾刀 4 · lipsync onended 是唯一能決定下一個畫面的地方
                       v.onended = function () {
                         window.__sophieLipsyncActive = false;
+                        window.__sophieVisualMode = window.__sophieResponseActive ? "speaking" : "idle";
                         try {
                           var nextSrc = window.__sophieResponseActive
                             ? "/static/sophie-speaking.mp4"

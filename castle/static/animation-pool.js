@@ -148,23 +148,26 @@
     this._active = true;
     this._phase = 2;
     this.pool.currentState = "speaking";
-    // 切 sophie-speaking.mp4 loop · 但若 lipsync 已 active (window.__sophieLipsyncActive) · 不覆蓋
+    // v1.9.15 · lipsync 已鎖 · 不動 video
+    if (window.__sophieLipsyncActive || window.__sophieVisualMode === "lipsync") {
+      this.pool._log("speaking start · skip src switch (lipsync 鎖住)");
+      return;
+    }
+    window.__sophieVisualMode = "speaking";
     try {
-      if (!window.__sophieLipsyncActive) {
-        var v = this.pool.video;
-        if (v) {
-          var currSrc = v.currentSrc || v.src || "";
-          if (currSrc.indexOf("sophie-speaking.mp4") === -1 && currSrc.indexOf("/lipsync/") === -1) {
-            v.classList.add("is-switching");
-            v.src = "/static/sophie-speaking.mp4";
-            v.loop = true;
-            v.muted = true;
-            var p = v.play();
-            if (p && p["catch"]) p["catch"](function () {});
-            var onR = function () { v.removeEventListener("canplay", onR); v.classList.remove("is-switching"); };
-            v.addEventListener("canplay", onR, { once: true });
-            setTimeout(function () { v.classList.remove("is-switching"); }, 500);
-          }
+      var v = this.pool.video;
+      if (v) {
+        var currSrc = v.currentSrc || v.src || "";
+        if (currSrc.indexOf("sophie-speaking.mp4") === -1 && currSrc.indexOf("/lipsync/") === -1) {
+          v.classList.add("is-switching");
+          v.src = "/static/sophie-speaking.mp4";
+          v.loop = true;
+          v.muted = true;
+          var p = v.play();
+          if (p && p["catch"]) p["catch"](function () {});
+          var onR = function () { v.removeEventListener("canplay", onR); v.classList.remove("is-switching"); };
+          v.addEventListener("canplay", onR, { once: true });
+          setTimeout(function () { v.classList.remove("is-switching"); }, 500);
         }
       }
     } catch (e) {}
@@ -172,6 +175,13 @@
   };
   SpeakingController.prototype.stop = function () {
     if (!this._active && !this._idleDelay) return;
+    // v1.9.15 · 霍爾刀 1 · lipsync active 時 stop 不准動 video · 由 lipsync onended 決定
+    if (window.__sophieLipsyncActive || window.__sophieVisualMode === "lipsync") {
+      this._active = false;
+      this._stopTimers();
+      this.pool._log("speaking stop · skip (lipsync 鎖住 · 等 clip onended 接管)");
+      return;
+    }
     this._active = false;
     this._stopTimers();
     if (this._idleDelay) { clearTimeout(this._idleDelay); this._idleDelay = null; }
@@ -179,7 +189,11 @@
     this._idleDelay = setTimeout(function () {
       self._idleDelay = null;
       if (self._active) return;
-      // 講完 · 切回 idle (含 lipsync 或 speaking 中斷情況)
+      // v1.9.15 · 切回前再 check lipsync 鎖
+      if (window.__sophieLipsyncActive || window.__sophieVisualMode === "lipsync") {
+        self.pool._log("speaking stop deferred · lipsync 已接管");
+        return;
+      }
       try {
         var v = self.pool.video;
         if (v) {
@@ -197,7 +211,7 @@
           }
         }
       } catch (e) {}
-      window.__sophieLipsyncActive = false;
+      window.__sophieVisualMode = "idle";
       self.pool.currentState = "idle";
       self.pool._log("speaking stop · 切回 idle");
     }, 250);
