@@ -725,7 +725,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.9.17</span>
+          <span class="vm-version">v1.9.18</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -734,6 +734,14 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.18</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>緊急穩定模式: 暫停所有 lipsync mp4 切片 · 先完全停止閃頻</li>
+            <li>保留 speaking fallback + 微呼吸 · 對話狀態穩定可用</li>
+            <li>下一版改 Avatar Director · 單一畫面主控權後再恢復 lipsync</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.17</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>緊急止血: 關閉 900ms lipsync kick · 不再沒命中也硬切 phrase_074</li>
@@ -1461,10 +1469,10 @@
   })();
   </script>
 
-  <script src="/static/session-memory.js?v=1.9.17"></script>
-  <script src="/static/conversation-memory.js?v=1.9.17"></script>
-  <script src="/static/animation-pool.js?v=1.9.17"></script>
-  <script src="/static/phrase-matcher.js?v=1.9.17"></script>
+  <script src="/static/session-memory.js?v=1.9.18"></script>
+  <script src="/static/conversation-memory.js?v=1.9.18"></script>
+  <script src="/static/animation-pool.js?v=1.9.18"></script>
+  <script src="/static/phrase-matcher.js?v=1.9.18"></script>
 
   <script>
   (function () {
@@ -2510,7 +2518,10 @@
               if (window.PhraseMatcher && !window.__sophiePhraseMatched && sophieTextBuffer.length >= 1) {
                 var match = window.PhraseMatcher.findMatching(sophieTextBuffer);
                 if (match) {
-                  playLipsyncVisual(match.phrase.mp4_url, match.phrase.sentence, "HIT", true);
+                  // v1.9.18 emergency stable mode:
+                  // do not switch to lipsync mp4 until V2 Avatar Director owns all video changes.
+                  window.__sophiePhraseMatched = true;
+                  log("[LIPSYNC PAUSED] " + match.phrase.sentence + " · stable speaking fallback");
                 }
               }
             } else if (data.type === "conversation.item.input_audio_transcription.completed") {
@@ -2945,7 +2956,7 @@
       });
     }
 
-    log("Voice Path v1.9.17 ready - kick disabled, stable visual owner - 2026-05-24");
+    log("Voice Path v1.9.18 ready - lipsync paused for stable visual - 2026-05-24");
 
     // ===== v1.9.7 · 單 video 保活 (砍雙層、只剩底層 idle) =====
     (function setupVideoKeepAlive() {
