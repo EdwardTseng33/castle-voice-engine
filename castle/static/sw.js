@@ -2,7 +2,7 @@
 // Voice Path v1.1.2.1 Service Worker
 // 待機 shell offline-first · realtime / breeze / musetalk 永遠 network-first 不 cache
 // v1.1.0 baseline · push notification handler + background sync handler (framework only · server 端 push 尚未 build)
-const CACHE_VERSION = 'v1.9.13';
+const CACHE_VERSION = 'v1.9.14';
 const CACHE_NAME = 'sophie-' + CACHE_VERSION;
 
 // 不 precache mp4 (5MB+ · 阻塞 install) · video element 自己 streaming load 即可
@@ -74,8 +74,9 @@ self.addEventListener('fetch', function (event) {
     }
   }
 
-  // v1.9.5 · index.html = network-first 強制 (避免 Edward 看到 cache 舊版含 poster)
-  if (url.pathname === '/static/index.html') {
+  // v1.9.5 · index.html = network-first 強制
+  // v1.9.14 · 霍爾刀 3 · 擴大到所有 .js · QA 期間避免 stale 動畫 / phrase-matcher 邏輯
+  if (url.pathname === '/static/index.html' || url.pathname.endsWith('.js')) {
     event.respondWith(
       fetch(event.request).then(function (resp) {
         if (resp && resp.ok) {

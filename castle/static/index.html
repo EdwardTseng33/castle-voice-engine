@@ -725,7 +725,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v1.9.13</span>
+          <span class="vm-version">v1.9.14</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -734,6 +734,17 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.14</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>霍爾 round 2 verdict · 5 刀 · 修 v1.9.13 漏抓的真實 bug</li>
+            <li>刀 1: audio 時間戳補設到 [FORCE] 分支 (v1.9.13 寫錯分支 elapsedSec 永遠 0)</li>
+            <li>刀 2: script tag 加 ?v=1.9.14 版本參數 (避免 stale JS cache)</li>
+            <li>刀 3: SW 對所有 .js 改 network-first (QA 期間)</li>
+            <li>刀 4: response.created 清空 sophieTextBuffer (避免上輪殘留干擾)</li>
+            <li>刀 5: PhraseMatcher 加 substring + early prefix match (長句早命中)</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v1.9.13</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>霍爾 (Codex) 排查 verdict 4 刀 · 解 lipsync 沒運作根本問題</li>
@@ -1421,10 +1432,10 @@
   })();
   </script>
 
-  <script src="/static/session-memory.js"></script>
-  <script src="/static/conversation-memory.js"></script>
-  <script src="/static/animation-pool.js"></script>
-  <script src="/static/phrase-matcher.js"></script>
+  <script src="/static/session-memory.js?v=1.9.14"></script>
+  <script src="/static/conversation-memory.js?v=1.9.14"></script>
+  <script src="/static/animation-pool.js?v=1.9.14"></script>
+  <script src="/static/phrase-matcher.js?v=1.9.14"></script>
 
   <script>
   (function () {
@@ -2285,8 +2296,11 @@
             if (isAudioOutputDelta && !window.__sophieSpeakingTriggered &&
                 animPool && typeof animPool.startSpeaking === "function") {
               window.__sophieSpeakingTriggered = true;
+              // v1.9.14 · 霍爾刀 1 · 在 [FORCE] 分支也設 audio ts (避免後面 audio.delta 分支被跳過)
+              window.__sophieAudioStartTs = Date.now();
+              window.__sophieLipsyncActive = false;
               animPool.startSpeaking();
-              log("[FORCE] " + t + " · 含 audio → startSpeaking · 上層 speaking crossfade in");
+              log("[FORCE] " + t + " · audio ts " + window.__sophieAudioStartTs);
             }
             // 含 audio + done = stopSpeaking
             var isAudioOutputDone =
@@ -2324,6 +2338,8 @@
                 window.__sophiePhraseMatched = false;
                 // v1.9.12 · 標記 response in progress · 避免雙聲音
                 window.__sophieResponseActive = true;
+                // v1.9.14 · 霍爾刀 4 · 清空 transcript buffer · 避免上一輪殘留干擾本輪 lipsync 命中
+                sophieTextBuffer = "";
               }
               if (data.type === "response.done") {
                 // v1.9.12 · response 結束 · 清標記

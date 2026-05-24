@@ -85,13 +85,12 @@
     var bestDist = Infinity;
     var bestRatio = Infinity;
 
-    // v1.9.12 · 加 prefix match · 蘇菲 buffer 起手部分 vs phrase 整段
-    // 範例: 蘇菲講「早安 Edward 你今天看起來不錯」· buffer 前 14 字 vs phrase「早安 Edward 新的一天從這裡開始」normalize 14 字
+    // v1.9.14 · 霍爾刀 5 · 三層匹配 · 短句 early hit + 長句 prefix + substring
     for (var i = 0; i < MANIFEST.phrases.length; i++) {
       var p = MANIFEST.phrases[i];
       var ns = p._normalized || _normalize(p.sentence);
 
-      // 1. 完整比 (原邏輯)
+      // 1. 完整比 (原邏輯) · 整段 Levenshtein
       var lenRatio = Math.abs(ns.length - nt.length) / Math.max(ns.length, nt.length);
       if (lenRatio <= 0.4) {
         var d = _levenshtein(nt, ns);
@@ -100,13 +99,36 @@
           best = p; bestDist = d; bestRatio = ratio;
         }
       }
-      // 2. v1.9.12 · prefix match (buffer 開頭 X 字 vs phrase 整段)
+
+      // 2. buffer 起手 X 字 vs phrase 整段 (蘇菲剛開口時用)
       if (nt.length >= ns.length) {
         var nt_prefix = nt.substring(0, ns.length);
         var dp = _levenshtein(nt_prefix, ns);
         var ratiop = dp / ns.length;
         if (ratiop < 0.30 && dp < bestDist) {
           best = p; bestDist = dp; bestRatio = ratiop;
+        }
+      }
+
+      // 3. v1.9.14 · 真 early prefix · buffer 還沒長到 phrase 長度時、用兩端較短長度比
+      // 例如 buffer = "我懂你" (3 字) vs phrase = "我懂" (2 字) · 取 buffer 前 2 字 "我懂" vs phrase "我懂" = 完美 match
+      // 或 buffer = "早安 Ed" (5 字) vs phrase = "早安 Edward 新的一天" (12 字) · 取兩邊前 5 字比
+      if (nt.length >= 2 && ns.length >= 2) {
+        var shortLen = Math.min(nt.length, ns.length);
+        var nt_head = nt.substring(0, shortLen);
+        var ns_head = ns.substring(0, shortLen);
+        var de = _levenshtein(nt_head, ns_head);
+        var ratioe = de / shortLen;
+        // 只在 shortLen 夠長 (≥ 2) 且 ratio 嚴格 (< 0.20) 才算命中 · 避免亂 match
+        if (shortLen >= 2 && ratioe < 0.20 && de < bestDist) {
+          best = p; bestDist = de; bestRatio = ratioe;
+        }
+      }
+
+      // 4. v1.9.14 · substring · buffer 內任何位置含 phrase
+      if (nt.length > ns.length && nt.indexOf(ns) !== -1) {
+        if (0 < bestDist) {
+          best = p; bestDist = 0; bestRatio = 0;
         }
       }
     }
