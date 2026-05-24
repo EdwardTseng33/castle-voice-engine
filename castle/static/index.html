@@ -725,7 +725,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v2.0.4</span>
+          <span class="vm-version">v2.0.5</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -734,6 +734,14 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v2.0.5</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>去口頭禪: 降低「我懂 / 我在 / 收到」權重 · 同場對話避免重複</li>
+            <li>改寫開場句池 · 不再頻繁用「我在」當招呼</li>
+            <li>回應先進內容 · 少用制式安撫句開頭</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v2.0.4</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>自然對話 prompt: 解除 25 字硬限制 · 允許 1 個自然追問</li>
@@ -1509,11 +1517,11 @@
   })();
   </script>
 
-  <script src="/static/session-memory.js?v=2.0.4"></script>
-  <script src="/static/conversation-memory.js?v=2.0.4"></script>
-  <script src="/static/avatar-director.js?v=2.0.4"></script>
-  <script src="/static/animation-pool.js?v=2.0.4"></script>
-  <script src="/static/phrase-matcher.js?v=2.0.4"></script>
+  <script src="/static/session-memory.js?v=2.0.5"></script>
+  <script src="/static/conversation-memory.js?v=2.0.5"></script>
+  <script src="/static/avatar-director.js?v=2.0.5"></script>
+  <script src="/static/animation-pool.js?v=2.0.5"></script>
+  <script src="/static/phrase-matcher.js?v=2.0.5"></script>
 
   <script>
   (function () {
@@ -2001,7 +2009,7 @@
             } else if (h >= 18 && h < 22) {
               pool = ["Edward 晚上又上來了、辛苦了。", "嗨 Edward、晚間又看到你。", "Edward 又來啦、要放鬆一下嗎？"];
             } else if (h >= 22 || h < 5) {
-              pool = ["Edward 還沒睡呢、再陪你一會。", "嗨 Edward、又上來啦、我在。", "Edward 深夜又找我、輕鬆聊。"];
+              pool = ["Edward 還沒睡呢、先輕一點聊。", "嗨 Edward、又上來啦。", "Edward 深夜又找我、輕鬆聊。"];
             } else {
               // 5-11 早上重訪
               pool = ["Edward 早、又上來了。", "嗨 Edward、早上又看到你。", "Edward 你又來啦、今天順嗎？"];
@@ -2036,7 +2044,7 @@
                 return _randPick(["Edward 週末嗎、不打擾。", "嗨 Edward、週末午後、想聊就聊。", "Edward 你來啦、週末輕鬆說。"]);
               }
               // 週末晚 / 深夜
-              return _randPick(["Edward 週末晚、想聊就聊。", "嗨 Edward、週末夜、我在。", "Edward 你還沒睡、週末嘛、輕鬆。"]);
+              return _randPick(["Edward 週末晚、想聊就聊。", "嗨 Edward、週末夜、慢慢說。", "Edward 你還沒睡、週末嘛、輕鬆。"]);
             }
             // 平日 · 沿用原 25 句池 (按時段 5 段)
             var pool;
@@ -2070,13 +2078,13 @@
                 "嗨 Edward、辛苦了一天、放鬆一下。",
                 "Hello Edward、晚上想聊什麼？",
                 "Edward 回來啦、晚餐吃了嗎？",
-                "嗨 Edward、晚間時光、我在。"
+                "嗨 Edward、晚間時光、慢慢說。"
               ];
             } else {
               pool = [
-                "Edward 還沒睡呢、我陪你。",
+                "Edward 還沒睡呢、輕一點聊。",
                 "嗨 Edward、深夜了、想聊聊嗎？",
-                "Edward、晚安前的一段時光、我在。",
+                "Edward、晚安前這段，慢慢說。",
                 "咦 Edward 醒著呢、要陪你還是聽你說？",
                 "Hello Edward、夜深了、輕鬆說吧。"
               ];
@@ -2171,6 +2179,8 @@
             "\n- 先接住對方剛說的情緒或意圖，再回答事情。" +
             "\n- 一般 1-3 句，20-80 字；複雜題可以稍長，但不要一次講成文章。" +
             "\n- 可以追問，但一次最多 1 個，且必須是關鍵問題。" +
+            "\n- 避免固定口頭禪；不要反覆用『我懂』『我在』『收到』『交給我』開頭。同場對話用過一次就換說法。" +
+            "\n- 能直接回答就直接回答，不要先塞制式安撫句。" +
             "\n- 不要一直用『我可以幫你』收尾；有判斷就直接講判斷。" +
             "\n- 不列點、不 markdown，除非 Edward 明確要整理。" +
             "\n\n[語言] Edward 或對方換 English / 日本語 / 한국어、立刻跟著切 · 講當地文化習慣的話 (日本敬語婉轉 · 韓國敬語階級 · 歐美自然直接)。" +
@@ -3052,7 +3062,7 @@
       });
     }
 
-    log("Voice Path v2.0.4 ready - natural conversation prompt, lipsync opt-in - 2026-05-24");
+    log("Voice Path v2.0.5 ready - reduced catchphrases, natural conversation prompt - 2026-05-24");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
