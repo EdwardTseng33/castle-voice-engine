@@ -41,7 +41,7 @@ fi
 echo ""
 echo "[2/4] Modal deploy app_staging.py ..."
 echo "-------------------------------------------"
-python -m modal deploy app_staging.py
+PYTHONIOENCODING=utf-8 python -m modal deploy app_staging.py
 DEPLOY_EXIT=$?
 echo "-------------------------------------------"
 if [ $DEPLOY_EXIT -ne 0 ]; then
@@ -81,21 +81,22 @@ else
 fi
 
 # 4b. /static/index.html 200 + contains AvatarCompositor / index script tag
-INDEX_BODY=$(curl -s $COOKIE_HEADER "$STAGING_URL/static/index.html")
-INDEX_CODE=$(curl -s -o /dev/null -w '%{http_code}' $COOKIE_HEADER "$STAGING_URL/static/index.html")
+INDEX_FILE=$(mktemp)
+INDEX_CODE=$(curl -s -o "$INDEX_FILE" -w '%{http_code}' $COOKIE_HEADER "$STAGING_URL/static/index.html")
 if [ "$INDEX_CODE" = "200" ]; then
   echo "  ✓ /static/index.html → 200"
 else
   echo "  ✗ /static/index.html → $INDEX_CODE"
   FAIL=1
 fi
-# Check for any expected script tag (AvatarCompositor or animation-pool.js)
-if echo "$INDEX_BODY" | grep -qE 'AvatarCompositor|animation-pool\.js|<script'; then
-  echo "  ✓ index.html 含 script tag (AvatarCompositor / animation-pool / 其他)"
+# Check for any expected script tag (AvatarCompositor / animation-pool / 任一 <script)
+if grep -qE 'AvatarCompositor|animation-pool|<script' "$INDEX_FILE"; then
+  echo "  ✓ index.html 含 script tag"
 else
-  echo "  ✗ index.html 缺 script tag · 主介面壞"
+  echo "  ✗ index.html 缺 script tag · 主介面壞 ($(wc -c < "$INDEX_FILE") bytes)"
   FAIL=1
 fi
+rm -f "$INDEX_FILE"
 
 # 4c. /lipsync/manifest.json 200 + phrases array
 MANIFEST_BODY=$(curl -s $COOKIE_HEADER "$STAGING_URL/lipsync/manifest.json")

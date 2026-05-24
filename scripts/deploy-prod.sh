@@ -81,7 +81,7 @@ sed 's/^/      /' "$APPROVAL_FILE"
 echo ""
 echo "[2/2] Modal deploy app.py ..."
 echo "-------------------------------------------"
-python -m modal deploy app.py
+PYTHONIOENCODING=utf-8 python -m modal deploy app.py
 DEPLOY_EXIT=$?
 echo "-------------------------------------------"
 
