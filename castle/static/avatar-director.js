@@ -1,5 +1,5 @@
 // castle/static/avatar-director.js
-// Voice Path v2.0.3 · single-owner avatar visual runtime.
+// Voice Path v2.0.4 · single-owner avatar visual runtime.
 (function (global) {
   "use strict";
 

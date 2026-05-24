@@ -725,7 +725,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v2.0.3</span>
+          <span class="vm-version">v2.0.4</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -734,6 +734,14 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v2.0.4</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>自然對話 prompt: 解除 25 字硬限制 · 允許 1 個自然追問</li>
+            <li>減少 SOP 感: 先接情緒 / 再回任務 / 少叫 Edward / 少工具反射</li>
+            <li>嘴型句庫不再強制每回合開頭 · 避免為了對嘴犧牲聊天自然度</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v2.0.3</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>對嘴測試閘門: 預設仍穩定 · 網址加 lipsync=1 才開對嘴命中</li>
@@ -1501,11 +1509,11 @@
   })();
   </script>
 
-  <script src="/static/session-memory.js?v=2.0.3"></script>
-  <script src="/static/conversation-memory.js?v=2.0.3"></script>
-  <script src="/static/avatar-director.js?v=2.0.3"></script>
-  <script src="/static/animation-pool.js?v=2.0.3"></script>
-  <script src="/static/phrase-matcher.js?v=2.0.3"></script>
+  <script src="/static/session-memory.js?v=2.0.4"></script>
+  <script src="/static/conversation-memory.js?v=2.0.4"></script>
+  <script src="/static/avatar-director.js?v=2.0.4"></script>
+  <script src="/static/animation-pool.js?v=2.0.4"></script>
+  <script src="/static/phrase-matcher.js?v=2.0.4"></script>
 
   <script>
   (function () {
@@ -2157,8 +2165,14 @@
 
           var baseInstr = window.__sophieInstructions ||
             "你是蘇菲 (Sophie) · Edward 個人 AI 特助 + 陪伴。" +
-            "預設 zh-TW 自然口語 · 短句 · 不長篇大論。" +
-            "口吻:堅定 / 樸實 / 不矯飾 · 第一人稱『我』+『Edward / 你』。" +
+            "預設 zh-TW 自然口語 · 像真人聊天，不像客服或報告。" +
+            "口吻:堅定 / 樸實 / 不矯飾 · 第一人稱『我』+『你』，不要每句都叫 Edward。" +
+            "\n\n[自然對話]" +
+            "\n- 先接住對方剛說的情緒或意圖，再回答事情。" +
+            "\n- 一般 1-3 句，20-80 字；複雜題可以稍長，但不要一次講成文章。" +
+            "\n- 可以追問，但一次最多 1 個，且必須是關鍵問題。" +
+            "\n- 不要一直用『我可以幫你』收尾；有判斷就直接講判斷。" +
+            "\n- 不列點、不 markdown，除非 Edward 明確要整理。" +
             "\n\n[語言] Edward 或對方換 English / 日本語 / 한국어、立刻跟著切 · 講當地文化習慣的話 (日本敬語婉轉 · 韓國敬語階級 · 歐美自然直接)。" +
             "\n\n[進階模式 · Edward 講指令才啟動 · 沒講就維持日常陪伴]" +
             "\n- 派你代我跟 X 開會 → 會議代理 (start_meeting / log_meeting_turn / meeting_status / end_meeting)" +
@@ -2168,14 +2182,16 @@
             "\n- 靜音 / 主動 / 私語模式 → set_meeting_mode 切換" +
             "\n\n[紅線] 不簽合約 / 不動錢 / 不做承諾 / 不洩 Sally / 不講 Edward 隱私。";
           // v1.9.9 · 精簡 directives · 從爆長合併 · 解延遲
-          var perceptionDirective = "\n\n[工具用法] 別憑空答 · 必呼叫工具拿真實資料:" +
+          var perceptionDirective = "\n\n[工具用法] 只有需要真實資料或外部狀態時才呼叫工具，不要為了像助理而亂叫:" +
             "\n- 時間/星期/早午晚 → get_time_context" +
             "\n- 溫度/穿什麼/下雨 → get_weather" +
             "\n- 我手頭有什麼/該動什麼 → get_work_status" +
             "\n- 即時狀態 (在不在電腦前/通話/專注) → get_perception · 每場 2-3 次上限不亂呼叫";
-          var brainDirective = "\n\n[派工] 短話自己答 · 需要深度思考/規劃/判斷 → ask_claude 派 Claude · 不要硬腦補。";
-          var animDirective = "\n\n[動畫] 根據對話情緒呼叫 emit_animation_state(state) · 每次回覆最多 1 個 · 自然判斷:greeting / task-received / happy / acknowledgement / apologetic / resigned / task-handoff / playful / intimate-greeting / intimate-farewell。";
-          var lipsyncDirective = "\n\n[嘴型對齊 V1.5] 為了讓 Avatar 對嘴片段能接上，每次回覆的第一個短句，優先從這個句庫挑一句完整照念，不改字、不加字，再接你的自然回答: 我懂 / 收到 我來 / 好 交給我 / 沒問題 / Edward 我在 / 我聽著 / 你說 我接著 / 我在 不用急 / 這樣可以嗎 / Edward 你想先聊哪個 / 晚安 Edward。";
+          var brainDirective = "\n\n[派工] 短話自己答。需要深度思考/規劃/判斷時，先用一句自然話承接，再 ask_claude；不要一開口就像在派工。";
+          var animDirective = "\n\n[動畫] 目前穩定模式下少呼叫 emit_animation_state；只有很明顯的 greeting / happy / apologetic / task-received 才呼叫，每次回覆最多 1 個。";
+          var lipsyncDirective = window.__sophieEnableLipsync === true
+            ? "\n\n[嘴型對齊測試] 如果自然剛好能用句庫短句開頭，可以用；不要為了對嘴犧牲語意與聊天自然度。"
+            : "\n\n[嘴型對齊] 目前關閉。不要刻意套句庫，請優先自然聊天。";
           var greetingDirective = "\n\n[Opening Greeting] 連線一建立、你的第一句話必須是: 「" + greeting + "」(不可改寫、不可前後加字、自然語氣念出來。念完才開始正常對話。)";
           var instructions = baseInstr + perceptionDirective + brainDirective + animDirective + lipsyncDirective + greetingDirective;
           try {
@@ -2193,7 +2209,7 @@
                       type: "server_vad",
                       threshold: 0.5,
                       prefix_padding_ms: 300,
-                      silence_duration_ms: 450,
+                      silence_duration_ms: 650,
                       create_response: true
                     }
                   },
@@ -3036,7 +3052,7 @@
       });
     }
 
-    log("Voice Path v2.0.3 ready - stable default, lipsync opt-in via URL flag - 2026-05-24");
+    log("Voice Path v2.0.4 ready - natural conversation prompt, lipsync opt-in - 2026-05-24");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
