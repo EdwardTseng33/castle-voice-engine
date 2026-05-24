@@ -165,6 +165,33 @@
       result("T10b: cached sid -> lipsync_cached mode", t10b.mode === "lipsync_cached" && t10b.srcSwitchCount === beforeT10b + 1, "mode=" + t10b.mode);
 
       await sleep(3500);
+
+      // T11 src allowlist (Suliman Tier B Seg 4 P1)
+      if (typeof AvatarCompositor._validateSrcForTest === "function") {
+        var v = AvatarCompositor._validateSrcForTest;
+        var t11cases = [
+          { src: "/static/sophie-idle.mp4", expectOk: true,  label: "T11a static relative" },
+          { src: "/lipsync/phrase_001.mp4", expectOk: true,  label: "T11b lipsync relative" },
+          { src: "blob:https://x/abc",      expectOk: true,  label: "T11c blob" },
+          { src: "javascript:alert(1)",     expectOk: false, label: "T11d javascript: BLOCK" },
+          { src: "data:text/html,<x>",      expectOk: false, label: "T11e data: BLOCK" },
+          { src: "https://evil.com/x.mp4",  expectOk: false, label: "T11f cross-origin BLOCK" },
+          { src: "",                        expectOk: false, label: "T11g empty BLOCK" },
+          { src: null,                      expectOk: false, label: "T11h null BLOCK" }
+        ];
+        var t11pass = 0, t11fail = 0;
+        for (var i = 0; i < t11cases.length; i++) {
+          var c = t11cases[i];
+          var got = !!v(c.src).ok;
+          var ok = got === c.expectOk;
+          result(c.label, ok, "expectOk=" + c.expectOk + " got=" + got);
+          if (ok) t11pass++; else t11fail++;
+        }
+        log("T11 src allowlist: " + t11pass + " pass / " + t11fail + " fail");
+      } else {
+        result("T11: src allowlist test hook not found", false, "AvatarCompositor._validateSrcForTest missing");
+      }
+
       var stats = compositor.getState();
       log("=== Final stats: " + JSON.stringify(stats) + " ===");
     }

@@ -28,24 +28,71 @@ from typing import Optional
 from fastapi import Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-# dev bypass token · 只在 dev/test 場景用 · prod 不開
-_DEV_TOKEN = "06c87b230ad966219137a5d7c005266f"
+# dev bypass token · 沙利曼 Tier B Seg 1 P0 修補
+# 1) token 從 Modal secret env 拉 · 不寫死 in code (舊 token 已 rotate · git history 在 Edward 端處理)
+# 2) DEV_BYPASS_ENABLED env 真守 · prod env 不設 = endpoint 完全失能 (縱深防禦)
+# 3) HEADER 名 export 給 app.py middleware / cookie set 副作用 用
+
+DEV_BYPASS_HEADER = "X-Castle-Dev-Bypass"
+
+_DEV_TOKEN = os.environ.get("CASTLE_DEV_BYPASS_TOKEN", "").strip()
 _DEV_ENABLED_ENV = os.environ.get("DEV_BYPASS_ENABLED", "").strip()
 
-# 如果沒有設 DEV_BYPASS_ENABLED=1，整組 endpoint 仍可掛載
-# 但 _check_dev_bypass() 會擋住所有請求 (防萬一 prod 漏掛)
-_DEV_EXPLICITLY_ENABLED = _DEV_ENABLED_ENV == "1"
+# 雙守：DEV_BYPASS_ENABLED=1 AND token 非空 · 缺一即失能
+_DEV_EXPLICITLY_ENABLED = (_DEV_ENABLED_ENV == "1") and bool(_DEV_TOKEN)
 
 
 def _check_dev_bypass(request: Request) -> Optional[JSONResponse]:
-    """驗 dev bypass header · 回 None 表示通過 · 回 JSONResponse 表示擋住"""
-    token = request.headers.get("X-Castle-Dev-Bypass", "").strip()
+    """驗 dev bypass header · 回 None 表示通過 · 回 JSONResponse 表示擋住.
+
+    沙利曼 Tier B Seg 1 P0 修補：
+      - 第一道 gate：若 DEV_BYPASS_ENABLED env 未設 = 整組 dev 失能 · 回 404 (不洩露 endpoint 存在)
+      - 第二道 gate：header token compare_digest 比對 (constant-time)
+      - prod 預設未設 DEV_BYPASS_ENABLED → 永遠拿不到 / dev/* 任何回應
+    """
+    # Gate 1 · env 未啟用 = 整組失能 · 404 不洩露
+    if not _DEV_EXPLICITLY_ENABLED:
+        return JSONResponse(
+            {"ok": False, "detail": "not found"},
+            status_code=404,
+        )
+
+    # Gate 2 · header token
+    token = request.headers.get(DEV_BYPASS_HEADER, "").strip()
     if not token or not secrets.compare_digest(token, _DEV_TOKEN):
         return JSONResponse(
-            {"ok": False, "detail": "dev bypass token required · use X-Castle-Dev-Bypass header"},
+            {"ok": False, "detail": "dev bypass token required · use " + DEV_BYPASS_HEADER + " header"},
             status_code=403,
         )
     return None
+
+
+def check_dev_bypass(request: Request) -> Optional[JSONResponse]:
+    """Public alias · app.py / middleware 用 · 同 _check_dev_bypass 雙守邏輯.
+
+    回 None = 此請求帶有效 dev bypass + DEV_BYPASS_ENABLED=1 · caller 可繼續處理 (含 set cookie 副作用).
+    回 JSONResponse = 擋住 (404 / 403) · caller 不要動作 (依然回 None 給 caller, caller 自己判).
+
+    使用：caller 只關心「這請求是否合法 dev bypass」, 不需要直接 return JSONResponse.
+        -> 對外提供 bool 版本 is_valid_dev_bypass(request) 更乾淨.
+    """
+    return _check_dev_bypass(request)
+
+
+def is_valid_dev_bypass(request: Request) -> bool:
+    """Bool 版本 · 給 app.py /auth/whoami 判 dev bypass 副作用.
+
+    True 才允許 mint dev cookie · 缺 env / 缺 token / token 錯 全部 False.
+    """
+    if not _DEV_EXPLICITLY_ENABLED:
+        return False
+    token = request.headers.get(DEV_BYPASS_HEADER, "").strip()
+    if not token:
+        return False
+    try:
+        return secrets.compare_digest(token, _DEV_TOKEN)
+    except Exception:
+        return False
 
 
 def _build_realtime_event_sequence(utterance: str, audio_file: Optional[str] = None) -> list[dict]:
@@ -136,7 +183,19 @@ async def _stream_events(events: list[dict], user_said: str, start_ts: float):
 
 
 def attach_dev_routes(app):
-    """掛載 /dev/* routes · 呼叫前確認 prod 不要呼叫這個"""
+    """掛載 /dev/* routes · 沙利曼 Tier B Seg 1 P0 修補：
+
+    第三道 gate (縱深防禦)：若 DEV_BYPASS_ENABLED != "1" 或 token 未配置 = 整組 route 不掛載
+    prod 環境 secret 不設 → route 根本不存在 → 連 404 都拿不到 (真正 "prod 等於沒這條路")
+    """
+    if not _DEV_EXPLICITLY_ENABLED:
+        # prod / 未配置 = 完全不掛載 · 雙重保險 (env gate + route 不存在)
+        try:
+            import logging as _lg
+            _lg.getLogger(__name__).info("[dev_endpoints] DEV_BYPASS_ENABLED != 1 or token empty · /dev/* routes NOT attached")
+        except Exception:
+            pass
+        return
 
     @app.get("/dev/health")
     async def _dev_health(request: Request):

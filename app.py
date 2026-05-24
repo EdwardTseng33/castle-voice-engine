@@ -133,6 +133,13 @@ def fastapi_app():
         is_public_path,
         COOKIE_NAME,
         COOKIE_MAX_AGE,
+        ALLOWED_EMAILS,
+        DEV_CRON_EMAIL,
+    )
+    # v1.5.1 Suliman Tier B Seg 2 fix · dev bypass cookie set 副作用支援
+    from castle.server.dev_endpoints import (
+        is_valid_dev_bypass,
+        DEV_BYPASS_HEADER,
     )
 
     from castle.server.auth_middleware import verify_google_id_token_any, OWNER_CONTACT_EMAIL
@@ -181,10 +188,41 @@ def fastapi_app():
 
     @fastapi_instance.get("/auth/whoami")
     async def _auth_whoami(request: Request):
+        """v1.5.1 Suliman Tier B Seg 2 fix · dev bypass cookie set 副作用
+
+        Path A (一般 user)：有 cookie + verify_signed_cookie OK → 回 email
+        Path B (dev cron)：無 cookie 但帶 X-Castle-Dev-Bypass header + DEV_BYPASS_ENABLED=1 →
+                          mint short-lived (30 min) DEV_CRON_EMAIL cookie · 後續 navigation 免帶 header
+        Path C (其他)：401
+
+        prod 環境未設 DEV_BYPASS_ENABLED → Path B 永遠失敗 (is_valid_dev_bypass 回 False)
+        """
+        # Path A · 已有 cookie · 走原 verify
         cookie = request.cookies.get(COOKIE_NAME)
         email = verify_signed_cookie(cookie) if cookie else None
         if email:
             return {"ok": True, "email": email}
+
+        # Path B · dev bypass header → mint 30 min DEV_CRON_EMAIL cookie
+        # 觸發條件 (任一缺即失敗)：
+        #   1. DEV_BYPASS_ENABLED env == "1" (在 dev_endpoints._DEV_EXPLICITLY_ENABLED 判)
+        #   2. CASTLE_DEV_BYPASS_TOKEN env 非空 (上同)
+        #   3. request 帶 X-Castle-Dev-Bypass header · token 對
+        if is_valid_dev_bypass(request):
+            dev_signed = sign_email_cookie(DEV_CRON_EMAIL)
+            resp = JSONResponse({"ok": True, "email": DEV_CRON_EMAIL, "mode": "dev-cron"})
+            resp.set_cookie(
+                key=COOKIE_NAME,
+                value=dev_signed,
+                max_age=1800,  # 30 min · 短時效縮小 blast radius
+                httponly=True,
+                secure=True,
+                samesite="lax",
+                path="/",
+            )
+            return resp
+
+        # Path C · 401
         return JSONResponse({"ok": False}, status_code=401)
 
     @fastapi_instance.post("/auth/logout")

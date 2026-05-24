@@ -360,10 +360,47 @@
     if (this._endTimeoutTimer) { clearTimeout(this._endTimeoutTimer); this._endTimeoutTimer = null; }
   };
 
+  // src URL scheme + prefix allowlist | Suliman Tier B Seg 4 P1 patch
+  // Allowed:
+  //   1. /static/...mp4     (relative same-origin static asset)
+  //   2. /lipsync/...mp4    (relative same-origin lipsync cache)
+  //   3. blob:...           (runtime generated lipsync · WebRTC / MediaSource)
+  //   4. <origin>/static/... or <origin>/lipsync/... (absolute same-origin)
+  //   5. https://edwardt0303--castle-voice-engine-fastapi-app.modal.run/... (modal prod absolute)
+  // Rejected: javascript: | data: | cross-origin http(s) | empty | non-string
+  var _ALLOWED_SAME_ORIGIN_PREFIXES = ["/static/", "/lipsync/"];
+  var _ALLOWED_ABS_ORIGIN = "https://edwardt0303--castle-voice-engine-fastapi-app.modal.run";
+  function _validateSrc(src) {
+    if (typeof src !== "string" || src.length === 0) {
+      return { ok: false, reason: "empty or non-string src" };
+    }
+    if (src.indexOf("blob:") === 0) return { ok: true };
+    for (var i = 0; i < _ALLOWED_SAME_ORIGIN_PREFIXES.length; i++) {
+      if (src.indexOf(_ALLOWED_SAME_ORIGIN_PREFIXES[i]) === 0) return { ok: true };
+    }
+    try {
+      var pageOrigin = (global.location && global.location.origin) || "";
+      if (pageOrigin && src.indexOf(pageOrigin + "/static/") === 0) return { ok: true };
+      if (pageOrigin && src.indexOf(pageOrigin + "/lipsync/") === 0) return { ok: true };
+    } catch (e) {}
+    if (src.indexOf(_ALLOWED_ABS_ORIGIN + "/static/") === 0) return { ok: true };
+    if (src.indexOf(_ALLOWED_ABS_ORIGIN + "/lipsync/") === 0) return { ok: true };
+    return { ok: false, reason: "disallowed src scheme/origin: " + src.slice(0, 60) };
+  }
+
   AvatarCompositor.prototype._writeSrcInternal = function (src) {
+    var v = _validateSrc(src);
+    if (!v.ok) {
+      this.stats.recordReject(v.reason);
+      try { console.error("[avatarCompositor] src allowlist REJECT | " + v.reason); } catch (e) {}
+      return;
+    }
     this._allowSrcWrite = true;
     try { this.video.src = src; } finally { this._allowSrcWrite = false; }
   };
+
+  // Test hook | expose validator for compositor-test.html unit test
+  AvatarCompositor._validateSrcForTest = _validateSrc;
 
   // Dev/test only: forcibly clear lipsync lock and reset to idle.
   // Production never calls this; lipsync naturally ends via clip onEnded.

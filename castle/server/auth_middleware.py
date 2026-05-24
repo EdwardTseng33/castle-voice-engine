@@ -28,6 +28,25 @@ ALLOWED_EMAILS = frozenset({
     "edwardt0303@gmail.com",
 })
 
+# v1.5.1 dev cron bypass · Suliman Tier B Seg 2 fix
+# 此假 email 只在 DEV_BYPASS_ENABLED=1 且 X-Castle-Dev-Bypass header 命中時才會被 mint cookie
+# prod env 未設 DEV_BYPASS_ENABLED → 永遠 mint 不出來 → 等於不存在
+DEV_CRON_EMAIL = "dev-cron@castle.local"
+
+
+def _dev_endpoint_enabled() -> bool:
+    """Lazy lookup · 避免 auth_middleware ↔ dev_endpoints circular import.
+
+    回 True 才表示 _DEV_EXPLICITLY_ENABLED=True (env + token 雙守過).
+    用在 verify_signed_cookie / sign_email_cookie 判 DEV_CRON_EMAIL 可否通行.
+    """
+    try:
+        from castle.server.dev_endpoints import _DEV_EXPLICITLY_ENABLED
+        return bool(_DEV_EXPLICITLY_ENABLED)
+    except Exception:
+        return False
+
+
 # v1.2.0 · 訪客被擋時顯示給對方 · 請聯絡 X 開放
 OWNER_CONTACT_EMAIL = "edwardt0303@gmail.com"
 
@@ -136,6 +155,10 @@ def verify_signed_cookie(cookie_value: str) -> str | None:
         return None
 
     if email in ALLOWED_EMAILS:
+        return email
+    # v1.5.1 dev cron · 只在 DEV_BYPASS_ENABLED=1 才接受 DEV_CRON_EMAIL · prod 沒啟用直接 reject
+    if email == DEV_CRON_EMAIL and _dev_endpoint_enabled():
+        logger.info("[auth] dev cron cookie accepted (DEV_BYPASS_ENABLED=1)")
         return email
     logger.warning("[auth] cookie email no longer in allow list: %s", email)
     return None
