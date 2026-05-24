@@ -2620,6 +2620,8 @@
                 animPool.startSpeaking();
                 scheduleLipsyncKick(data.type);
                 log("audio.delta first chunk -> startSpeaking · audio ts " + window.__sophieAudioStartTs);
+                // v2.x 馬魯克 metric hook · first speaking switch · optional chaining guard (v2-verdict-checks.js 未載入時 noop)
+                try { window.__sophieV2Verdict && window.__sophieV2Verdict.notifySessionStart && window.__sophieV2Verdict.notifySessionStart(performance.now()); } catch (e) {}
               }
             } else if (data.type === "response.audio.done" || data.type === "response.output_audio.done") {
               // v1.9.15 · 霍爾刀 2 · 砍掉 response.audio_transcript.done · 它只是文字完成 ≠ 視覺可停
@@ -2628,6 +2630,8 @@
                 animPool.stopSpeaking();
                 log("audio.done -> stopSpeaking");
               }
+              // v2.x 馬魯克 metric hook · audio.done · optional chaining guard
+              try { window.__sophieV2Verdict && window.__sophieV2Verdict.notifyAudioDone && window.__sophieV2Verdict.notifyAudioDone(performance.now()); } catch (e) {}
               clearLipsyncKick();
               // v1.3.1 · reset trigger flag (下次回應重新等)
               window.__sophieSpeakingTriggered = false;
