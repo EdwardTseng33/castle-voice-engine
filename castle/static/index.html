@@ -725,7 +725,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v2.0.2</span>
+          <span class="vm-version">v2.0.3</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -734,6 +734,14 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v2.0.3</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>對嘴測試閘門: 預設仍穩定 · 網址加 lipsync=1 才開對嘴命中</li>
+            <li>新增 lipsync_test=phrase_074 直播放測試 · 不必等 GPT 句子命中</li>
+            <li>保留穩定單片源底座 · 只有 lipsync 測試/命中能暫時接管 Avatar</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v2.0.2</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>穩定單片源模式: 暫停 idle/action/speaking MP4 互切 · 先根除閃頻</li>
@@ -1493,11 +1501,11 @@
   })();
   </script>
 
-  <script src="/static/session-memory.js?v=2.0.2"></script>
-  <script src="/static/conversation-memory.js?v=2.0.2"></script>
-  <script src="/static/avatar-director.js?v=2.0.2"></script>
-  <script src="/static/animation-pool.js?v=2.0.2"></script>
-  <script src="/static/phrase-matcher.js?v=2.0.2"></script>
+  <script src="/static/session-memory.js?v=2.0.3"></script>
+  <script src="/static/conversation-memory.js?v=2.0.3"></script>
+  <script src="/static/avatar-director.js?v=2.0.3"></script>
+  <script src="/static/animation-pool.js?v=2.0.3"></script>
+  <script src="/static/phrase-matcher.js?v=2.0.3"></script>
 
   <script>
   (function () {
@@ -1522,10 +1530,12 @@
     var micIcon    = document.getElementById("micIcon");
     var camIcon    = document.getElementById("camIcon");
     var avatarDirector = null;
+    var qs = new URLSearchParams(window.location.search || "");
     window.__sophieStableSingleVideo = true;
     window.__sophieEnableAvatarIdleRotation = false;
     window.__sophieEnableAvatarActions = false;
-    window.__sophieEnableLipsync = false;
+    window.__sophieEnableLipsync = qs.get("lipsync") === "1" || qs.get("lipsync") === "true";
+    window.__sophieLipsyncTest = qs.get("lipsync_test") || qs.get("test_lipsync") || "";
 
     try {
       if (typeof AvatarDirector === "function") {
@@ -1765,6 +1775,18 @@
     function scheduleLipsyncKick(reason) {
       // v2.0.1: forced kick removed. Lipsync only runs by explicit matcher hit + feature flag.
       return;
+    }
+
+    function runLipsyncUrlTest() {
+      if (window.__sophieEnableLipsync !== true || !window.__sophieLipsyncTest) return;
+      var id = String(window.__sophieLipsyncTest).replace(/\.mp4$/i, "").replace(/[^a-zA-Z0-9_-]/g, "");
+      if (!id) return;
+      if (id.indexOf("phrase_") !== 0) id = "phrase_" + id;
+      var url = "/lipsync/" + id + ".mp4";
+      setTimeout(function () {
+        log("[LIPSYNC TEST] " + url);
+        playLipsyncVisual(url, "url-test", "URL TEST", false);
+      }, 1200);
     }
 
     function showError(msg) {
@@ -3014,7 +3036,13 @@
       });
     }
 
-    log("Voice Path v2.0.2 ready - stable single-video mode, no MP4 source switching - 2026-05-24");
+    log("Voice Path v2.0.3 ready - stable default, lipsync opt-in via URL flag - 2026-05-24");
+    if (window.__sophieEnableLipsync === true) {
+      log("[LIPSYNC ENABLED] URL flag on");
+      runLipsyncUrlTest();
+    } else {
+      log("[LIPSYNC DISABLED] add ?lipsync=1 to test phrase-matched mp4");
+    }
 
     // ===== v1.9.7 · 單 video 保活 (砍雙層、只剩底層 idle) =====
     (function setupVideoKeepAlive() {
