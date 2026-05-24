@@ -1528,6 +1528,9 @@
   <script src="/static/session-memory.js?v=2.0.6"></script>
   <script src="/static/conversation-memory.js?v=2.0.6"></script>
   <script src="/static/avatar-director.js?v=2.0.6"></script>
+  <script src="/static/avatar-compositor.js?v=2.x"></script>
+  <script src="/static/speech-state.js?v=2.x"></script>
+  <script src="/static/debug-panel.js?v=2.x"></script>
   <script src="/static/animation-pool.js?v=2.0.6"></script>
   <script src="/static/phrase-matcher.js?v=2.0.6"></script>
 
@@ -1561,17 +1564,60 @@
     window.__sophieEnableLipsync = qs.get("lipsync") === "1" || qs.get("lipsync") === "true";
     window.__sophieLipsyncTest = qs.get("lipsync_test") || qs.get("test_lipsync") || "";
 
+    // v2.x Compositor · 主畫面唯一指揮 (取代 AvatarDirector)
+    // 向下相容：Compositor 內含 playSpeaking/playIdle/playLipsync/play shim
+    // window.__sophieAvatarDirector 仍指向同一物件 · 既有呼叫不破
+    var avatarCompositor = null;
+    var speechStateReducer = null;
+    var debugPanel = null;
     try {
-      if (typeof AvatarDirector === "function") {
-        avatarDirector = new AvatarDirector(liveVideo, {
-          log: function (msg) { log("[AvatarDirector] " + msg); }
+      var CompositorCtor = (typeof AvatarCompositor === "function") ? AvatarCompositor : (typeof AvatarDirector === "function" ? AvatarDirector : null);
+      if (!CompositorCtor) throw new Error("no AvatarCompositor or AvatarDirector class loaded");
+      avatarCompositor = new CompositorCtor(liveVideo, {
+        log: function (msg) { log("[Compositor] " + msg); }
+      });
+      avatarDirector = avatarCompositor;
+      window.avatarDirector = avatarCompositor;
+      window.__sophieAvatarDirector = avatarCompositor;
+      window.__sophieAvatarCompositor = avatarCompositor;
+      window.__sophieCompositorReady = true;
+      log("AvatarCompositor init OK · single owner of liveVideo.src");
+
+      // SpeechStateReducer · OpenAI Realtime events -> speech_state intent -> compositor
+      if (typeof SpeechStateReducer === "function") {
+        speechStateReducer = new SpeechStateReducer(avatarCompositor, {
+          log: function (msg) { log("[SpeechState] " + msg); }
         });
-        window.avatarDirector = avatarDirector;
-        window.__sophieAvatarDirector = avatarDirector;
-        log("AvatarDirector init OK");
+        window.__sophieSpeechState = speechStateReducer;
+        log("SpeechStateReducer init OK");
       }
+
+      // DebugPanel · dev/cron overlay
+      if (typeof AvatarDebugPanel === "function") {
+        debugPanel = new AvatarDebugPanel(avatarCompositor, speechStateReducer, {
+          log: function (msg) { log("[DebugPanel] " + msg); }
+        });
+        window.__sophieDebugPanel = debugPanel;
+        log("AvatarDebugPanel init OK · enabled=" + debugPanel.enabled);
+      }
+
+      // V1.5 hook · phrase-matcher hit emits sophie:lipsync_intent · Compositor 接管
+      window.addEventListener("sophie:lipsync_intent", function (e) {
+        if (!e || !e.detail) return;
+        var intent = e.detail;
+        if (!intent || !intent.src) return;
+        try {
+          if (avatarCompositor && typeof avatarCompositor.dispatch === "function") {
+            avatarCompositor.dispatch(intent);
+            log("[Compositor] lipsync_intent received -> dispatch · src=" + intent.src);
+          }
+        } catch (err) {
+          log("[Compositor] lipsync_intent dispatch fail: " + err.message);
+        }
+      });
     } catch (e) {
-      log("AvatarDirector init fail: " + e.message);
+      log("AvatarCompositor init fail: " + e.message);
+      window.__sophieCompositorReady = false;
     }
 
     // v0.8 · 4-state animation pool init
@@ -1732,66 +1778,28 @@
           }
         );
       }
+      // v2.x · legacy fallback path 改走 Compositor.dispatch (禁止直接 v.src)
       try {
-        var v = document.getElementById("liveVideo");
-        if (!v) return false;
-        v.classList.add("is-switching");
-        v.src = mp4Url;
-        v.loop = false;
-        v.muted = true;
-        var onLoaded = function () {
-          v.removeEventListener("loadedmetadata", onLoaded);
-          try {
-            if (alignToAudio !== false && elapsedSec > 0 && v.duration > 0) {
-              v.currentTime = Math.min(elapsedSec, Math.max(0, v.duration - 0.3));
+        if (window.__sophieAvatarCompositor && typeof window.__sophieAvatarCompositor.dispatch === "function") {
+          window.__sophieAvatarCompositor.dispatch({
+            type: "play_lipsync_cached",
+            src: mp4Url,
+            owner: "playLipsyncVisual-fallback",
+            label: label,
+            currentTime: alignToAudio === false ? 0 : elapsedSec,
+            reason: reason,
+            onEnded: function () {
+              window.__sophieLipsyncActive = false;
+              window.__sophieVisualMode = window.__sophieResponseActive ? "speaking" : "idle";
             }
-          } catch (e) {}
-        };
-        v.addEventListener("loadedmetadata", onLoaded, { once: true });
-        v.addEventListener("playing", function onPlaying() {
-          v.removeEventListener("playing", onPlaying);
-          log("[LIPSYNC PLAYING] " + label + " · src=" + (v.currentSrc || v.src));
-        }, { once: true });
-        v.addEventListener("error", function onErr() {
-          v.removeEventListener("error", onErr);
-          log("[LIPSYNC ERROR] " + label + " · src=" + mp4Url);
-        }, { once: true });
-        var p = v.play();
-        if (p && p["catch"]) p["catch"](function (err) {
-          log("[LIPSYNC PLAY FAIL] " + (err && err.message ? err.message : "unknown"));
-        });
-        var onReady = function () {
-          v.removeEventListener("canplay", onReady);
-          v.classList.remove("is-switching");
-        };
-        v.addEventListener("canplay", onReady, { once: true });
-        setTimeout(function () { v.classList.remove("is-switching"); }, 600);
-        v.onended = function () {
-          window.__sophieLipsyncActive = false;
-          window.__sophieVisualMode = window.__sophieResponseActive ? "speaking" : "idle";
-          try {
-            var nextSrc = window.__sophieResponseActive
-              ? "/static/sophie-speaking.mp4"
-              : "/static/sophie-idle.mp4";
-            v.classList.add("is-switching");
-            v.src = nextSrc;
-            v.loop = true;
-            v.muted = true;
-            var pp = v.play();
-            if (pp && pp["catch"]) pp["catch"](function () {});
-            var onReady2 = function () {
-              v.removeEventListener("canplay", onReady2);
-              v.classList.remove("is-switching");
-            };
-            v.addEventListener("canplay", onReady2, { once: true });
-            setTimeout(function () { v.classList.remove("is-switching"); }, 600);
-          } catch (e) {}
-          v.onended = null;
-        };
-        log("[LIPSYNC " + reason + "] " + label + " · elapsed " + elapsedSec.toFixed(2) + "s");
-        return true;
+          });
+          log("[LIPSYNC " + reason + " via Compositor] " + label + " · elapsed " + elapsedSec.toFixed(2) + "s");
+          return true;
+        }
+        log("[LIPSYNC] no Compositor available · skip (V2 forbids direct v.src writes)");
+        return false;
       } catch (e) {
-        log("[LIPSYNC] switch fail: " + e.message);
+        log("[LIPSYNC] Compositor dispatch fail: " + e.message);
         return false;
       }
     }
@@ -1894,24 +1902,23 @@
       if (animPool && typeof animPool.stopPreCallRotation === "function") {
         try { animPool.stopPreCallRotation(); } catch (e) {}
       }
-      // v1.9.12 · 修進通話閃頻 · 強制切回 idle.mp4 (避免 stroke-hair / playful 等 pre-call 狀態進通話時切換)
+      // v2.x · call-start 走 Compositor.dispatch (禁止直接 v.src)
       try {
         var v = document.getElementById('liveVideo');
         if (!window.__sophieStableSingleVideo && v && v.currentSrc && v.currentSrc.indexOf('/sophie-idle.mp4') === -1) {
-          if (window.__sophieAvatarDirector && window.__sophieAvatarDirector.playIdle) {
+          if (window.__sophieAvatarCompositor && window.__sophieAvatarCompositor.dispatch) {
+            window.__sophieAvatarCompositor.dispatch({
+              type: "play_idle",
+              src: "/static/sophie-idle.mp4",
+              owner: "call-start-reset",
+              reason: "in-call entry · ensure idle baseline"
+            });
+            log('[v2.x] 進通話請 Compositor 切回 sophie-idle.mp4');
+          } else if (window.__sophieAvatarDirector && window.__sophieAvatarDirector.playIdle) {
             window.__sophieAvatarDirector.playIdle('/static/sophie-idle.mp4', 'call-start-reset');
-            log('[v2.0.0] 進通話請 AvatarDirector 切回 sophie-idle.mp4');
+            log('[v2.0.0] 進通話請 AvatarDirector 切回 sophie-idle.mp4 (compat)');
           } else {
-          v.classList.add('is-switching');
-          v.src = '/static/sophie-idle.mp4';
-          v.loop = true;
-          v.muted = true;
-          var pp = v.play();
-          if (pp && pp.catch) pp.catch(function () {});
-          var onR = function () { v.removeEventListener('canplay', onR); v.classList.remove('is-switching'); };
-          v.addEventListener('canplay', onR, { once: true });
-          setTimeout(function () { v.classList.remove('is-switching'); }, 500);
-          log('[v1.9.12] 進通話強制切回 sophie-idle.mp4 · 避免閃頻');
+            log('[v2.x] 進通話切 idle 失敗 · no Compositor available · 不直接動 v.src');
           }
         }
       } catch (e) {}
@@ -2524,6 +2531,14 @@
           try {
             var data = JSON.parse(ev.data);
             var t = data.type || "";
+            // v2.x · SpeechStateReducer 同步驅動 Compositor (不取代既有 startSpeaking 邏輯 · 雙路並行 noop guard)
+            try {
+              if (window.__sophieSpeechState && typeof window.__sophieSpeechState.handleOpenAIEvent === "function") {
+                window.__sophieSpeechState.handleOpenAIEvent(data);
+              }
+            } catch (ssErr) {
+              log("[SpeechState] handleOpenAIEvent fail: " + ssErr.message);
+            }
             // v1.3.2 · log every event type once · Edward 通話完截圖給我看實際事件名
             if (!window.__sophieEventTypes) window.__sophieEventTypes = {};
             if (!window.__sophieEventTypes[t]) {
@@ -2634,14 +2649,39 @@
               }
               // v1.9.13 · 霍爾刀 2+3 · 砍 5 字 gate (讓 PhraseMatcher 自管短長)
               // + 命中時用 audio elapsed time 對齊 video.currentTime · 嘴不晚半拍
+              // v1.5.1 馬魯克 · 命中時送 play_lipsync_cached intent 到 compositor bus
+              //         Compositor 未 ready 時 fallback 走既有 Director.playLipsync 路徑
               if (window.PhraseMatcher && !window.__sophiePhraseMatched && sophieTextBuffer.length >= 1) {
                 var match = window.PhraseMatcher.findMatching(sophieTextBuffer);
                 if (match) {
-                  if (window.__sophieEnableLipsync === true) {
-                    playLipsyncVisual(match.phrase.mp4_url, match.phrase.sentence, "HIT", true);
-                  } else {
-                    window.__sophiePhraseMatched = true;
-                    log("[LIPSYNC READY PAUSED] " + match.phrase.sentence + " · Director path ready, feature flag off");
+                  // 發送 intent · Avatar Compositor (卡西法 scope) 監聽此 bus 接管播放
+                  // intent 格式對齊霍爾設計書 §2
+                  var lipsyncIntent = {
+                    type: "play_lipsync_cached",
+                    src: match.phrase.mp4_url,
+                    priority: 80,
+                    owner: "phrase-matcher",
+                    reason: "cache hit · " + match.phrase.sentence
+                  };
+                  // 發到 compositor bus (CustomEvent + window.__sophieCompositorBus)
+                  try {
+                    window.dispatchEvent(new CustomEvent("sophie:lipsync_intent", { detail: lipsyncIntent }));
+                  } catch (evtErr) {}
+                  // window.__sophieCompositorBus 供 Compositor 直接 poll (備用)
+                  window.__sophieCompositorBus = window.__sophieCompositorBus || [];
+                  window.__sophieCompositorBus.push(lipsyncIntent);
+                  if (window.__sophieCompositorBus.length > 10) window.__sophieCompositorBus.shift();
+                  log("[LIPSYNC INTENT] sent play_lipsync_cached · src=" + lipsyncIntent.src);
+
+                  // Compositor 接管旗標：若 Compositor 已 ready，跳過下面 Director fallback
+                  var compositorHandled = window.__sophieCompositorReady === true;
+                  if (!compositorHandled) {
+                    if (window.__sophieEnableLipsync === true) {
+                      playLipsyncVisual(match.phrase.mp4_url, match.phrase.sentence, "HIT", true);
+                    } else {
+                      window.__sophiePhraseMatched = true;
+                      log("[LIPSYNC READY PAUSED] " + match.phrase.sentence + " · Director path ready, feature flag off");
+                    }
                   }
                 }
               }
@@ -3077,7 +3117,7 @@
       });
     }
 
-    log("Voice Path v2.0.6 ready - lipsync end release fixed, natural conversation prompt - 2026-05-24");
+    log("Voice Path v2.0.6+v1.5.1 ready - lipsync intent bus + compositor hook - 2026-05-25");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();

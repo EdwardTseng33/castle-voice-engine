@@ -164,24 +164,22 @@
       this.pool._log("speaking start -> AvatarDirector");
       return;
     }
+    // v2.x · 禁止直接 v.src · 改走 Compositor.dispatch
     try {
-      var v = this.pool.video;
-      if (v) {
-        var currSrc = v.currentSrc || v.src || "";
-        if (currSrc.indexOf("sophie-speaking.mp4") === -1 && currSrc.indexOf("/lipsync/") === -1) {
-          v.classList.add("is-switching");
-          v.src = "/static/sophie-speaking.mp4";
-          v.loop = true;
-          v.muted = true;
-          var p = v.play();
-          if (p && p["catch"]) p["catch"](function () {});
-          var onR = function () { v.removeEventListener("canplay", onR); v.classList.remove("is-switching"); };
-          v.addEventListener("canplay", onR, { once: true });
-          setTimeout(function () { v.classList.remove("is-switching"); }, 500);
-        }
+      if (window.__sophieAvatarCompositor && window.__sophieAvatarCompositor.dispatch) {
+        window.__sophieAvatarCompositor.dispatch({
+          type: "play_speaking",
+          src: "/static/sophie-speaking.mp4",
+          owner: "speakingCtrl-fallback",
+          reason: "speaking start · no director path"
+        });
+        this.pool._log("speaking start -> Compositor (fallback path)");
+      } else {
+        this.pool._log("speaking start FAIL · no Compositor or Director · refuse direct v.src write");
       }
-    } catch (e) {}
-    this.pool._log("speaking start (切 speaking.mp4 fallback · lipsync 命中會再切)");
+    } catch (e) {
+      this.pool._log("speaking start Compositor fail: " + e.message);
+    }
   };
   SpeakingController.prototype.stop = function () {
     if (!this._active && !this._idleDelay) return;
@@ -217,26 +215,24 @@
         self.pool._log("speaking stop -> AvatarDirector idle");
         return;
       }
+      // v2.x · 禁止直接 v.src · 改走 Compositor.dispatch
       try {
-        var v = self.pool.video;
-        if (v) {
-          var currSrc = v.currentSrc || v.src || "";
-          if (currSrc.indexOf("sophie-idle.mp4") === -1) {
-            v.classList.add("is-switching");
-            v.src = "/static/sophie-idle.mp4";
-            v.loop = true;
-            v.muted = true;
-            var p = v.play();
-            if (p && p["catch"]) p["catch"](function () {});
-            var onR = function () { v.removeEventListener("canplay", onR); v.classList.remove("is-switching"); };
-            v.addEventListener("canplay", onR, { once: true });
-            setTimeout(function () { v.classList.remove("is-switching"); }, 500);
-          }
+        if (window.__sophieAvatarCompositor && window.__sophieAvatarCompositor.dispatch) {
+          window.__sophieAvatarCompositor.dispatch({
+            type: "play_idle",
+            src: "/static/sophie-idle.mp4",
+            owner: "speakingCtrl-stop-fallback",
+            reason: "speaking stop · no director path"
+          });
+          self.pool._log("speaking stop -> Compositor idle (fallback)");
+        } else {
+          self.pool._log("speaking stop FAIL · no Compositor available · refuse direct v.src write");
         }
-      } catch (e) {}
+      } catch (e) {
+        self.pool._log("speaking stop Compositor fail: " + e.message);
+      }
       window.__sophieVisualMode = "idle";
       self.pool.currentState = "idle";
-      self.pool._log("speaking stop · 切回 idle");
     }, 250);
   };
   SpeakingController.prototype._stopTimers = function () {
@@ -369,31 +365,21 @@
       this.currentState = state;
       return;
     }
-    // v1.2.0g · src 切換時短暫 opacity 0.3 隱黑頻 (transition 150ms)
-    var self = this;
-    var sameSrc = false;
-    try { sameSrc = (this.video.currentSrc && this.video.currentSrc.indexOf(src) !== -1); } catch (e) {}
-    if (!sameSrc) {
-      this.video.classList.add("is-switching");
-      try { this.video.src = src; }
-      catch (e) { this._log("_playRaw set src fail: " + e.message); this.video.classList.remove("is-switching"); return; }
-      // canplay 後移除 is-switching · fade 回 opacity 1
-      var onReady = function () {
-        self.video.removeEventListener("canplay", onReady);
-        self.video.classList.remove("is-switching");
-      };
-      this.video.addEventListener("canplay", onReady, { once: true });
-      // safety fallback 500ms 後強制復原
-      setTimeout(function () {
-        try { self.video.removeEventListener("canplay", onReady); } catch (e) {}
-        self.video.classList.remove("is-switching");
-      }, 500);
+    // v2.x · 禁止直接 v.src · 改走 Compositor.dispatch
+    if (window.__sophieAvatarCompositor && window.__sophieAvatarCompositor.dispatch) {
+      var mode2 = (IDLE_VARIANTS.indexOf(state) !== -1 || state === "idle") ? "play_idle" : "play_action";
+      window.__sophieAvatarCompositor.dispatch({
+        type: mode2,
+        src: src,
+        loop: !!loop,
+        owner: "animation-pool-playRaw",
+        label: state
+      });
+      this.currentState = state;
+      return;
     }
-    this.video.loop = !!loop;
-    this.video.muted = true;
-    var p = this.video.play();
-    if (p && p.then) { p["catch"](function () {}); }
-    this.currentState = state;
+    this._log("_playRaw FAIL · no Compositor available · refuse direct v.src write: " + state);
+    return;
   };
 
   AnimationPool.prototype._initIdle = function () {
@@ -405,17 +391,18 @@
       this._log("idle init OK via AvatarDirector src=" + idle);
       return;
     }
-    try {
-      if (this.video.getAttribute("src") !== src) { this.video.src = src; }
-    } catch (e) {}
-    this.video.loop = true;
-    this.video.muted = true;
-    this.video.autoplay = true;
-    this.video.setAttribute("preload", "auto");
-    var p = this.video.play();
-    if (p && p.then) { p["catch"](function () {}); }
-    this.currentState = idle;
-    this._log("idle init OK src=" + idle);
+    // v2.x · 禁止直接 v.src · 改走 Compositor.dispatch
+    if (window.__sophieAvatarCompositor && window.__sophieAvatarCompositor.dispatch) {
+      window.__sophieAvatarCompositor.dispatch({
+        type: "play_idle",
+        src: src,
+        owner: "animation-pool-initIdle"
+      });
+      this.currentState = idle;
+      this._log("idle init OK via Compositor src=" + idle);
+    } else {
+      this._log("idle init SKIP · no Compositor · refuse direct v.src write src=" + idle);
+    }
   };
 
   AnimationPool.prototype._preloadCriticalActions = function () {
