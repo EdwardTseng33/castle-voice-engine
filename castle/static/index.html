@@ -725,7 +725,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v2.0.0</span>
+          <span class="vm-version">v2.0.1</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -734,6 +734,14 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v2.0.1</span><span class="vm-entry-date">2026-05-24</span></header>
+          <ul class="vm-list">
+            <li>結構收斂: AvatarDirector 提前初始化 · AnimationPool 初始 idle 也走 Director</li>
+            <li>lipsync 播放函式改接 Director.playLipsync · 預設開關仍關閉不影響穩定</li>
+            <li>清掉強制 kick 的死路徑 · 不再有自動硬切對嘴片</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v2.0.0</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>V2 Avatar Runtime 地基 · 新增 AvatarDirector 單一畫面主控權</li>
@@ -1477,11 +1485,11 @@
   })();
   </script>
 
-  <script src="/static/session-memory.js?v=2.0.0"></script>
-  <script src="/static/conversation-memory.js?v=2.0.0"></script>
-  <script src="/static/avatar-director.js?v=2.0.0"></script>
-  <script src="/static/animation-pool.js?v=2.0.0"></script>
-  <script src="/static/phrase-matcher.js?v=2.0.0"></script>
+  <script src="/static/session-memory.js?v=2.0.1"></script>
+  <script src="/static/conversation-memory.js?v=2.0.1"></script>
+  <script src="/static/avatar-director.js?v=2.0.1"></script>
+  <script src="/static/animation-pool.js?v=2.0.1"></script>
+  <script src="/static/phrase-matcher.js?v=2.0.1"></script>
 
   <script>
   (function () {
@@ -1506,6 +1514,20 @@
     var micIcon    = document.getElementById("micIcon");
     var camIcon    = document.getElementById("camIcon");
     var avatarDirector = null;
+    window.__sophieEnableLipsync = false;
+
+    try {
+      if (typeof AvatarDirector === "function") {
+        avatarDirector = new AvatarDirector(liveVideo, {
+          log: function (msg) { log("[AvatarDirector] " + msg); }
+        });
+        window.avatarDirector = avatarDirector;
+        window.__sophieAvatarDirector = avatarDirector;
+        log("AvatarDirector init OK");
+      }
+    } catch (e) {
+      log("AvatarDirector init fail: " + e.message);
+    }
 
     // v0.8 · 4-state animation pool init
     var animPool = null;
@@ -1636,23 +1658,6 @@
       }
     }
 
-    try {
-      if (typeof AvatarDirector === "function") {
-        avatarDirector = new AvatarDirector(liveVideo, {
-          log: function (msg) { log("[AvatarDirector] " + msg); }
-        });
-        window.avatarDirector = avatarDirector;
-        window.__sophieAvatarDirector = avatarDirector;
-        if (animPool) {
-          animPool.director = avatarDirector;
-          log("AvatarDirector linked to AnimationPool");
-        }
-        log("AvatarDirector init OK");
-      }
-    } catch (e) {
-      log("AvatarDirector init fail: " + e.message);
-    }
-
     function clearLipsyncKick() {
       if (window.__sophieLipsyncKickTimer) {
         clearTimeout(window.__sophieLipsyncKickTimer);
@@ -1665,6 +1670,23 @@
       window.__sophiePhraseMatched = true;
       window.__sophieLipsyncActive = true;
       window.__sophieVisualMode = "lipsync";
+      var elapsedSec = window.__sophieAudioStartTs ? (Date.now() - window.__sophieAudioStartTs) / 1000 : 0;
+      if (window.__sophieAvatarDirector && window.__sophieAvatarDirector.playLipsync) {
+        return window.__sophieAvatarDirector.playLipsync(
+          mp4Url,
+          label,
+          alignToAudio === false ? 0 : elapsedSec,
+          function () {
+            window.__sophieLipsyncActive = false;
+            window.__sophieVisualMode = window.__sophieResponseActive ? "speaking" : "idle";
+            if (window.__sophieResponseActive) {
+              window.__sophieAvatarDirector.playSpeaking("/static/sophie-speaking.mp4", "lipsync-ended");
+            } else {
+              window.__sophieAvatarDirector.playIdle("/static/sophie-idle.mp4", "lipsync-ended");
+            }
+          }
+        );
+      }
       try {
         var v = document.getElementById("liveVideo");
         if (!v) return false;
@@ -1672,7 +1694,6 @@
         v.src = mp4Url;
         v.loop = false;
         v.muted = true;
-        var elapsedSec = window.__sophieAudioStartTs ? (Date.now() - window.__sophieAudioStartTs) / 1000 : 0;
         var onLoaded = function () {
           v.removeEventListener("loadedmetadata", onLoaded);
           try {
@@ -1731,16 +1752,8 @@
     }
 
     function scheduleLipsyncKick(reason) {
-      // v1.9.17 emergency rollback: forced kick caused visible flicker.
-      // Keep the function as a no-op so existing call sites stay harmless.
+      // v2.0.1: forced kick removed. Lipsync only runs by explicit matcher hit + feature flag.
       return;
-      clearLipsyncKick();
-      window.__sophieLipsyncKickTimer = setTimeout(function () {
-        window.__sophieLipsyncKickTimer = null;
-        if (!window.__sophieResponseActive) return;
-        if (window.__sophiePhraseMatched || window.__sophieLipsyncActive || window.__sophieVisualMode === "lipsync") return;
-        playLipsyncVisual("/lipsync/phrase_074.mp4", "我懂", "KICK " + reason, false);
-      }, 900);
     }
 
     function showError(msg) {
@@ -2550,10 +2563,12 @@
               if (window.PhraseMatcher && !window.__sophiePhraseMatched && sophieTextBuffer.length >= 1) {
                 var match = window.PhraseMatcher.findMatching(sophieTextBuffer);
                 if (match) {
-                  // v1.9.18 emergency stable mode:
-                  // do not switch to lipsync mp4 until V2 Avatar Director owns all video changes.
-                  window.__sophiePhraseMatched = true;
-                  log("[LIPSYNC PAUSED] " + match.phrase.sentence + " · stable speaking fallback");
+                  if (window.__sophieEnableLipsync === true) {
+                    playLipsyncVisual(match.phrase.mp4_url, match.phrase.sentence, "HIT", true);
+                  } else {
+                    window.__sophiePhraseMatched = true;
+                    log("[LIPSYNC READY PAUSED] " + match.phrase.sentence + " · Director path ready, feature flag off");
+                  }
                 }
               }
             } else if (data.type === "conversation.item.input_audio_transcription.completed") {
@@ -2988,7 +3003,7 @@
       });
     }
 
-    log("Voice Path v2.0.0 ready - AvatarDirector structural runtime - 2026-05-24");
+    log("Voice Path v2.0.1 ready - AvatarDirector owns visual flow, lipsync gated - 2026-05-24");
 
     // ===== v1.9.7 · 單 video 保活 (砍雙層、只剩底層 idle) =====
     (function setupVideoKeepAlive() {
