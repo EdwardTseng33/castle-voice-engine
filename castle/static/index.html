@@ -1551,7 +1551,7 @@
   <script src="/static/session-memory.js?v=2.0.6"></script>
   <script src="/static/conversation-memory.js?v=2.0.6"></script>
   <script src="/static/avatar-director.js?v=2.0.6"></script>
-  <script src="/static/animation-pool.js?v=2.0.14-idle-talk-queue"></script>
+  <script src="/static/animation-pool.js?v=2.0.16-revert-talking-idle"></script>
   <script src="/static/phrase-matcher.js?v=2.0.6"></script>
 
   <script>
@@ -3168,7 +3168,7 @@
       });
     }
 
-    log("Voice Path v2.0.10 ready - speaking hold keeps long replies animated - 2026-05-25");
+    log("Voice Path v2.0.16 ready - revert talking idle (idle 嘴閉 / 講話切上層) - 2026-05-25");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
