@@ -1902,7 +1902,35 @@
     }
 
     // v1.2.0 · 訪客模式 · Start 點擊先檢查 auth · 401 彈 GIS modal · 403 顯示邀請畫面
+    // v2.0.18 · 卡西法 5/26 deep debug · user-gesture 內立刻 warmup speakingVideo (autoplay unlock + decode prime)
+    // root cause hypothesis: 某些 mobile 環境 speakingVideo 直到 user gesture 才能 play() · 進通話後第一次 startSpeaking 觸 readyState 不夠 = 嘴沒律動視覺
     startBtn.addEventListener("click", function () {
+      // CRITICAL: warmup BOTH videos inside user-gesture handler (synchronous · 不 await · 不 catch 噪音)
+      try {
+        var _sv = document.getElementById("liveVideoSpeaking");
+        if (_sv) {
+          _sv.muted = true;
+          _sv.loop = true;
+          _sv.playsInline = true;
+          var _spp = _sv.play();
+          if (_spp && _spp.then) {
+            _spp.then(function () {
+              // 立刻 pause 但保持 ready · 之後 _setSpeakingLayer(true) 再 play 不會被 autoplay policy 擋
+              try { _sv.pause(); } catch (e) {}
+              log("[v2.0.18] speakingVideo warmup OK · readyState=" + _sv.readyState);
+            })["catch"](function (err) {
+              log("[v2.0.18] speakingVideo warmup play() rejected: " + (err && err.message));
+            });
+          }
+        }
+        var _iv = document.getElementById("liveVideo");
+        if (_iv && _iv.paused) {
+          var _ivp = _iv.play();
+          if (_ivp && _ivp["catch"]) _ivp["catch"](function () {});
+        }
+      } catch (warmupErr) {
+        log("[v2.0.18] warmup fail: " + warmupErr.message);
+      }
       askNotifPermissionOnce();
       ensureAuthThenStart().catch(function (err) {
         log("ensureAuth fatal: " + (err && err.message));
@@ -3158,6 +3186,17 @@
     });
 
     if ("serviceWorker" in navigator) {
+      // v2.0.18 · ?_swkill=1 強制 unregister + reload · 給 Edward debug 用 (繞 SW cache)
+      try {
+        if (qs.get("_swkill") === "1") {
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            return Promise.all(regs.map(function (r) { return r.unregister(); }));
+          }).then(function () {
+            log("[v2.0.18] SW unregistered · hard reload in 500ms");
+            setTimeout(function () { window.location.reload(true); }, 500);
+          });
+        }
+      } catch (swkillErr) {}
       window.addEventListener("load", function () {
         navigator.serviceWorker.register("/static/sw.js", { scope: "/static/" })
           .then(function (reg) {
@@ -3165,12 +3204,24 @@
             // v1.9.11 · 砍掉 auto-reload 干擾影片載入 · 只 check update、不強制 reload
             // 新 SW 安裝完 = 下次 Edward 自己刷新自然生效 (network-first 確保 HTML 拿到最新)
             try { reg.update(); } catch (e) {}
+            // v2.0.18 · 新 SW installed waiting · log 提示 + 不強制 reload (避免打斷通話)
+            try {
+              reg.addEventListener("updatefound", function () {
+                var nw = reg.installing;
+                if (!nw) return;
+                nw.addEventListener("statechange", function () {
+                  if (nw.state === "installed" && navigator.serviceWorker.controller) {
+                    log("[v2.0.18] new SW installed · please refresh to activate");
+                  }
+                });
+              });
+            } catch (updErr) {}
           })
           .catch(function (err) { log("sw fail: " + err.message); });
       });
     }
 
-    log("Voice Path v2.0.16 ready - revert talking idle (idle 嘴閉 / 講話切上層) - 2026-05-25");
+    log("Voice Path v2.0.18 ready - speaking layer warmup on user gesture + verify build - 2026-05-26");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
