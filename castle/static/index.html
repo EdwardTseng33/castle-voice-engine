@@ -1528,7 +1528,7 @@
   <script src="/static/session-memory.js?v=2.0.6"></script>
   <script src="/static/conversation-memory.js?v=2.0.6"></script>
   <script src="/static/avatar-director.js?v=2.0.6"></script>
-  <script src="/static/animation-pool.js?v=2.0.6"></script>
+  <script src="/static/animation-pool.js?v=0.9.10"></script>
   <script src="/static/phrase-matcher.js?v=2.0.6"></script>
 
   <script>
@@ -1915,6 +1915,10 @@
           }
         }
       } catch (e) {}
+      // v0.9.10 · 通話開始啟動 in-call idle rotator (30-60s 隨機切 4 個 idle)
+      if (animPool && typeof animPool.startInCallIdleRotator === 'function') {
+        try { animPool.startInCallIdleRotator(30000, 60000); log('[v0.9.10] in-call idle rotator started · 30-60s · 4 idle pool'); } catch (e) {}
+      }
       try {
         try {
           localStream = await navigator.mediaDevices.getUserMedia({
@@ -2990,6 +2994,10 @@
       // v1.3.5 · 通話結束 · 重啟待機豐富輪播
       if (window.__sophieEnableAvatarIdleRotation === true && animPool && typeof animPool.startPreCallRotation === "function") {
         try { animPool.startPreCallRotation(); } catch (e) {}
+      }
+      // v0.9.10 · 通話結束 stop in-call idle rotator
+      if (animPool && typeof animPool.stopInCallIdleRotator === "function") {
+        try { animPool.stopInCallIdleRotator(); log("[v0.9.10] in-call idle rotator stopped"); } catch (e) {}
       }
       // v1.1.2 · 通話結束自動摘要當日對話 + TTL cleanup (raw > 7 天 / summary > 30 天)
       try {

@@ -148,16 +148,14 @@
     this._active = true;
     this._phase = 2;
     this.pool.currentState = "speaking";
-    if (window.__sophieStableSingleVideo === true) {
-      window.__sophieVisualMode = "speaking";
-      this.pool._log("speaking start · stable single-video mode, no src switch");
-      return;
-    }
-    // v1.9.15 · lipsync 已鎖 · 不動 video
+    // v0.9.10 · stable mode 不再 block speaking src switch · 講話必切 sophie-speaking.mp4
+    // 但 lipsync active 仍 skip · 交 lipsync clip 接管
     if (window.__sophieLipsyncActive || window.__sophieVisualMode === "lipsync") {
       this.pool._log("speaking start · skip src switch (lipsync 鎖住)");
       return;
     }
+    // v0.9.10 · 進 speaking 時暫停 in-call idle rotator (如在跑)
+    try { if (this.pool._pauseInCallRotator) this.pool._pauseInCallRotator(); } catch (e) {}
     window.__sophieVisualMode = "speaking";
     if (this.pool.director && this.pool.director.playSpeaking) {
       this.pool.director.playSpeaking("/static/sophie-speaking.mp4", "speaking-start");
@@ -195,12 +193,9 @@
     this._active = false;
     this._stopTimers();
     if (this._idleDelay) { clearTimeout(this._idleDelay); this._idleDelay = null; }
-    if (window.__sophieStableSingleVideo === true) {
-      window.__sophieVisualMode = "idle";
-      this.pool.currentState = "idle";
-      this.pool._log("speaking stop · stable single-video mode, no src switch");
-      return;
-    }
+    // v0.9.10 · stable mode 不再 block speaking stop src switch · 講完必切回 idle
+    // rotator (如在跑) 會接管後續 30-60s 切換 · 退 speaking 時恢復 rotator
+    try { if (this.pool._resumeInCallRotator) this.pool._resumeInCallRotator(); } catch (e) {}
     var self = this;
     this._idleDelay = setTimeout(function () {
       self._idleDelay = null;
@@ -513,6 +508,71 @@
     }
     this.idleRotator.setPreCallMode(false);
     this._log("preCallRotation stop (back to normal idle)");
+  };
+
+  // v0.9.10 · in-call idle rotator · 30-60s 隨機切 4 個 pure idle · 不走 rich pool action
+  // 不受 __sophieEnableAvatarIdleRotation flag 鎖 · 是 v0.9.10 hotfix 獨立邏輯
+  // speaking active 時暫停 · stop 時恢復 · 通話結束時 stop
+  AnimationPool.prototype.startInCallIdleRotator = function (minMs, maxMs) {
+    if (this._inCallRotatorTimer) return; // 已在跑
+    this._inCallRotatorPaused = false;
+    var lo = (typeof minMs === "number" && minMs > 0) ? minMs : 30000;
+    var hi = (typeof maxMs === "number" && maxMs > lo) ? maxMs : 60000;
+    var self = this;
+    var scheduleNext = function () {
+      var delay = lo + Math.random() * (hi - lo);
+      self._inCallRotatorTimer = setTimeout(function () {
+        // pause guard · speaking 中 / 暫停 / lipsync 鎖 → skip + reschedule
+        if (self._inCallRotatorPaused) { scheduleNext(); return; }
+        if (self.speakingCtrl && self.speakingCtrl.isActive && self.speakingCtrl.isActive()) { scheduleNext(); return; }
+        if (window.__sophieLipsyncActive || window.__sophieVisualMode === "lipsync") { scheduleNext(); return; }
+        // 挑非當前的 idle
+        var idleList = ["idle", "idle-2", "idle-3", "idle-4"];
+        var curr = self.currentState;
+        var candidates = [];
+        for (var i = 0; i < idleList.length; i++) {
+          if (idleList[i] !== curr) candidates.push(idleList[i]);
+        }
+        var pick = candidates[Math.floor(Math.random() * candidates.length)];
+        var src = ANIMATION_POOL[pick];
+        try {
+          var v = self.video;
+          if (v && src) {
+            v.src = src;
+            v.loop = true;
+            v.muted = true;
+            var p = v.play();
+            if (p && p["catch"]) p["catch"](function () {});
+            self.currentState = pick;
+            self._log("in-call idle rotate -> " + pick);
+          }
+        } catch (e) { self._log("in-call rotator err: " + e.message); }
+        scheduleNext();
+      }, delay);
+    };
+    scheduleNext();
+    this._log("in-call idle rotator start (" + lo + "-" + hi + "ms · 4 idle pool)");
+  };
+
+  AnimationPool.prototype.stopInCallIdleRotator = function () {
+    if (this._inCallRotatorTimer) {
+      clearTimeout(this._inCallRotatorTimer);
+      this._inCallRotatorTimer = null;
+    }
+    this._inCallRotatorPaused = false;
+    this._log("in-call idle rotator stop");
+  };
+
+  AnimationPool.prototype._pauseInCallRotator = function () {
+    if (this._inCallRotatorTimer) {
+      this._inCallRotatorPaused = true;
+    }
+  };
+
+  AnimationPool.prototype._resumeInCallRotator = function () {
+    if (this._inCallRotatorTimer) {
+      this._inCallRotatorPaused = false;
+    }
   };
 
   // v1.1.3 - force greeting (used when Edward returns from absent); bypasses 600s greeting cooldown
