@@ -43,7 +43,7 @@ image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("libgl1", "libglib2.0-0")
     .pip_install_from_requirements("requirements.txt")
-    .add_local_dir("castle", remote_path="/root/castle")
+    .add_local_dir("castle", remote_path="/root/castle", copy=True)
 )
 
 app = modal.App("castle-voice-engine")

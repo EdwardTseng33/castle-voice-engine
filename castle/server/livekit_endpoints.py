@@ -23,6 +23,7 @@ import os
 import time
 import hashlib
 import logging
+from datetime import timedelta
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -105,7 +106,7 @@ def attach_livekit_routes(app):
                 .with_identity(identity)
                 .with_name(user_email.split("@")[0])
                 .with_grants(grants)
-                .with_ttl(ttl_s)
+                .with_ttl(timedelta(seconds=ttl_s))
                 .to_jwt()
             )
         except Exception as e:
