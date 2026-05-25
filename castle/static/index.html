@@ -1585,6 +1585,13 @@
         if (window.__sophieEnableAvatarIdleRotation === true && typeof animPool.startPreCallRotation === "function") {
           setTimeout(function () { animPool.startPreCallRotation(); }, 3000);
         }
+        // v0.9.10 · Edward 5/25 親口 · 不分 in-call / out-of-call · idle rotator page load 後就啟動 (5-10s)
+        // speaking active / lipsync active 時自動 pause · 結束恢復 (rotator 內已守)
+        if (typeof animPool.startInCallIdleRotator === "function") {
+          setTimeout(function () {
+            try { animPool.startInCallIdleRotator(5000, 10000); log("[v0.9.10] idle rotator started on page load · 5-10s · 4 idle pool"); } catch (e) {}
+          }, 3000);
+        }
         // v1.5.0 · 預載嘴對齊預錄 100 句 manifest (fuzzy match 用)
         if (window.PhraseMatcher && typeof window.PhraseMatcher.init === "function") {
           window.PhraseMatcher.init().then(function (m) {
@@ -1915,9 +1922,9 @@
           }
         }
       } catch (e) {}
-      // v0.9.10 · 通話開始啟動 in-call idle rotator (30-60s 隨機切 4 個 idle)
+      // v0.9.10 · rotator 已在 page load 後啟動 (5-10s) · 此 call 等於 noop (timer 已守) · 保留 log
       if (animPool && typeof animPool.startInCallIdleRotator === 'function') {
-        try { animPool.startInCallIdleRotator(30000, 60000); log('[v0.9.10] in-call idle rotator started · 30-60s · 4 idle pool'); } catch (e) {}
+        try { animPool.startInCallIdleRotator(5000, 10000); log('[v0.9.10] enter call · idle rotator already running 5-10s'); } catch (e) {}
       }
       try {
         try {

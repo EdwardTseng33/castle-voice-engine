@@ -516,8 +516,9 @@
   AnimationPool.prototype.startInCallIdleRotator = function (minMs, maxMs) {
     if (this._inCallRotatorTimer) return; // 已在跑
     this._inCallRotatorPaused = false;
-    var lo = (typeof minMs === "number" && minMs > 0) ? minMs : 30000;
-    var hi = (typeof maxMs === "number" && maxMs > lo) ? maxMs : 60000;
+    // v0.9.10 · Edward 5/25 親口 5-10s · 跟 idle mp4 自然 loop 長度匹配
+    var lo = (typeof minMs === "number" && minMs > 0) ? minMs : 5000;
+    var hi = (typeof maxMs === "number" && maxMs > lo) ? maxMs : 10000;
     var self = this;
     var scheduleNext = function () {
       var delay = lo + Math.random() * (hi - lo);

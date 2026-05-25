@@ -187,11 +187,9 @@ def fastapi_app():
 
     @fastapi_instance.get("/auth/whoami")
     async def _auth_whoami(request: Request):
-        cookie = request.cookies.get(COOKIE_NAME)
-        email = verify_signed_cookie(cookie) if cookie else None
-        if email:
-            return {"ok": True, "email": email}
-        return JSONResponse({"ok": False}, status_code=401)
+        # v0.9.10 emergency bypass · Edward 5/25 staging 拿掉登入 · whoami 永遠 200
+        # 前端 ensureAuthThenStart 拿到 200 直接 startConversation · 不彈 GIS modal
+        return {"ok": True, "email": "edwardt0303@gmail.com", "bypass": True}
 
     @fastapi_instance.post("/auth/logout")
     async def _auth_logout():
