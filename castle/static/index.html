@@ -417,8 +417,19 @@
       object-fit: cover;
       background: transparent;
     }
+    .live-video-idle { z-index: 1; }
+    .live-video-speaking {
+      z-index: 2;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 140ms ease-out;
+      will-change: opacity;
+    }
+    .live-video-speaking.is-visible { opacity: 1; }
     /* v1.9.7 · 砍雙層回單 · idle 永遠在 · 命中 lipsync 才切片 · 切片時 opacity 0.75 隱載入空檔 */
     .live-video.is-switching { opacity: 1; transition: none; }
+    /* v2.0.12-idle-rotator · 4 idle 輪播切 src 時 fade 蓋空檔 */
+    .live-video.is-rotating { opacity: 0.35; transition: opacity 220ms ease-out; }
     .bottom {
       position: absolute;
       bottom: 0; left: 0; right: 0;
@@ -662,6 +673,16 @@
         loop
         preload="auto"
         src="/static/sophie-idle.mp4"
+      ></video>
+      <video
+        class="live-video live-video-speaking"
+        id="liveVideoSpeaking"
+        autoplay
+        playsinline
+        muted
+        loop
+        preload="auto"
+        src="/static/sophie-speaking.mp4"
       ></video>
       <audio class="live-audio" id="liveAudio" autoplay playsinline></audio>
 
@@ -1528,7 +1549,7 @@
   <script src="/static/session-memory.js?v=2.0.6"></script>
   <script src="/static/conversation-memory.js?v=2.0.6"></script>
   <script src="/static/avatar-director.js?v=2.0.6"></script>
-  <script src="/static/animation-pool.js?v=2.0.6"></script>
+  <script src="/static/animation-pool.js?v=2.0.14-idle-talk-queue"></script>
   <script src="/static/phrase-matcher.js?v=2.0.6"></script>
 
   <script>
@@ -1547,6 +1568,7 @@
     var endBtn     = document.getElementById("endBtn");
     var timerEl    = document.getElementById("timer");
     var liveVideo  = document.getElementById("liveVideo");
+    var speakingVideo = document.getElementById("liveVideoSpeaking");
     // v1.2.0g · 砍 liveVideoB · 回單 video element 簡潔架構
     var liveAudio  = document.getElementById("liveAudio");
     var errBar     = document.getElementById("errBar");
@@ -1558,7 +1580,8 @@
     window.__sophieStableSingleVideo = true;
     window.__sophieEnableAvatarIdleRotation = false;
     window.__sophieEnableAvatarActions = false;
-    window.__sophieEnableLipsync = qs.get("lipsync") === "1" || qs.get("lipsync") === "true";
+    // v2.0.13-lipsync-default-on · Edward 5/25 拍板 · 100 句預錄嘴對齊預設開 · 加 ?lipsync=0 關
+    window.__sophieEnableLipsync = qs.get("lipsync") !== "0" && qs.get("lipsync") !== "false";
     window.__sophieLipsyncTest = qs.get("lipsync_test") || qs.get("test_lipsync") || "";
 
     try {
@@ -1578,7 +1601,7 @@
     var animPool = null;
     try {
       if (typeof AnimationPool === "function") {
-        animPool = new AnimationPool(liveVideo);
+        animPool = new AnimationPool(liveVideo, speakingVideo);
         window.animPool = animPool;
         // v1.3.5 · 重啟未 Start 待機豐富輪播 · 砍掉情緒反應類 (適合訪客場景)
         // 65% idle / 15% stroke-hair / 12% playful / 8% greeting · 14-22s 隨機切
@@ -1708,6 +1731,32 @@
         clearTimeout(window.__sophieLipsyncKickTimer);
         window.__sophieLipsyncKickTimer = null;
       }
+    }
+
+    function extendSpeakingHold(ms, reason) {
+      var minMs = typeof ms === "number" ? ms : 12000;
+      var until = Date.now() + minMs;
+      window.__sophieSpeakingHoldUntil = Math.max(window.__sophieSpeakingHoldUntil || 0, until);
+      if (reason) window.__sophieSpeakingHoldReason = reason;
+    }
+
+    function scheduleSpeakingStop(reason, delayMs) {
+      if (window.__sophieStopSpeakingTimer) clearTimeout(window.__sophieStopSpeakingTimer);
+      var baseDelay = typeof delayMs === "number" ? delayMs : 650;
+      window.__sophieStopSpeakingTimer = setTimeout(function tryStopSpeaking() {
+        var wait = (window.__sophieSpeakingHoldUntil || 0) - Date.now();
+        if (wait > 0 && !window.__sophieLipsyncActive) {
+          window.__sophieStopSpeakingTimer = setTimeout(tryStopSpeaking, Math.min(wait + 120, 1800));
+          log(reason + " delayed by speaking hold");
+          return;
+        }
+        window.__sophieStopSpeakingTimer = null;
+        if (animPool && typeof animPool.stopSpeaking === "function" && !window.__sophieLipsyncActive) {
+          animPool.stopSpeaking();
+          window.__sophieSpeakingTriggered = false;
+          log(reason + " -> stopSpeaking");
+        }
+      }, baseDelay);
     }
 
     function playLipsyncVisual(mp4Url, label, reason, alignToAudio) {
@@ -1934,6 +1983,14 @@
           throw mediaErr;
         }
         log("user media OK");
+        try {
+          var aCount = localStream.getAudioTracks().length;
+          var vCount = localStream.getVideoTracks().length;
+          window.__sophieClientCameraActive = vCount > 0 && camOn;
+          log("user media tracks audio=" + aCount + " video=" + vCount + " camOn=" + camOn);
+        } catch (trackLogErr) {
+          log("user media track inspect fail: " + trackLogErr.message);
+        }
 
         peerConn = new RTCPeerConnection({
           iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
@@ -1982,6 +2039,10 @@
 
         localStream.getAudioTracks().forEach(function (t) {
           peerConn.addTrack(t, localStream);
+        });
+        localStream.getVideoTracks().forEach(function (t) {
+          window.__sophieClientCameraActive = camOn && t.enabled && t.readyState === "live";
+          log("client camera track active=" + window.__sophieClientCameraActive + " label=" + (t.label || "camera"));
         });
 
         // v1.1.2 · sessionId per (day + connection start)
@@ -2533,8 +2594,12 @@
             window.__sophieEventTypes[t]++;
 
             // v1.3.2 防呆暴力觸發 · 不管 OpenAI 改什麼事件名 · 只要含 audio + 不含 done/transcript/input → startSpeaking
+            var isExactOutputAudioDelta = t === "response.audio.delta" || t === "response.output_audio.delta";
+            var isExactOutputAudioDone = t === "response.audio.done" || t === "response.output_audio.done";
             var lt = t.toLowerCase();
             var isAudioOutputDelta =
+              false &&
+              !isExactOutputAudioDelta &&
               lt.indexOf("audio") !== -1 &&
               lt.indexOf("done") === -1 &&
               lt.indexOf("transcript") === -1 &&
@@ -2546,12 +2611,15 @@
               // v1.9.14 · 霍爾刀 1 · 在 [FORCE] 分支也設 audio ts (避免後面 audio.delta 分支被跳過)
               window.__sophieAudioStartTs = Date.now();
               window.__sophieLipsyncActive = false;
+              extendSpeakingHold(12000, t);
               animPool.startSpeaking();
               scheduleLipsyncKick(t);
               log("[FORCE] " + t + " · audio ts " + window.__sophieAudioStartTs);
             }
             // 含 audio + done = stopSpeaking
             var isAudioOutputDone =
+              false &&
+              !isExactOutputAudioDone &&
               lt.indexOf("audio") !== -1 &&
               lt.indexOf("done") !== -1 &&
               lt.indexOf("transcript") === -1 &&
@@ -2559,7 +2627,7 @@
             if (isAudioOutputDone && window.__sophieSpeakingTriggered &&
                 animPool && typeof animPool.stopSpeaking === "function") {
               window.__sophieSpeakingTriggered = false;
-              animPool.stopSpeaking();
+              scheduleSpeakingStop("[FORCE] " + t, 650);
               log("[FORCE] " + t + " · 含 done → stopSpeaking");
             }
 
@@ -2582,20 +2650,34 @@
               // v1.3.1 · response.created 時 reset speaking trigger flag (每次新回應重新等第一個 audio delta)
               if (data.type === "response.created") {
                 clearLipsyncKick();
+                if (window.__sophieStopSpeakingTimer) {
+                  clearTimeout(window.__sophieStopSpeakingTimer);
+                  window.__sophieStopSpeakingTimer = null;
+                }
+                window.__sophieSpeakingHoldUntil = 0;
                 window.__sophieSpeakingTriggered = false;
                 window.__sophiePhraseMatched = false;
                 window.__sophieResponseActive = true;
                 sophieTextBuffer = "";
                 // v1.9.15 · 霍爾刀 3 · reset 視覺鎖 (上輪可能 lipsync 中斷沒清乾淨)
                 window.__sophieLipsyncActive = false;
-                window.__sophieVisualMode = "speaking";
+                window.__sophieVisualMode = "thinking";
               }
               if (data.type === "response.done") {
                 clearLipsyncKick();
                 // v1.9.12 · response 結束 · 清標記
                 window.__sophieResponseActive = false;
+                if (window.__sophieSpeakingTriggered && !window.__sophieStopSpeakingTimer) {
+                  window.__sophieStopSpeakingTimer = setTimeout(function () {
+                    window.__sophieStopSpeakingTimer = null;
+                    if (animPool && typeof animPool.stopSpeaking === "function" && !window.__sophieLipsyncActive) {
+                      scheduleSpeakingStop("response.done fallback", 0);
+                    }
+                  }, 2200);
+                }
               }
             } else if (data.type === "response.audio.delta" || data.type === "response.output_audio.delta") {
+              extendSpeakingHold(12000, data.type);
               // v1.3.1 CRITICAL FIX · OpenAI Realtime 不 emit *.start · 改聽第一個 audio delta trigger startSpeaking
               if (!window.__sophieSpeakingTriggered && animPool && typeof animPool.startSpeaking === "function") {
                 window.__sophieSpeakingTriggered = true;
@@ -2609,10 +2691,7 @@
             } else if (data.type === "response.audio.done" || data.type === "response.output_audio.done") {
               // v1.9.15 · 霍爾刀 2 · 砍掉 response.audio_transcript.done · 它只是文字完成 ≠ 視覺可停
               // 文字 done 早於 audio done 觸發 stopSpeaking 會打斷 lipsync
-              if (animPool && typeof animPool.stopSpeaking === "function") {
-                animPool.stopSpeaking();
-                log("audio.done -> stopSpeaking");
-              }
+              scheduleSpeakingStop("audio.done", 650);
               clearLipsyncKick();
               // v1.3.1 · reset trigger flag (下次回應重新等)
               window.__sophieSpeakingTriggered = false;
@@ -2629,6 +2708,14 @@
               }
             } else if (data.type === "response.audio_transcript.delta" || data.type === "response.output_audio_transcript.delta") {
               // v1.1.0 · 累積 transcript chunk · 餵桌面通知 body
+              if (!window.__sophieSpeakingTriggered && animPool && typeof animPool.startSpeaking === "function") {
+                window.__sophieSpeakingTriggered = true;
+                window.__sophieAudioStartTs = Date.now();
+                extendSpeakingHold(12000, data.type);
+                animPool.startSpeaking();
+                log("audio transcript delta fallback -> startSpeaking");
+              }
+              extendSpeakingHold(9000, data.type);
               if (typeof data.delta === "string") {
                 sophieTextBuffer += data.delta;
               }
@@ -3077,7 +3164,7 @@
       });
     }
 
-    log("Voice Path v2.0.6 ready - lipsync end release fixed, natural conversation prompt - 2026-05-24");
+    log("Voice Path v2.0.10 ready - speaking hold keeps long replies animated - 2026-05-25");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
@@ -3086,13 +3173,50 @@
     }
 
     // ===== v1.9.7 · 單 video 保活 (砍雙層、只剩底層 idle) =====
+    if (qs.get("visual_test") === "1" || qs.get("visual_test") === "true") {
+      log("[VISUAL TEST] speaking layer toggles without OpenAI audio");
+      setTimeout(function () {
+        try { if (animPool && animPool.startSpeaking) animPool.startSpeaking(); } catch (e) {}
+      }, 900);
+      setTimeout(function () {
+        try { if (animPool && animPool.stopSpeaking) animPool.stopSpeaking(); } catch (e) {}
+      }, 3600);
+      setInterval(function () {
+        try {
+          if (!animPool || !animPool.startSpeaking || !animPool.stopSpeaking) return;
+          animPool.startSpeaking();
+          setTimeout(function () { animPool.stopSpeaking(); }, 2200);
+        } catch (e) {}
+      }, 6200);
+    }
+
     (function setupVideoKeepAlive() {
+      var videoBootTs = Date.now();
+      function repairVideo(v, fallbackSrc) {
+        if (!v || !fallbackSrc) return;
+        var tooLongBlank = (Date.now() - videoBootTs) > 5000 && v.readyState === 0;
+        if (v.error || tooLongBlank || !(v.currentSrc || v.src)) {
+          try {
+            v.src = fallbackSrc;
+            v.load();
+            var rp = v.play();
+            if (rp && rp.catch) rp.catch(function () {});
+          } catch (e) {}
+        }
+      }
       function keepAlive() {
         try {
           var v = document.getElementById("liveVideo");
+          repairVideo(v, "/static/sophie-idle.mp4");
           if (v && v.paused && !v.ended) {
             var p = v.play();
             if (p && p.catch) p.catch(function () {});
+          }
+          var sv = document.getElementById("liveVideoSpeaking");
+          repairVideo(sv, "/static/sophie-speaking.mp4");
+          if (sv && sv.paused && !sv.ended) {
+            var sp = sv.play();
+            if (sp && sp.catch) sp.catch(function () {});
           }
         } catch (e) {}
       }
@@ -3143,7 +3267,9 @@
             body: JSON.stringify({
               presence: p.presence,
               last_voice_input_sec: Math.floor(p.idle),
-              mic_active: micActive
+              mic_active: micActive,
+              client_camera_active: !!window.__sophieClientCameraActive,
+              client_camera_tracks: localStream ? localStream.getVideoTracks().length : 0
             })
           }).then(function (r) {
             // silent · 不污染 log

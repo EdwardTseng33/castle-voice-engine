@@ -1,6 +1,7 @@
 /*!
- * Voice Path v1.1.3 - 17-State Animation Pool + absent-aware idle
- * Edward 2026-05-23 spec: docs/v0.9-animation-pool-design.md
+ * Voice Path v2.0.14-idle-talk-queue - idle mp4 self-contained 嘴微動 · 砍 speaking layer 切換
+ * Edward 2026-05-25 spec: Phase B · 4 idle-talk mp4 + SpeakingController stub + idle queue
+ * 不對齊每字 / 嘴自然微動 / 對話期間不切 idle / 結束 fade 切下個
  * ES5 only
  */
 (function (global) {
@@ -134,110 +135,39 @@
     this._active = false;
     this._phase = 0;
   }
-  // v1.9.13 · 霍爾 verdict · 加回 speaking fallback · 視覺優先順序：
-  // 精準 lipsync > fuzzy lipsync > sophie-speaking.mp4 loop > idle
-  // start: 切 sophie-speaking.mp4 loop (除非 lipsync 已 active)
-  // stop: 切回 idle (含 lipsync 中斷情況)
+  // v2.0.14-idle-talk-queue · Edward 2026-05-25 拍板
+  // 砍 SpeakingController 切換邏輯 · idle mp4 自帶嘴微動 · 不再蓋 speaking layer 不再切 src
+  // start/stop 保留 method 名 (其他地方 call 不會 crash) · 改成 no-op + log
+  // 視覺優先順序更新：精準 lipsync > fuzzy lipsync > idle 嘴微動 (預設保持 idle src)
   SpeakingController.prototype.start = function () {
     if (this._idleDelay) { clearTimeout(this._idleDelay); this._idleDelay = null; }
     if (this._active) {
-      this.pool._log("speaking continue (already active)");
+      this.pool._log("speaking start · noop (already active · idle 自帶嘴微動)");
       return;
     }
-    this._stopTimers();
     this._active = true;
     this._phase = 2;
-    this.pool.currentState = "speaking";
-    if (window.__sophieStableSingleVideo === true) {
-      window.__sophieVisualMode = "speaking";
-      this.pool._log("speaking start · stable single-video mode, no src switch");
-      return;
+    // 標記 visual mode = idle-talk · 給 idle rotator 看 (對話期間不切 idle)
+    if (!window.__sophieLipsyncActive && window.__sophieVisualMode !== "lipsync") {
+      window.__sophieVisualMode = "idle-talk";
     }
-    // v1.9.15 · lipsync 已鎖 · 不動 video
-    if (window.__sophieLipsyncActive || window.__sophieVisualMode === "lipsync") {
-      this.pool._log("speaking start · skip src switch (lipsync 鎖住)");
-      return;
-    }
-    window.__sophieVisualMode = "speaking";
-    if (this.pool.director && this.pool.director.playSpeaking) {
-      this.pool.director.playSpeaking("/static/sophie-speaking.mp4", "speaking-start");
-      this.pool._log("speaking start -> AvatarDirector");
-      return;
-    }
-    try {
-      var v = this.pool.video;
-      if (v) {
-        var currSrc = v.currentSrc || v.src || "";
-        if (currSrc.indexOf("sophie-speaking.mp4") === -1 && currSrc.indexOf("/lipsync/") === -1) {
-          v.classList.add("is-switching");
-          v.src = "/static/sophie-speaking.mp4";
-          v.loop = true;
-          v.muted = true;
-          var p = v.play();
-          if (p && p["catch"]) p["catch"](function () {});
-          var onR = function () { v.removeEventListener("canplay", onR); v.classList.remove("is-switching"); };
-          v.addEventListener("canplay", onR, { once: true });
-          setTimeout(function () { v.classList.remove("is-switching"); }, 500);
-        }
-      }
-    } catch (e) {}
-    this.pool._log("speaking start (切 speaking.mp4 fallback · lipsync 命中會再切)");
+    this.pool._log("speaking start · noop (砍 speaking layer · idle mp4 自帶嘴微動)");
   };
   SpeakingController.prototype.stop = function () {
-    if (!this._active && !this._idleDelay) return;
-    // v1.9.15 · 霍爾刀 1 · lipsync active 時 stop 不准動 video · 由 lipsync onended 決定
-    if (window.__sophieLipsyncActive || window.__sophieVisualMode === "lipsync") {
-      this._active = false;
-      this._stopTimers();
-      this.pool._log("speaking stop · skip (lipsync 鎖住 · 等 clip onended 接管)");
-      return;
-    }
+    // v2.0.14 · stub · 不切 video src · 不蓋 speaking layer
+    // 只清 active flag + visual mode 還原 (給 idle rotator 看 · 對話結束可切下個 idle)
+    if (!this._active) return;
     this._active = false;
     this._stopTimers();
-    if (this._idleDelay) { clearTimeout(this._idleDelay); this._idleDelay = null; }
-    if (window.__sophieStableSingleVideo === true) {
-      window.__sophieVisualMode = "idle";
-      this.pool.currentState = "idle";
-      this.pool._log("speaking stop · stable single-video mode, no src switch");
+    // lipsync active 時不動 visual mode (lipsync onended 自己接管)
+    if (window.__sophieLipsyncActive || window.__sophieVisualMode === "lipsync") {
+      this.pool._log("speaking stop · noop (lipsync 接管)");
       return;
     }
-    var self = this;
-    this._idleDelay = setTimeout(function () {
-      self._idleDelay = null;
-      if (self._active) return;
-      // v1.9.15 · 切回前再 check lipsync 鎖
-      if (window.__sophieLipsyncActive || window.__sophieVisualMode === "lipsync") {
-        self.pool._log("speaking stop deferred · lipsync 已接管");
-        return;
-      }
-      if (self.pool.director && self.pool.director.playIdle) {
-        self.pool.director.playIdle("/static/sophie-idle.mp4", "speaking-stop");
-        window.__sophieVisualMode = "idle";
-        self.pool.currentState = "idle";
-        self.pool._log("speaking stop -> AvatarDirector idle");
-        return;
-      }
-      try {
-        var v = self.pool.video;
-        if (v) {
-          var currSrc = v.currentSrc || v.src || "";
-          if (currSrc.indexOf("sophie-idle.mp4") === -1) {
-            v.classList.add("is-switching");
-            v.src = "/static/sophie-idle.mp4";
-            v.loop = true;
-            v.muted = true;
-            var p = v.play();
-            if (p && p["catch"]) p["catch"](function () {});
-            var onR = function () { v.removeEventListener("canplay", onR); v.classList.remove("is-switching"); };
-            v.addEventListener("canplay", onR, { once: true });
-            setTimeout(function () { v.classList.remove("is-switching"); }, 500);
-          }
-        }
-      } catch (e) {}
-      window.__sophieVisualMode = "idle";
-      self.pool.currentState = "idle";
-      self.pool._log("speaking stop · 切回 idle");
-    }, 250);
+    // 標記對話剛結束 · 給 idle rotator fade 切下個 idle (在 _startIdleTalkQueueRotator 內處理)
+    window.__sophieVisualMode = "idle";
+    window.__sophieLastSpeakEndMs = Date.now();
+    this.pool._log("speaking stop · noop · 等 idle rotator 切下個 (對話結束 ms=" + window.__sophieLastSpeakEndMs + ")");
   };
   SpeakingController.prototype._stopTimers = function () {
     if (this._t1) { clearTimeout(this._t1); this._t1 = null; }
@@ -246,10 +176,11 @@
   };
   SpeakingController.prototype.isActive = function () { return this._active; };
 
-  function AnimationPool(videoEl) {
+  function AnimationPool(videoEl, speakingVideoEl) {
     if (!videoEl) { console.warn("[animPool] no video element supplied"); return; }
     // v1.2.0g · 砍 double buffer · 回單 video 簡潔架構
     this.video = videoEl;
+    this.speakingVideo = speakingVideoEl || (global.document && global.document.getElementById ? global.document.getElementById("liveVideoSpeaking") : null);
     this.director = global.__sophieAvatarDirector || global.avatarDirector || null;
     this.currentState = "idle";
     this.frequencyGuard = new FrequencyGuard();
@@ -262,11 +193,115 @@
     this._analyser = null;
     this._breathRAF = null;
     this._currentAmp = 0;
+    this._audioDrivenSpeaking = false;
+    this._lastRemoteAudioMs = 0;
     this._initIdle();
+    this._initSpeakingLayer();
     this._installManualLoop();
     this._preloadCriticalActions();
     this._maybeFireGreeting();
+    // v2.0.12-idle-rotator · 4 idle 變體 30-60s 隨機輪播 + fade 蓋切換空檔
+    this._startIdleRotator(30000, 60000);
   }
+
+  // v2.0.14-idle-talk-queue · Edward 2026-05-25 拍板 · 4 idle 嘴微動 + 對話期間不切 + 結束 fade 切下個
+  // 對話期間：visual mode === "speaking" / "idle-talk" / "lipsync" → 跳過 + reschedule
+  // 對話結束：__sophieLastSpeakEndMs 在 200ms 內 → 立刻 fade 切下個 idle (給對話一個視覺收尾)
+  // 否則：維持原 30-60s 隨機輪播 (待機自然輪換)
+  AnimationPool.prototype._startIdleRotator = function (minMs, maxMs) {
+    if (this._idleRotatorTimer) return;
+    var self = this;
+    var IDLE_VARIANTS = [
+      "/static/sophie-idle.mp4",
+      "/static/sophie-idle-2.mp4",
+      "/static/sophie-idle-3.mp4",
+      "/static/sophie-idle-4.mp4"
+    ];
+    minMs = minMs || 30000;
+    maxMs = maxMs || 60000;
+    var pickNext = function (currentSrc) {
+      var pool = IDLE_VARIANTS.filter(function (s) {
+        return currentSrc.indexOf(s.split("/").pop()) === -1;
+      });
+      if (pool.length === 0) pool = IDLE_VARIANTS;
+      return pool[Math.floor(Math.random() * pool.length)];
+    };
+    var doSwitchIdle = function (label) {
+      try {
+        var v = self.video;
+        if (!v) return;
+        var nextSrc = pickNext(v.currentSrc || v.src || "");
+        v.classList.add("is-rotating");
+        setTimeout(function () {
+          v.src = nextSrc;
+          v.loop = true;
+          v.muted = true;
+          var p = v.play();
+          if (p && p["catch"]) p["catch"](function () {});
+          var onR = function () {
+            v.removeEventListener("canplay", onR);
+            v.classList.remove("is-rotating");
+          };
+          v.addEventListener("canplay", onR, { once: true });
+          setTimeout(function () { v.classList.remove("is-rotating"); }, 1500);
+          self._log("idle rotator [" + label + "] -> " + nextSrc.split("/").pop());
+        }, 200);
+      } catch (e) {
+        self._log("idle rotator [" + label + "] fail: " + e.message);
+      }
+    };
+    // 監聽對話結束 · 200ms 內切下個 idle (給對話收尾)
+    var postSpeakWatcher = setInterval(function () {
+      var endMs = global.__sophieLastSpeakEndMs || 0;
+      if (endMs === 0) return;
+      var elapsed = Date.now() - endMs;
+      // 對話剛結束 1.5s 內 + 不是 lipsync / speaking active → 切下個 idle
+      if (elapsed >= 0 && elapsed < 1500) {
+        if (global.__sophieLipsyncActive || global.__sophieVisualMode === "speaking" ||
+            global.__sophieVisualMode === "idle-talk" || global.__sophieVisualMode === "lipsync") {
+          return;
+        }
+        global.__sophieLastSpeakEndMs = 0; // 消費掉
+        doSwitchIdle("post-speak");
+      } else if (elapsed > 8000) {
+        // 5s 都沒消費掉 = stale flag · 清掉避免 next loop 又觸發
+        global.__sophieLastSpeakEndMs = 0;
+      }
+    }, 100);
+    self._postSpeakWatcher = postSpeakWatcher;
+    // 常規 30-60s 隨機輪播 (待機)
+    var schedule = function () {
+      var delay = minMs + Math.random() * (maxMs - minMs);
+      self._idleRotatorTimer = setTimeout(function () {
+        self._idleRotatorTimer = null;
+        // 對話期間跳過 · 等下次 schedule
+        if (global.__sophieLipsyncActive || global.__sophieVisualMode === "speaking" ||
+            global.__sophieVisualMode === "idle-talk" || global.__sophieVisualMode === "lipsync") {
+          schedule();
+          return;
+        }
+        if (self.currentState && self.currentState !== "idle") {
+          schedule();
+          return;
+        }
+        doSwitchIdle("scheduled");
+        schedule();
+      }, delay);
+    };
+    schedule();
+    self._log("idle rotator v2.0.14-talk-queue started · " + (minMs/1000) + "-" + (maxMs/1000) + "s · 4 variants · 對話期間不切");
+  };
+
+  AnimationPool.prototype._stopIdleRotator = function () {
+    if (this._idleRotatorTimer) {
+      clearTimeout(this._idleRotatorTimer);
+      this._idleRotatorTimer = null;
+    }
+    if (this._postSpeakWatcher) {
+      clearInterval(this._postSpeakWatcher);
+      this._postSpeakWatcher = null;
+    }
+  };
 
   // v1.3.0 · 手動 loop · 在 video 快結束 (剩 0.15s) 時主動 currentTime=0 + play
   // 避開 Chrome native video.loop 接縫黑 frame
@@ -294,6 +329,41 @@
   };
 
   // v1.3.0 · 接 OpenAI realtime audio stream · 抓即時音量驅動微呼吸 + 亮度浮動
+  AnimationPool.prototype._initSpeakingLayer = function () {
+    var v = this.speakingVideo;
+    if (!v) return;
+    try {
+      if (!v.getAttribute("src")) v.src = "/static/sophie-speaking.mp4";
+      v.loop = true;
+      v.muted = true;
+      v.autoplay = true;
+      v.setAttribute("preload", "auto");
+      var p = v.play();
+      if (p && p["catch"]) p["catch"](function () {});
+    } catch (e) {}
+  };
+
+  AnimationPool.prototype._setSpeakingLayer = function (active) {
+    var v = this.speakingVideo;
+    if (!v) return false;
+    try {
+      if (active) {
+        if (!v.getAttribute("src")) v.src = "/static/sophie-speaking.mp4";
+        v.loop = true;
+        v.muted = true;
+        var p = v.play();
+        if (p && p["catch"]) p["catch"](function () {});
+        v.classList.add("is-visible");
+      } else {
+        v.classList.remove("is-visible");
+      }
+      return true;
+    } catch (e) {
+      this._log("speaking layer fail: " + e.message);
+      return false;
+    }
+  };
+
   AnimationPool.prototype.attachAudioAnalyser = function (audioEl) {
     if (!audioEl || this._analyser) return; // 已 attach 過、不重複
     try {
@@ -317,6 +387,7 @@
     if (this._breathRAF) return;
     var self = this;
     var buf = new Uint8Array(this._analyser.frequencyBinCount);
+    var _breathLastSetMs = 0; // v2.0.11-throttle · 50ms 一次 set CSS · 防 GPU 跟 video 解碼搶 (Edward 5/25 catch B 卡格)
     var tick = function () {
       self._breathRAF = requestAnimationFrame(tick);
       if (!self._analyser) return;
@@ -328,6 +399,31 @@
       // smooth + 限幅
       self._currentAmp = self._currentAmp * 0.7 + avg * 0.3;
       var amp = self._currentAmp;
+      var now = Date.now();
+      // v2.0.14 · 砍 audio analyser trigger speaking 邏輯 · idle mp4 自帶嘴微動
+      // 仍呼叫 speakingCtrl.start/stop 作為 visual mode flag (給 idle rotator 看 · 對話期間不切)
+      if (global.__sophieDisableAudioVisualFallback !== true) {
+        if (amp > 0.018) {
+          self._lastRemoteAudioMs = now;
+          if (!self._audioDrivenSpeaking && !global.__sophieLipsyncActive) {
+            self._audioDrivenSpeaking = true;
+            if (self.speakingCtrl && !self.speakingCtrl.isActive()) {
+              self.startSpeaking();
+              self._log("audio analyser -> speaking flag on (idle 自帶嘴微動 · 不切 src)");
+            }
+          }
+        } else if (self._audioDrivenSpeaking && self._lastRemoteAudioMs && (now - self._lastRemoteAudioMs) > 1800 &&
+                   now > (global.__sophieSpeakingHoldUntil || 0)) {
+          self._audioDrivenSpeaking = false;
+          if (self.speakingCtrl && self.speakingCtrl.isActive()) {
+            self.stopSpeaking();
+            self._log("audio analyser -> speaking flag off (mark __sophieLastSpeakEndMs)");
+          }
+        }
+      }
+      // v2.0.11-throttle · 50ms 才 set CSS · 不每幀 (60fps→20fps) · 防 GPU 跟 video 解碼搶 = Edward 5/25 catch 卡格 root cause
+      if (now - _breathLastSetMs < 50) return;
+      _breathLastSetMs = now;
       // 套用到 video style
       // - 講話中：scale 1.00~1.025 微縮放 (呼吸感) + brightness 1.00~1.06
       // - 待機 (沒講話)：amp 接近 0 · scale 1.00 · brightness 1.00
