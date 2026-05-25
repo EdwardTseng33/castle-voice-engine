@@ -226,26 +226,41 @@
       if (pool.length === 0) pool = IDLE_VARIANTS;
       return pool[Math.floor(Math.random() * pool.length)];
     };
+    // v2.0.15-no-orange-flash · Edward 5/25 catch · 改 preload-first swap · is-rotating opacity 保持 1 (不透橘底)
+    // 流程：先 hidden preload next mp4 → canplay 後 swap v.src + 加 is-rotating (CSS 500ms fade) → 200ms 後移除
     var doSwitchIdle = function (label) {
       try {
         var v = self.video;
         if (!v) return;
         var nextSrc = pickNext(v.currentSrc || v.src || "");
-        v.classList.add("is-rotating");
-        setTimeout(function () {
-          v.src = nextSrc;
-          v.loop = true;
-          v.muted = true;
-          var p = v.play();
-          if (p && p["catch"]) p["catch"](function () {});
-          var onR = function () {
-            v.removeEventListener("canplay", onR);
-            v.classList.remove("is-rotating");
-          };
-          v.addEventListener("canplay", onR, { once: true });
-          setTimeout(function () { v.classList.remove("is-rotating"); }, 1500);
+        // 先在 hidden preload element 載入 next mp4 · canplay 後才 swap (不透底色)
+        var pre = document.createElement("video");
+        pre.preload = "auto";
+        pre.muted = true;
+        pre.style.display = "none";
+        pre.src = nextSrc;
+        var swapped = false;
+        var doSwap = function () {
+          if (swapped) return;
+          swapped = true;
+          try { pre.parentNode && pre.parentNode.removeChild(pre); } catch (e) {}
+          v.classList.add("is-rotating");
+          try {
+            v.src = nextSrc;
+            v.loop = true;
+            v.muted = true;
+            var pp = v.play();
+            if (pp && pp["catch"]) pp["catch"](function () {});
+          } catch (e) { self._log("swap src fail: " + e.message); }
+          // 500ms 後移除 is-rotating · CSS transition 結束 fade 自然結尾
+          setTimeout(function () { v.classList.remove("is-rotating"); }, 520);
           self._log("idle rotator [" + label + "] -> " + nextSrc.split("/").pop());
-        }, 200);
+        };
+        pre.addEventListener("canplaythrough", doSwap, { once: true });
+        pre.addEventListener("canplay", doSwap, { once: true });
+        // safety: 800ms 沒 ready 就直接 swap (檔案應該 cached · 不會這麼慢)
+        setTimeout(doSwap, 800);
+        try { document.body.appendChild(pre); pre.load(); } catch (e) { doSwap(); }
       } catch (e) {
         self._log("idle rotator [" + label + "] fail: " + e.message);
       }
@@ -269,27 +284,33 @@
       }
     }, 100);
     self._postSpeakWatcher = postSpeakWatcher;
-    // 常規 30-60s 隨機輪播 (待機)
+    // v2.0.15-in-call-idle-queue · Edward 5/25 拍板 · 對話期間也切 idle (講越長排越多 idle)
+    // 對話期間 (idle-talk / speaking mode) → 短間隔 7-10s 切下個 idle variant (只切 4 idle · 不切 stroke-hair / playful 防干擾)
+    // 待機 (idle mode) → 原 30-60s 隨機切 (4 idle 自然輪播)
+    // lipsync active → 跳過 (lipsync onended 自己接管 visual)
     var schedule = function () {
-      var delay = minMs + Math.random() * (maxMs - minMs);
+      // 對話期間 vs 待機判定不同 delay
+      var inCall = (global.__sophieVisualMode === "speaking" || global.__sophieVisualMode === "idle-talk");
+      var delay = inCall ? (7000 + Math.random() * 3000) : (minMs + Math.random() * (maxMs - minMs));
       self._idleRotatorTimer = setTimeout(function () {
         self._idleRotatorTimer = null;
-        // 對話期間跳過 · 等下次 schedule
-        if (global.__sophieLipsyncActive || global.__sophieVisualMode === "speaking" ||
-            global.__sophieVisualMode === "idle-talk" || global.__sophieVisualMode === "lipsync") {
+        // lipsync active 跳過 (lipsync 自己接管 visual)
+        if (global.__sophieLipsyncActive || global.__sophieVisualMode === "lipsync") {
           schedule();
           return;
         }
-        if (self.currentState && self.currentState !== "idle") {
+        // 待機狀態 + currentState 非 idle → 跳過 (action play 中)
+        var nowInCall = (global.__sophieVisualMode === "speaking" || global.__sophieVisualMode === "idle-talk");
+        if (!nowInCall && self.currentState && self.currentState !== "idle") {
           schedule();
           return;
         }
-        doSwitchIdle("scheduled");
+        doSwitchIdle(nowInCall ? "in-call-queue" : "scheduled");
         schedule();
       }, delay);
     };
     schedule();
-    self._log("idle rotator v2.0.14-talk-queue started · " + (minMs/1000) + "-" + (maxMs/1000) + "s · 4 variants · 對話期間不切");
+    self._log("idle rotator v2.0.15-in-call-queue started · idle: " + (minMs/1000) + "-" + (maxMs/1000) + "s · in-call: 7-10s · 4 variants");
   };
 
   AnimationPool.prototype._stopIdleRotator = function () {
@@ -578,6 +599,8 @@
   };
 
   // v1.2.0b · pre-call 自動輪播 timer (Edward 5/23「未 start 加親親 / 撒嬌 / hello」)
+  // v2.0.15 · Edward 5/25 catch · 修「flag 寫死 false 沒啟動」+ 改走 _doSwitchIdleRich (preload-first swap · 不透橘底)
+  // 不再受 __sophieStableSingleVideo 限制 (pre-call 不在 in-call · 不擔心通話閃頻)
   AnimationPool.prototype.startPreCallRotation = function () {
     if (global.__sophieEnableAvatarIdleRotation !== true) {
       this._log("preCallRotation skipped · disabled for anti-flicker stable mode");
@@ -586,20 +609,102 @@
     if (this._preCallTimer) return;
     this.idleRotator.setPreCallMode(true);
     var self = this;
+    var ANIMATION_POOL_LOCAL = {
+      "idle": "/static/sophie-idle.mp4",
+      "idle-2": "/static/sophie-idle-2.mp4",
+      "idle-3": "/static/sophie-idle-3.mp4",
+      "idle-4": "/static/sophie-idle-4.mp4",
+      "stroke-hair": "/static/sophie-stroke-hair.mp4",
+      "playful": "/static/sophie-playful.mp4",
+      "greeting": "/static/sophie-greeting.mp4"
+    };
+    // 走 preload-first swap (preload next 完才切 · is-rotating opacity 1 · 不透底色)
+    // 動作類 (stroke-hair / playful / greeting) 播完接回 random idle (loop)
+    var doSwitchPreCall = function () {
+      var v = self.video;
+      if (!v) return;
+      var nextState = self.idleRotator.pickNext();  // rich pool
+      var nextSrc = ANIMATION_POOL_LOCAL[nextState] || ANIMATION_POOL_LOCAL["idle"];
+      var isIdle = (nextState && nextState.indexOf("idle") === 0);
+      // hidden preload first
+      var pre = document.createElement("video");
+      pre.preload = "auto";
+      pre.muted = true;
+      pre.style.display = "none";
+      pre.src = nextSrc;
+      var swapped = false;
+      var doSwap = function () {
+        if (swapped) return;
+        swapped = true;
+        try { pre.parentNode && pre.parentNode.removeChild(pre); } catch (e) {}
+        // 砍既有 ended handler (防動作播完 _returnToIdle 重複觸發)
+        if (self._endHandler) {
+          try { v.removeEventListener("ended", self._endHandler); } catch (e) {}
+          self._endHandler = null;
+        }
+        v.classList.add("is-rotating");
+        try {
+          v.src = nextSrc;
+          v.loop = !!isIdle;  // idle loop · action one-shot
+          v.muted = true;
+          var pp = v.play();
+          if (pp && pp["catch"]) pp["catch"](function () {});
+        } catch (e) { self._log("preCall swap fail: " + e.message); }
+        setTimeout(function () { v.classList.remove("is-rotating"); }, 520);
+        // 動作 (non-loop) 播完接回 random idle
+        if (!isIdle) {
+          self._endHandler = function () {
+            try { v.removeEventListener("ended", self._endHandler); } catch (e) {}
+            self._endHandler = null;
+            var idle = self.idleRotator.pickIdleOnly();
+            var idleSrc = ANIMATION_POOL_LOCAL[idle];
+            // 動作後接 idle · 再次 preload swap
+            var pre2 = document.createElement("video");
+            pre2.preload = "auto";
+            pre2.muted = true;
+            pre2.style.display = "none";
+            pre2.src = idleSrc;
+            var s2 = false;
+            var swap2 = function () {
+              if (s2) return; s2 = true;
+              try { pre2.parentNode && pre2.parentNode.removeChild(pre2); } catch (e) {}
+              v.classList.add("is-rotating");
+              try { v.src = idleSrc; v.loop = true; v.muted = true; var p2 = v.play(); if (p2 && p2["catch"]) p2["catch"](function () {}); } catch (e) {}
+              setTimeout(function () { v.classList.remove("is-rotating"); }, 520);
+              self._log("preCall action -> idle (" + idle + ")");
+            };
+            pre2.addEventListener("canplaythrough", swap2, { once: true });
+            pre2.addEventListener("canplay", swap2, { once: true });
+            setTimeout(swap2, 800);
+            try { document.body.appendChild(pre2); pre2.load(); } catch (e) { swap2(); }
+          };
+          v.addEventListener("ended", self._endHandler, { once: true });
+        }
+        self.currentState = nextState;
+        self._log("preCallRotation -> " + nextState);
+      };
+      pre.addEventListener("canplaythrough", doSwap, { once: true });
+      pre.addEventListener("canplay", doSwap, { once: true });
+      setTimeout(doSwap, 800);
+      try { document.body.appendChild(pre); pre.load(); } catch (e) { doSwap(); }
+    };
     var schedule = function () {
       self._preCallTimer = setTimeout(function () {
-        // 通話中 / speaking 中 / 已被 paused → 不主動切 (in-call 由 GPT event 驅動)
         if (self.speakingCtrl.isActive() || self.idleRotator.isPaused()) {
           schedule();
           return;
         }
-        // 走 _returnToIdle 走 pickNext (rich pool) · 含正確的 loop / ended handler 邏輯
-        self._returnToIdle();
+        // in-call mode 不主動切 (在 _startIdleRotator 自己有 7-10s 短間隔 in-call queue)
+        if (global.__sophieVisualMode === "idle-talk" || global.__sophieVisualMode === "speaking" || global.__sophieVisualMode === "lipsync") {
+          schedule();
+          return;
+        }
+        doSwitchPreCall();
         schedule();
-      }, 14000 + Math.random() * 8000);  // v1.3.5 · 14-22s 隨機間隔 · 慢一點不密集切
+      }, 14000 + Math.random() * 8000);  // v1.3.5 · 14-22s 隨機間隔
     };
     schedule();
-    this._log("preCallRotation start (rich pool · idle 65% / stroke-hair 15% / playful 12% / greeting 8%)");
+    this._log("preCallRotation v2.0.15 start · rich pool · idle 65 / stroke-hair 15 / playful 12 / greeting 8 · 14-22s · preload-first swap");
   };
 
   AnimationPool.prototype.stopPreCallRotation = function () {

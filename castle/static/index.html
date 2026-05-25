@@ -428,8 +428,10 @@
     .live-video-speaking.is-visible { opacity: 1; }
     /* v1.9.7 · 砍雙層回單 · idle 永遠在 · 命中 lipsync 才切片 · 切片時 opacity 0.75 隱載入空檔 */
     .live-video.is-switching { opacity: 1; transition: none; }
-    /* v2.0.12-idle-rotator · 4 idle 輪播切 src 時 fade 蓋空檔 */
-    .live-video.is-rotating { opacity: 0.35; transition: opacity 220ms ease-out; }
+    /* v2.0.15-no-orange-flash · Edward 5/25 catch "橘色底色閃" · root cause = stage-canvas 底色橘 (#C95B2E) 透出 */
+    /* 修法：is-rotating 期間 opacity 保持 1 · 不透底色 · 改用 video.src preload 完才切 (next idle ready 才換) */
+    /* fade 機制改：先 ready 再 swap · transition 500ms 接縫平順 */
+    .live-video.is-rotating { opacity: 1; transition: opacity 500ms ease-out; }
     .bottom {
       position: absolute;
       bottom: 0; left: 0; right: 0;
@@ -1577,8 +1579,10 @@
     var camIcon    = document.getElementById("camIcon");
     var avatarDirector = null;
     var qs = new URLSearchParams(window.location.search || "");
+    // v2.0.15-pre-call-rotation-on · Edward 5/25 catch · pre-call rotator 從來沒啟動 (flag = false 寫死)
+    // 改 __sophieEnableAvatarIdleRotation = true · pre-call (未 Start) 走 rich pool (idle 65 / stroke-hair 15 / playful 12 / greeting 8)
     window.__sophieStableSingleVideo = true;
-    window.__sophieEnableAvatarIdleRotation = false;
+    window.__sophieEnableAvatarIdleRotation = true;
     window.__sophieEnableAvatarActions = false;
     // v2.0.13-lipsync-default-on · Edward 5/25 拍板 · 100 句預錄嘴對齊預設開 · 加 ?lipsync=0 關
     window.__sophieEnableLipsync = qs.get("lipsync") !== "0" && qs.get("lipsync") !== "false";
