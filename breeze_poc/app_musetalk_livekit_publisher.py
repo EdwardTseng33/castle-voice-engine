@@ -75,7 +75,9 @@ async def publish_to_room(room: str, mode: str = "idle", duration_s: float = 300
     import asyncio
     import numpy as np
     import cv2
+    from datetime import timedelta
     from livekit import rtc
+    print(f'[publisher] ENTER publish_to_room room={room} mode={mode} duration_s={duration_s} fps={fps}', flush=True)
 
     api_key = os.environ.get("LIVEKIT_API_KEY", "").strip()
     api_secret = os.environ.get("LIVEKIT_API_SECRET", "").strip()
@@ -111,13 +113,16 @@ async def publish_to_room(room: str, mode: str = "idle", duration_s: float = 300
             .with_identity(f"sophie-renderer-{int(time.time())}")
             .with_name("sophie-renderer")
             .with_grants(grants)
-            .with_ttl(int(duration_s) + 60)
+            .with_ttl(timedelta(seconds=int(duration_s) + 60))
             .to_jwt()
         )
     except Exception as e:
+        print(f'[publisher] FAIL token mint: {e}', flush=True)
         return {"ok": False, "detail": f"renderer token mint fail: {e}"}
+    print(f'[publisher] TOKEN MINTED · ttl_s={int(duration_s)+60}', flush=True)
 
     # ----- Connect to room ------------------------------------------------
+    print(f'[publisher] CONNECTING to url={url} room={room}', flush=True)
     rtc_room = rtc.Room()
     try:
         await rtc_room.connect(url, renderer_token)
