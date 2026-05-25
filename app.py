@@ -60,6 +60,7 @@ lipsync_volume = modal.Volume.from_name("sophie-lipsync-cache", create_if_missin
         modal.Secret.from_name("openai"),
         modal.Secret.from_name("anthropic-key"),
         modal.Secret.from_name("tavus"),  # v0.3.2 Phase 3.2 Tavus CVI 即時對話
+        modal.Secret.from_name("livekit-creds"),  # v0.10 Phase 2 LiveKit WebRTC SFU (2026-05-25 calcifer)
     ],
     volumes={"/lipsync_cache": lipsync_volume},  # v1.5.0 · 100 句嘴對齊 mp4
 )
@@ -77,6 +78,7 @@ def fastapi_app():
     from castle.server.tavus_endpoints import attach_tavus_routes
     from castle.server.memory_endpoints import attach_memory_routes  # v1.1.2 IndexedDB summary backend
     from castle.server.brain_endpoints import attach_brain_routes  # v1.6.0 Claude 真大腦 + 派工接口
+    from castle.server.livekit_endpoints import attach_livekit_routes  # v0.10 Phase 2 LiveKit WebRTC SFU
 
     attach_realtime_routes(fastapi_instance)
     attach_camera_routes(fastapi_instance)
@@ -84,6 +86,7 @@ def fastapi_app():
     attach_tavus_routes(fastapi_instance)  # v0.3.2 Phase 3.2: Tavus CVI 即時對話 video
     attach_memory_routes(fastapi_instance)  # v1.1.2 Phase 3.3: 記憶連續性 (Claude Haiku 摘要 · 後端 stateless)
     attach_brain_routes(fastapi_instance)  # v1.6.0 雙腦混合 · ask_claude / dispatch_howl / dispatch_code
+    attach_livekit_routes(fastapi_instance)  # v0.10 Phase 2: LiveKit WebRTC SFU integration
 
     # v1.5.0 · 嘴對齊 100 句預生 mp4 serve · 從 modal.Volume sophie-lipsync-cache 讀
     import os as _os

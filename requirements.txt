@@ -50,3 +50,11 @@ modal>=0.65,<1.0
 google-auth>=2.30,<3.0
 # Cookie 簽名 (verified email 存 cookie · 防偽造)
 itsdangerous>=2.2,<3.0
+
+# --- v0.10 Phase 2 LiveKit WebRTC SFU integration (2026-05-25 calcifer) ---
+# livekit-api: Server SDK · token mint + room management (Apache-2.0)
+# livekit-rtc: RTC SDK · backend WebRTC publisher (Apache-2.0)
+# Edward registers LiveKit Cloud personally (free tier 100GB/month)
+# Modal secret `livekit-creds` holds LIVEKIT_API_KEY / LIVEKIT_API_SECRET / LIVEKIT_URL
+livekit-api>=0.7,<2.0
+livekit>=0.20,<2.0
