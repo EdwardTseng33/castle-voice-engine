@@ -306,6 +306,10 @@ class MuseTalkRunner:
         self.weight_dtype = None
         self.timesteps = None
 
+        # v0.10 Phase 1 multi-reference cache.
+        self.refs = {}
+        self.idle_ref_ids = []
+
         sophie_path = "/weights/assets/sophie-portrait-original.png"
         if os.path.exists(sophie_path):
             try:
@@ -372,8 +376,80 @@ class MuseTalkRunner:
         else:
             print(f"[MuseTalk] Sophie portrait not found at {sophie_path}; precompute skipped", flush=True)
 
+        # v0.10 Phase 1: load multi-reference library.
+        self._load_reference_library()
+
         elapsed = round(time.time() - t0, 1)
-        print(f"[MuseTalk] ready in {elapsed}s (sophie_ready={self.sophie_ready})", flush=True)
+        print(f"[MuseTalk] ready in {elapsed}s (sophie_ready={self.sophie_ready}, refs={list(self.refs.keys())})", flush=True)
+
+    def _build_reference_cycles(self, video_path):
+        import os, cv2, tempfile
+        from musetalk.utils.preprocessing import get_landmark_and_bbox, coord_placeholder
+        if not os.path.exists(video_path):
+            return None
+        cap = cv2.VideoCapture(video_path)
+        frames = []
+        while True:
+            ok, fr = cap.read()
+            if not ok:
+                break
+            frames.append(fr)
+        cap.release()
+        if not frames:
+            print(f"[MuseTalk ref] {video_path}: 0 frames", flush=True)
+            return None
+        tmp_dir = tempfile.mkdtemp(prefix="musetalk_ref_")
+        paths = []
+        for i, fr in enumerate(frames):
+            fp = f"{tmp_dir}/{i:05d}.png"
+            cv2.imwrite(fp, fr)
+            paths.append(fp)
+        try:
+            coord_list, frame_list = get_landmark_and_bbox(paths, 0)
+        except Exception as e:
+            print(f"[MuseTalk ref] {video_path}: landmark fail {type(e).__name__}: {e}", flush=True)
+            return None
+        extra_margin = 10
+        input_latent_list = []
+        new_coord_list = []
+        for bbox, frame in zip(coord_list, frame_list):
+            if bbox == coord_placeholder:
+                new_coord_list.append(bbox)
+                continue
+            x1, y1, x2, y2 = bbox
+            y2 = min(y2 + extra_margin, frame.shape[0])
+            new_coord_list.append([x1, y1, x2, y2])
+            crop_frame = frame[y1:y2, x1:x2]
+            crop_frame = cv2.resize(crop_frame, (256, 256), interpolation=cv2.INTER_LANCZOS4)
+            latents = self.vae.get_latents_for_unet(crop_frame)
+            input_latent_list.append(latents)
+        if not input_latent_list:
+            return None
+        frame_cycle = frame_list + frame_list[::-1]
+        coord_cycle = new_coord_list + new_coord_list[::-1]
+        latent_cycle = input_latent_list + input_latent_list[::-1]
+        return coord_cycle, frame_cycle, latent_cycle
+
+    def _load_reference_library(self):
+        import os, time
+        ref_dir = "/weights/assets/references"
+        if not os.path.isdir(ref_dir):
+            print(f"[MuseTalk ref] {ref_dir} missing", flush=True)
+            return
+        wanted = ["idle.mp4", "idle-2.mp4", "idle-3.mp4", "idle-4.mp4", "speaking.mp4"]
+        for name in wanted:
+            path = os.path.join(ref_dir, name)
+            ref_id = name.removesuffix(".mp4")
+            t0 = time.time()
+            built = self._build_reference_cycles(path)
+            if built is None:
+                print(f"[MuseTalk ref] SKIP {ref_id}", flush=True)
+                continue
+            coord_cycle, frame_cycle, latent_cycle = built
+            self.refs[ref_id] = {"coord_cycle": coord_cycle, "frame_cycle": frame_cycle, "latent_cycle": latent_cycle}
+            if ref_id.startswith("idle"):
+                self.idle_ref_ids.append(ref_id)
+            print(f"[MuseTalk ref] {ref_id}: cycle_len={len(frame_cycle)} ({(time.time()-t0)*1000:.0f}ms)", flush=True)
 
     @modal.method()
     def warm(self):
@@ -382,6 +458,8 @@ class MuseTalkRunner:
             "model": "MuseTalk v1.5",
             "license": "MIT (Lyra Lab/Tencent Music Entertainment)",
             "sophie_reference_cached": self.sophie_ready,
+            "refs_loaded": list(self.refs.keys()),
+            "idle_ref_count": len(self.idle_ref_ids),
         }
 
     @modal.method()
@@ -486,6 +564,121 @@ class MuseTalkRunner:
                 pass
 
 
+    # -------------------------------------------------------------------------
+    # v0.10 Phase 1 (2026-05-25 calcifer): continuous frame generators
+    # -------------------------------------------------------------------------
+    @modal.method()
+    def list_references(self):
+        return {rid: len(self.refs[rid]["frame_cycle"]) for rid in self.refs}
+
+    @modal.method()
+    def generate_idle_continuous(self, duration_s: float = 30.0, fps: int = 25,
+                                  start_ref=None, rotate_every_s=None):
+        import time, cv2
+        if not self.idle_ref_ids:
+            yield {"frame": b"", "error": "no idle references loaded"}
+            return
+        target_count = int(duration_s * fps)
+        if start_ref and start_ref in self.idle_ref_ids:
+            ref_idx = self.idle_ref_ids.index(start_ref)
+        else:
+            ref_idx = 0
+        t0 = time.time()
+        emitted = 0
+        ref_cycle_pos = 0
+        last_rotate_t = t0
+        while emitted < target_count:
+            cur_ref = self.idle_ref_ids[ref_idx]
+            frame_cycle = self.refs[cur_ref]["frame_cycle"]
+            frame = frame_cycle[ref_cycle_pos % len(frame_cycle)]
+            ok, jpg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            if not ok:
+                yield {"frame": b"", "error": f"jpeg encode fail at emit={emitted}"}
+                return
+            yield {"frame": jpg.tobytes(), "ref_id": cur_ref, "emit_index": emitted, "mode": "idle"}
+            emitted += 1
+            ref_cycle_pos += 1
+            now = time.time()
+            wrap = (ref_cycle_pos % len(frame_cycle) == 0)
+            time_rotate = (rotate_every_s is not None and (now - last_rotate_t) >= rotate_every_s)
+            if wrap or time_rotate:
+                ref_idx = (ref_idx + 1) % len(self.idle_ref_ids)
+                ref_cycle_pos = 0
+                last_rotate_t = now
+    @modal.method()
+    def generate_speaking_continuous(self, audio_pcm_bytes: bytes, fps: int = 25, ref_id: str = "speaking"):
+        import io, time, tempfile, os, copy, cv2, numpy as np, torch
+        import soundfile as sf
+        from musetalk.utils.utils import datagen
+        from musetalk.utils.blending import get_image
+        if ref_id not in self.refs:
+            fallback = self.idle_ref_ids[0] if self.idle_ref_ids else None
+            if fallback is None:
+                yield {"frame": b"", "error": f"ref {ref_id!r} not loaded and no idle fallback"}
+                return
+            print(f"[MuseTalk speak] ref {ref_id!r} missing; fallback {fallback!r}", flush=True)
+            ref_id = fallback
+        ref = self.refs[ref_id]
+        coord_cycle = ref["coord_cycle"]
+        frame_cycle = ref["frame_cycle"]
+        latent_cycle = ref["latent_cycle"]
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        audio_arr, sr = sf.read(io.BytesIO(audio_pcm_bytes), dtype="float32")
+        if sr != 16000:
+            yield {"frame": b"", "error": f"expected 16kHz PCM, got {sr}Hz"}
+            return
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_wav_f:
+            tmp_wav = tmp_wav_f.name
+        sf.write(tmp_wav, audio_arr, sr, subtype="PCM_16")
+        try:
+            t0 = time.time()
+            whisper_input_features, librosa_length = self.audio_processor.get_audio_feature(
+                tmp_wav, weight_dtype=self.weight_dtype
+            )
+            whisper_chunks = self.audio_processor.get_whisper_chunk(
+                whisper_input_features, device, self.weight_dtype, self.whisper, librosa_length,
+                fps=fps, audio_padding_length_left=2, audio_padding_length_right=2,
+            )
+            video_num = len(whisper_chunks)
+            print(f"[MuseTalk speak] audio_chunks={video_num} ref={ref_id} ({(time.time()-t0)*1000:.0f}ms)", flush=True)
+            batch_size = 2
+            gen = datagen(whisper_chunks=whisper_chunks, vae_encode_latents=latent_cycle,
+                          batch_size=batch_size, delay_frame=0, device=str(device))
+            emitted = 0
+            t1 = time.time()
+            for i, (whisper_batch, latent_batch) in enumerate(gen):
+                audio_feature_batch = self.pe(whisper_batch.to(device))
+                latent_batch = latent_batch.to(device=device, dtype=self.unet.model.dtype)
+                pred_latents = self.unet.model(latent_batch, self.timesteps,
+                                                encoder_hidden_states=audio_feature_batch).sample
+                pred_latents = pred_latents.to(device=device, dtype=self.vae.vae.dtype)
+                recon = self.vae.decode_latents(pred_latents)
+                for res_frame in recon:
+                    bbox = coord_cycle[emitted % len(coord_cycle)]
+                    ori_frame = copy.deepcopy(frame_cycle[emitted % len(frame_cycle)])
+                    x1, y1, x2, y2 = bbox
+                    try:
+                        res_frame_resized = cv2.resize(res_frame.astype(np.uint8), (x2 - x1, y2 - y1))
+                    except Exception:
+                        emitted += 1
+                        continue
+                    combine_frame = get_image(ori_frame, res_frame_resized, [x1, y1, x2, y2],
+                                              mode="jaw", fp=self.fp)
+                    ok, jpg = cv2.imencode(".jpg", combine_frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                    if not ok:
+                        emitted += 1
+                        continue
+                    yield {"frame": jpg.tobytes(), "ref_id": ref_id, "emit_index": emitted, "mode": "speaking"}
+                    emitted += 1
+                del pred_latents, recon, audio_feature_batch
+                torch.cuda.empty_cache()
+            print(f"[MuseTalk speak] emitted={emitted} dt={(time.time()-t1)*1000:.0f}ms", flush=True)
+        finally:
+            try:
+                os.unlink(tmp_wav)
+            except Exception:
+                pass
+
 # ---------------------------------------------------------------------------
 # FastAPI ASGI app
 # ---------------------------------------------------------------------------
@@ -500,7 +693,7 @@ class MuseTalkRunner:
 def fastapi_app():
     import os
 
-    from fastapi import FastAPI, WebSocket, HTTPException, UploadFile, File, Form, Header
+    from fastapi import FastAPI, WebSocket, HTTPException, UploadFile, File, Form, Header, Request
     from fastapi.responses import JSONResponse
 
     api = FastAPI(title="castle-voice-engine MuseTalk")
@@ -580,4 +773,68 @@ def fastapi_app():
             except Exception:
                 pass
 
+    # -------------------------------------------------------------------------
+    # v0.10 Phase 1 continuous endpoints (calcifer 2026-05-25)
+    # -------------------------------------------------------------------------
+    BOUNDARY = "musetalk-frame-boundary"
+
+    def _multipart_frame(jpg_bytes: bytes) -> bytes:
+        header = f"--{BOUNDARY}\r\nContent-Type: image/jpeg\r\nContent-Length: {len(jpg_bytes)}\r\n\r\n"
+        return header.encode("ascii") + jpg_bytes + b"\r\n"
+
+    @api.get("/musetalk/references")
+    async def references(authorization: str | None = Header(None)):
+        _check_auth(authorization)
+        return runner.list_references.remote()
+
+    @api.get("/musetalk/idle_continuous")
+    async def idle_continuous(
+        duration_s: float = 30.0,
+        fps: int = 25,
+        start_ref: str | None = None,
+        rotate_every_s: float | None = None,
+        authorization: str | None = Header(None),
+    ):
+        _check_auth(authorization)
+        from fastapi.responses import StreamingResponse
+
+        def gen():
+            for item in runner.generate_idle_continuous.remote_gen(
+                duration_s=duration_s, fps=fps, start_ref=start_ref,
+                rotate_every_s=rotate_every_s,
+            ):
+                if item.get("error"):
+                    err = item["error"].encode("utf-8")
+                    yield (f"--{BOUNDARY}\r\nContent-Type: text/plain\r\nContent-Length: {len(err)}\r\n\r\n").encode("ascii") + err + b"\r\n"
+                    return
+                yield _multipart_frame(item["frame"])
+            yield f"--{BOUNDARY}--\r\n".encode("ascii")
+
+        return StreamingResponse(gen(), media_type=f"multipart/x-mixed-replace; boundary={BOUNDARY}")
+
+    @api.post("/musetalk/speaking_continuous")
+    async def speaking_continuous(
+        request: Request,
+        fps: int = 25,
+        ref_id: str = "speaking",
+        authorization: str | None = Header(None),
+    ):
+        _check_auth(authorization)
+        from fastapi.responses import StreamingResponse
+        audio_bytes = await request.body()
+        if not audio_bytes:
+            return JSONResponse({"error": "empty body; expected 16kHz mono PCM-16 wav"}, status_code=400)
+
+        def gen():
+            for item in runner.generate_speaking_continuous.remote_gen(
+                audio_bytes, fps=fps, ref_id=ref_id,
+            ):
+                if item.get("error"):
+                    err = item["error"].encode("utf-8")
+                    yield (f"--{BOUNDARY}\r\nContent-Type: text/plain\r\nContent-Length: {len(err)}\r\n\r\n").encode("ascii") + err + b"\r\n"
+                    return
+                yield _multipart_frame(item["frame"])
+            yield f"--{BOUNDARY}--\r\n".encode("ascii")
+
+        return StreamingResponse(gen(), media_type=f"multipart/x-mixed-replace; boundary={BOUNDARY}")
     return api
