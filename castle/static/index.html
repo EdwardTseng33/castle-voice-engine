@@ -1902,26 +1902,16 @@
     }
 
     // v1.2.0 · 訪客模式 · Start 點擊先檢查 auth · 401 彈 GIS modal · 403 顯示邀請畫面
-    // v2.0.18 · 卡西法 5/26 deep debug · user-gesture 內立刻 warmup speakingVideo (autoplay unlock + decode prime)
-    // root cause hypothesis: 某些 mobile 環境 speakingVideo 直到 user gesture 才能 play() · 進通話後第一次 startSpeaking 觸 readyState 不夠 = 嘴沒律動視覺
+    // v2.0.19 · 卡西法 5/26 deep debug · 撤 v2.0.18 play().then(pause()) (cold start 觸 readyState=2 卡 currentTime=0.99 = Edward 真實看到的嘴沒動)
+    // 改 .load() 預熱 buffer · 不 play 不 pause (避免 mid-buffer 中斷) · _setSpeakingLayer readyState guard 補保險
     startBtn.addEventListener("click", function () {
-      // CRITICAL: warmup BOTH videos inside user-gesture handler (synchronous · 不 await · 不 catch 噪音)
       try {
         var _sv = document.getElementById("liveVideoSpeaking");
-        if (_sv) {
-          _sv.muted = true;
-          _sv.loop = true;
-          _sv.playsInline = true;
-          var _spp = _sv.play();
-          if (_spp && _spp.then) {
-            _spp.then(function () {
-              // 立刻 pause 但保持 ready · 之後 _setSpeakingLayer(true) 再 play 不會被 autoplay policy 擋
-              try { _sv.pause(); } catch (e) {}
-              log("[v2.0.18] speakingVideo warmup OK · readyState=" + _sv.readyState);
-            })["catch"](function (err) {
-              log("[v2.0.18] speakingVideo warmup play() rejected: " + (err && err.message));
-            });
-          }
+        if (_sv && _sv.readyState < 3) {
+          try { _sv.load(); } catch (e) {}
+          log("[v2.0.19] speakingVideo .load() warming · readyState=" + _sv.readyState);
+        } else if (_sv) {
+          log("[v2.0.19] speakingVideo already ready · readyState=" + _sv.readyState);
         }
         var _iv = document.getElementById("liveVideo");
         if (_iv && _iv.paused) {
@@ -1929,7 +1919,7 @@
           if (_ivp && _ivp["catch"]) _ivp["catch"](function () {});
         }
       } catch (warmupErr) {
-        log("[v2.0.18] warmup fail: " + warmupErr.message);
+        log("[v2.0.19] warmup fail: " + warmupErr.message);
       }
       askNotifPermissionOnce();
       ensureAuthThenStart().catch(function (err) {
@@ -3221,7 +3211,7 @@
       });
     }
 
-    log("Voice Path v2.0.18 ready - speaking layer warmup on user gesture + verify build - 2026-05-26");
+    log("Voice Path v2.0.19 ready - readyState guard + load buffer warming - 2026-05-26");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();

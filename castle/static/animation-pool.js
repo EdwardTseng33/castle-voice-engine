@@ -356,22 +356,53 @@
         if (!v.getAttribute("src")) v.src = "/static/sophie-speaking.mp4";
         v.loop = true;
         v.muted = true;
-        var p = v.play();
-        if (p && p["catch"]) p["catch"](function () {});
-        v.classList.add("is-visible");
-        try {
-          this.video.style.transform = "";
-          this.video.style.filter = "";
-        } catch (styleErr) {}
+        // v2.0.19 · 卡西法 5/26 deep debug · readyState guard
+        // root cause: cold start / Modal 冷啟 / CDN miss → speakingVideo readyState=2 (HAVE_CURRENT_DATA)
+        // play() 後 currentTime 卡 0.99 不前進 = 嘴 frozen frame = Edward 真實看到「嘴沒動」
+        // guard: readyState >= 3 (HAVE_FUTURE_DATA) 才切 is-visible · 否則 wait canplaythrough 或 1500ms fallback
         var self = this;
-        setTimeout(function () {
+        var doActivate = function () {
           try {
-            if (self.speakingVideo && self.speakingVideo.classList.contains("is-visible") && self.video && !self.video.paused) {
-              self.video.pause();
-              self._idlePausedForSpeaking = true;
-            }
-          } catch (pauseIdleErr) {}
-        }, 220);
+            var pp = v.play();
+            if (pp && pp["catch"]) pp["catch"](function () {});
+            v.classList.add("is-visible");
+            self.video.style.transform = "";
+            self.video.style.filter = "";
+            setTimeout(function () {
+              try {
+                if (self.speakingVideo && self.speakingVideo.classList.contains("is-visible") && self.video && !self.video.paused) {
+                  self.video.pause();
+                  self._idlePausedForSpeaking = true;
+                }
+              } catch (pauseIdleErr) {}
+            }, 220);
+          } catch (actErr) {
+            self._log("v2.0.19 doActivate fail: " + actErr.message);
+          }
+        };
+        if (v.readyState >= 3) {
+          self._log("v2.0.19 speaking activate · readyState=" + v.readyState + " (immediate)");
+          doActivate();
+        } else {
+          self._log("v2.0.19 speaking wait canplaythrough · readyState=" + v.readyState);
+          try { v.load(); } catch (loadErr) {}
+          var fired = false;
+          var onCanPlay = function () {
+            if (fired) return;
+            fired = true;
+            try { v.removeEventListener("canplaythrough", onCanPlay); } catch (e) {}
+            self._log("v2.0.19 canplaythrough fired · readyState=" + v.readyState + " · activate");
+            doActivate();
+          };
+          v.addEventListener("canplaythrough", onCanPlay, { once: true });
+          setTimeout(function () {
+            if (fired) return;
+            fired = true;
+            try { v.removeEventListener("canplaythrough", onCanPlay); } catch (e) {}
+            self._log("v2.0.19 canplaythrough timeout 1500ms · fallback activate · readyState=" + v.readyState);
+            doActivate();
+          }, 1500);
+        }
       } else {
         try {
           if (this.video && this.video.paused) {
