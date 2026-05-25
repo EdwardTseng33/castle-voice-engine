@@ -1584,8 +1584,10 @@
     window.__sophieStableSingleVideo = true;
     window.__sophieEnableAvatarIdleRotation = true;
     window.__sophieEnableAvatarActions = false;
-    // v2.0.13-lipsync-default-on · Edward 5/25 拍板 · 100 句預錄嘴對齊預設開 · 加 ?lipsync=0 關
-    window.__sophieEnableLipsync = qs.get("lipsync") !== "0" && qs.get("lipsync") !== "false";
+    // v2.0.17 · Edward 2026-05-26 03:01 catch「剛開始講話仍然看到一個嘴巴在臉上」= 100 句 lipsync cache 命中 mp4 是「貼嘴」感
+    // 撤 v2.0.13-lipsync-default-on · 改回預設 false · 加 ?lipsync=1 才開
+    // 講話視覺改靠 SpeakingController 切上層 sophie-speaking.mp4 (嘴自然律動 · 5 frame evidence 嘴開合明顯)
+    window.__sophieEnableLipsync = qs.get("lipsync") === "1" || qs.get("lipsync") === "true";
     window.__sophieLipsyncTest = qs.get("lipsync_test") || qs.get("test_lipsync") || "";
 
     try {
