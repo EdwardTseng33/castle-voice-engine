@@ -680,6 +680,27 @@
       .action-btn.start { font-size: 16px; padding: 16px 36px; }
       .actions { gap: 24px; }
     }
+    /* v2.0.22 · Edward 5/26 catch · 桌面打開蘇菲不會被拉超大 · 中央 portrait window + letterbox */
+    /* 觸發條件: 寬 ≥ 768px AND 寬高比 ≥ 1 (即桌面 / 平板橫向) · 手機豎屏完全不影響 */
+    @media (min-width: 768px) and (min-aspect-ratio: 1 / 1) {
+      .shell {
+        background: #0a0a0a; /* letterbox 深色 · 取代滿屏橘 */
+      }
+      .stage-canvas {
+        max-width: calc(100dvh * 9 / 16);
+        margin-left: auto;
+        margin-right: auto;
+        background: var(--sophie-warm); /* stage 內保留橘 (video 載入空檔不閃黑) */
+      }
+      /* top / bottom 跟著 stage 同寬居中 · 不橫跨黑色 letterbox (cinema 風) */
+      .top, .bottom {
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        width: calc(100dvh * 9 / 16);
+        max-width: calc(100dvh * 9 / 16);
+      }
+    }
     @media (max-width: 393px) and (orientation: portrait) {
       .name { font-size: 17px; }
       .action-btn.start { padding: 12px 22px; font-size: 14px; }
@@ -1821,6 +1842,19 @@
         logEl.scrollTop = logEl.scrollHeight;
       }
     }
+
+    // v2.0.22 · PWA mode detect (Edward 5/26 iPhone PWA verify) · standalone 模式加 .is-pwa class
+    try {
+      var _isPwaMode = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+                       (window.navigator && window.navigator.standalone === true) ||
+                       (window.location.search.indexOf('launched_from=pwa') !== -1);
+      if (_isPwaMode) {
+        document.documentElement.classList.add('is-pwa');
+        log("[PWA] standalone mode · 加到主畫面開啟、預設 fullscreen 無 Safari chrome");
+      } else {
+        log("[PWA] browser tab mode · 從瀏覽器網址列開啟");
+      }
+    } catch (e) { log("[PWA] detect fail: " + e.message); }
 
     function clearLipsyncKick() {
       if (window.__sophieLipsyncKickTimer) {
@@ -3346,7 +3380,7 @@
       });
     }
 
-    log("Voice Path v2.0.21 ready - VAD 調穩 + 自己鏡頭小窗 + 暖機 overlay - 2026-05-26");
+    log("Voice Path v2.0.22 ready - 桌面 portrait window + letterbox + PWA detect - 2026-05-26");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
