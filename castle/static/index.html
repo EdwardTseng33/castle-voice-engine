@@ -432,6 +432,79 @@
     /* 修法：is-rotating 期間 opacity 保持 1 · 不透底色 · 改用 video.src preload 完才切 (next idle ready 才換) */
     /* fade 機制改：先 ready 再 swap · transition 500ms 接縫平順 */
     .live-video.is-rotating { opacity: 1; transition: opacity 500ms ease-out; }
+
+    /* v2.0.21 · Self-view 右下角小窗 · 用戶看自己鏡頭確認有開 (Edward 5/26 catch) */
+    .self-view {
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      width: 110px;
+      height: 82px;
+      object-fit: cover;
+      border-radius: 10px;
+      border: 1.5px solid rgba(255, 255, 255, 0.35);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+      background: #000;
+      z-index: 6;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 250ms ease-out;
+      transform: scaleX(-1); /* 鏡像 · 像照鏡子自然 */
+    }
+    .self-view.is-active { opacity: 1; pointer-events: auto; }
+    @media (max-width: 600px) {
+      .self-view { width: 88px; height: 66px; right: 10px; bottom: 96px; }
+    }
+
+    /* v2.0.21 · 暖機 overlay · 連線好之前不讓用戶以為可以馬上講 (Edward 5/26 catch) */
+    .ready-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 7;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 280ms ease-out;
+    }
+    .ready-overlay.is-active { opacity: 1; pointer-events: auto; }
+    .ready-overlay-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      color: rgba(255, 255, 255, 0.95);
+      text-align: center;
+      padding: 24px 28px;
+      background: rgba(20, 12, 8, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 14px;
+    }
+    .ready-spinner {
+      width: 28px;
+      height: 28px;
+      border: 2.5px solid rgba(255, 255, 255, 0.22);
+      border-top-color: var(--sophie-warm, #C95B2E);
+      border-radius: 50%;
+      animation: ready-spin 0.9s linear infinite;
+    }
+    @keyframes ready-spin {
+      to { transform: rotate(360deg); }
+    }
+    .ready-text {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .ready-hint {
+      font-size: 12px;
+      opacity: 0.72;
+      letter-spacing: 0.3px;
+    }
     .bottom {
       position: absolute;
       bottom: 0; left: 0; right: 0;
@@ -688,7 +761,24 @@
       ></video>
       <audio class="live-audio" id="liveAudio" autoplay playsinline></audio>
 
+      <!-- v2.0.21 · Edward 5/26 catch · 視訊 self-view 右下角小窗 (用戶確認自己鏡頭有開) -->
+      <video
+        class="self-view"
+        id="selfView"
+        autoplay
+        muted
+        playsinline
+        aria-hidden="true"
+      ></video>
 
+      <!-- v2.0.21 · Edward 5/26 catch · 暖機提示 overlay (連線好之前不讓用戶以為可以馬上講) -->
+      <div class="ready-overlay" id="readyOverlay" role="status">
+        <div class="ready-overlay-inner">
+          <div class="ready-spinner"></div>
+          <div class="ready-text">正在喚醒蘇菲...</div>
+          <div class="ready-hint">她準備好會跟你打招呼</div>
+        </div>
+      </div>
 
       <div class="err-bar" id="errBar" role="alert"></div>
       <div class="log" id="log" aria-hidden="true"></div>
@@ -1963,6 +2053,12 @@
     async function startConversation() {
       if (shell.getAttribute("data-state") !== "idle") return;
       startBtn.disabled = true;
+      // v2.0.21 · 顯示「正在喚醒蘇菲」overlay · ready 後 (蘇菲第一個 audio.delta) 隱藏
+      try {
+        var _ro = document.getElementById("readyOverlay");
+        if (_ro) _ro.classList.add("is-active");
+        window.__sophieReady = false;
+      } catch (e) {}
       // v1.3.5 · 通話開始 · 停 pre-call 待機輪播 (in-call 由 GPT 主導)
       if (animPool && typeof animPool.stopPreCallRotation === "function") {
         try { animPool.stopPreCallRotation(); } catch (e) {}
@@ -2010,6 +2106,14 @@
         try {
           var aCount = localStream.getAudioTracks().length;
           var vCount = localStream.getVideoTracks().length;
+          // v2.0.21 · 把自己鏡頭 attach 到右下角小窗 (Edward 5/26 catch · 用戶要確認鏡頭真有開)
+          try {
+            var _sv = document.getElementById("selfView");
+            if (_sv && vCount > 0) {
+              _sv.srcObject = localStream;
+              _sv.classList.add("is-active");
+            }
+          } catch (e) { log("[selfView] attach fail: " + e.message); }
           window.__sophieClientCameraActive = vCount > 0 && camOn;
           log("user media tracks audio=" + aCount + " video=" + vCount + " camOn=" + camOn);
         } catch (trackLogErr) {
@@ -2338,12 +2442,14 @@
                   input: {
                     transcription: { model: "whisper-1" },
                     turn_detection: {
-                      // v1.2.0d · Edward 5/23 catch「對話遲鈍」· 加快 GPT 接話
-                      // silence_duration 800 → 450ms · GPT 偵到你停 450ms 就開始回 (原 800 太遲鈍)
+                      // v2.0.21 · Edward 5/26 catch「沒講話蘇菲腦補」· 把 VAD 敏感度降一點
+                      // threshold 0.5 → 0.62 (環境噪音 / 呼吸不算 user 講話)
+                      // silence 650 → 800ms (再耐心一點 · 你停半秒蘇菲不急著接)
+                      // v1.2.0d 原本為了「對話不遲鈍」把 silence 砍到 450 後又升 650 · 5/26 再升 800 找平衡
                       type: "server_vad",
-                      threshold: 0.5,
+                      threshold: 0.62,
                       prefix_padding_ms: 300,
-                      silence_duration_ms: 650,
+                      silence_duration_ms: 800,
                       create_response: true
                     }
                   },
@@ -2718,6 +2824,15 @@
               }
             } else if (data.type === "response.audio.delta" || data.type === "response.output_audio.delta") {
               extendSpeakingHold(12000, data.type);
+              // v2.0.21 · 第一個 audio.delta 到 = 真的 ready · 隱藏「正在喚醒蘇菲」overlay
+              if (!window.__sophieReady) {
+                window.__sophieReady = true;
+                try {
+                  var _ro2 = document.getElementById("readyOverlay");
+                  if (_ro2) _ro2.classList.remove("is-active");
+                  log("[v2.0.21] ready overlay hidden · sophie 開口了");
+                } catch (e) {}
+              }
               // v1.3.1 CRITICAL FIX · OpenAI Realtime 不 emit *.start · 改聽第一個 audio delta trigger startSpeaking
               if (!window.__sophieSpeakingTriggered && animPool && typeof animPool.startSpeaking === "function") {
                 window.__sophieSpeakingTriggered = true;
@@ -3094,6 +3209,17 @@
         localStream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
         localStream = null;
       }
+      // v2.0.21 · 通話結束清 self-view (避免黑窗殘留)
+      try {
+        var _svEnd = document.getElementById("selfView");
+        if (_svEnd) {
+          _svEnd.srcObject = null;
+          _svEnd.classList.remove("is-active");
+        }
+        var _roEnd = document.getElementById("readyOverlay");
+        if (_roEnd) _roEnd.classList.remove("is-active");
+        window.__sophieReady = false;
+      } catch (e) {}
       liveAudio.srcObject = null;
       // liveVideo not touched - video loop always playing (v0.7.2 spec)
       stopTimer();
@@ -3220,7 +3346,7 @@
       });
     }
 
-    log("Voice Path v2.0.20 ready - response.create guard (修「Conversation already has an active response in progress」) - 2026-05-26");
+    log("Voice Path v2.0.21 ready - VAD 調穩 + 自己鏡頭小窗 + 暖機 overlay - 2026-05-26");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
