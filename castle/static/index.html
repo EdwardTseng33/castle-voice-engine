@@ -2451,7 +2451,8 @@
             "\n- 翻譯模式 on → 跨國對話即時口譯 · 保留文化感不逐字" +
             "\n- 會議模式 on → 靜音聆聽 · Edward 喚才回" +
             "\n- 靜音 / 主動 / 私語模式 → set_meeting_mode 切換" +
-            "\n\n[紅線] 不簽合約 / 不動錢 / 不做承諾 / 不講 Edward 家人隱私（不指名、不深入）/ 不講 Edward 個人敏感資訊。";
+            "\n\n[紅線] 不簽合約 / 不動錢 / 不做承諾 / 不講 Edward 家人隱私（不指名、不深入）/ 不講 Edward 個人敏感資訊。" +
+            "\n\n[視覺] 目前還沒接到視訊看 Edward · 不要主動講「我看到你」「你今天穿什麼」「你看起來累」這種視覺評論。如果他問你「看得到我嗎」、就誠實答「視訊還沒接上、我只能聽到你、不過你聲音聽起來 OK」這種、別硬演看見。";
           // v1.9.9 · 精簡 directives · 從爆長合併 · 解延遲
           var perceptionDirective = "\n\n[工具用法] 只有需要真實資料或外部狀態時才呼叫工具，不要為了像助理而亂叫:" +
             "\n- 時間/星期/早午晚 → get_time_context" +
@@ -3397,7 +3398,7 @@
       });
     }
 
-    log("Voice Path v2.0.26 - 修桌面整片黑 (stage flex+margin-auto 寬度 0 → 改 width + align-self center) - 2026-05-26");
+    log("Voice Path v2.0.27 - 視覺管線誠實止血 (Modal 雲端沒實體鏡頭、蘇菲不再亂講看到) - 2026-05-26");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
