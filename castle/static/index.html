@@ -406,8 +406,9 @@
       align-items: center;
       justify-content: center;
       overflow: hidden;
-      /* v1.9.1 · stage 底色 Sophie 主色橘 · video 載入空檔不閃黑 */
-      background: var(--sophie-warm);
+      /* v2.0.23 · Edward 5/26 catch · 切換閃頻緩解 · 從橘色 #C95B2E 改深棕 #1f120b */
+      /* 之前橘色閃頻 = video swap 時 stage 底色透出橘色非常明顯 · 深棕 = 接近 video 暗部 = 切換時不違和 */
+      background: #1f120b;
     }
     .live-video {
       position: absolute;
@@ -690,7 +691,7 @@
         max-width: calc(100dvh * 9 / 16);
         margin-left: auto;
         margin-right: auto;
-        background: var(--sophie-warm); /* stage 內保留橘 (video 載入空檔不閃黑) */
+        background: #1f120b; /* v2.0.23 · 桌面 stage 也改深棕 · 跟手機版一致 · 切換不閃橘 */
       }
       /* top / bottom 跟著 stage 同寬居中 · 不橫跨黑色 letterbox (cinema 風) */
       .top, .bottom {
@@ -1662,7 +1663,7 @@
   <script src="/static/session-memory.js?v=2.0.6"></script>
   <script src="/static/conversation-memory.js?v=2.0.6"></script>
   <script src="/static/avatar-director.js?v=2.0.6"></script>
-  <script src="/static/animation-pool.js?v=2.0.20-response-create-guard"></script>
+  <script src="/static/animation-pool.js?v=2.0.23-emotion-pool-and-flicker"></script>
   <script src="/static/phrase-matcher.js?v=2.0.6"></script>
 
   <script>
@@ -2460,7 +2461,7 @@
             "\n- 我手頭有什麼/該動什麼 → get_work_status" +
             "\n- 即時狀態 (在不在電腦前/通話/專注) → get_perception · 每場 2-3 次上限不亂呼叫";
           var brainDirective = "\n\n[派工] 短話自己答。需要深度思考/規劃/判斷時，先用一句自然話承接，再 ask_claude；不要一開口就像在派工。";
-          var animDirective = "\n\n[動畫] 目前穩定模式下少呼叫 emit_animation_state；只有很明顯的 greeting / happy / apologetic / task-received 才呼叫，每次回覆最多 1 個。";
+          var animDirective = "\n\n[動畫] 對話時自然依情緒呼叫 emit_animation_state、讓自己活起來：\n- 開頭打招呼 / 你回來 → greeting 或 intimate-greeting\n- 你完成一件事 / 報好消息 → happy\n- 收到你的派工 / 答應做事 → task-received 或 acknowledgement\n- 派工結束 / 道別 → task-handoff 或 intimate-farewell\n- 撒嬌 / 玩耍 / 你說笑話 → playful\n- 沒事閒著或思考 → 不用呼叫、讓底層 idle 跑\n- 道歉 / 自責 → apologetic\n- 失落 / 累 → resigned\n每段回覆最多 1 個、自然就好、不刻意。speaking 動畫不要呼叫 (audio event 自動驅動)。
           var lipsyncDirective = window.__sophieEnableLipsync === true
             ? "\n\n[嘴型對齊測試] 如果自然剛好能用句庫短句開頭，可以用；不要為了對嘴犧牲語意與聊天自然度。"
             : "\n\n[嘴型對齊] 目前關閉。不要刻意套句庫，請優先自然聊天。";
@@ -2837,6 +2838,15 @@
                 window.__sophiePhraseMatched = false;
                 window.__sophieResponseActive = true;
                 window.__sophieResponseCreateSentAt = 0;  // v2.0.20 · 確認收到 · 清 sent timestamp
+                // v2.0.23 · response.created 也算 ready · 隱藏「正在喚醒蘇菲」overlay (蘇菲開始 response = 連線 100% OK)
+                if (!window.__sophieReady) {
+                  window.__sophieReady = true;
+                  try {
+                    var _roRC = document.getElementById("readyOverlay");
+                    if (_roRC) _roRC.classList.remove("is-active");
+                    log("[v2.0.23] ready overlay hidden via response.created · 蘇菲已可對話");
+                  } catch (e) {}
+                }
                 sophieTextBuffer = "";
                 // v1.9.15 · 霍爾刀 3 · reset 視覺鎖 (上輪可能 lipsync 中斷沒清乾淨)
                 window.__sophieLipsyncActive = false;
@@ -2896,6 +2906,15 @@
                 } catch (e) {}
               }
             } else if (data.type === "response.audio_transcript.delta" || data.type === "response.output_audio_transcript.delta") {
+              // v2.0.23 · transcript.delta 也算 ready · 隱藏「正在喚醒蘇菲」overlay (蘇菲開始輸出文字 = 連線成功)
+              if (!window.__sophieReady) {
+                window.__sophieReady = true;
+                try {
+                  var _roT = document.getElementById("readyOverlay");
+                  if (_roT) _roT.classList.remove("is-active");
+                  log("[v2.0.23] ready overlay hidden via transcript.delta · 蘇菲已可對話");
+                } catch (e) {}
+              }
               // v1.1.0 · 累積 transcript chunk · 餵桌面通知 body
               if (!window.__sophieSpeakingTriggered && animPool && typeof animPool.startSpeaking === "function") {
                 window.__sophieSpeakingTriggered = true;
@@ -3380,7 +3399,7 @@
       });
     }
 
-    log("Voice Path v2.0.22 ready - 桌面 portrait window + letterbox + PWA detect - 2026-05-26");
+    log("Voice Path v2.0.23 ready - 情緒動畫鬆綁 + overlay 早關 + 待機池加情緒 + 閃頻緩解 - 2026-05-26");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();

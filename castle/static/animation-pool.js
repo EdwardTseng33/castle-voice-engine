@@ -82,18 +82,24 @@
     this._preCall = false; // v1.2.0b · pre-call (未 Start) 用 rich 池
   }
   // v1.3.5 · 待機豐富動作池 · 適合 pre-call (未 Start) 場景 · 砍情緒反應類
-  // 機率：65% idle (4 變體輪播)
-  //      15% stroke-hair (摸頭髮 / 撒嬌)
-  //      12% playful (玩耍 / 表情變化)
-  //      8% greeting (打招呼 hello)
-  // 砍：intimate-* (親密互動 · 訪客不該看)
-  // 砍：acknowledgement / happy / apologetic / resigned (對話反應類 · 不適合待機 random)
+  // v2.0.23 · Edward 5/26 catch · 加情緒類進 pre-call 池 · 蘇菲待機更生動
+  // 機率：55% idle (4 變體輪播)
+  //      13% stroke-hair (摸頭髮 / 撒嬌)
+  //      11% playful (玩耍 / 表情變化)
+  //      7% greeting (打招呼 hello)
+  //      7% happy (開心 · 新加 v2.0.23)
+  //      4% acknowledgement (輕點頭 · 新加 v2.0.23)
+  //      3% intimate-greeting (親近招呼 · 新加 v2.0.23 · L2 伴侶感)
+  // 砍：speaking / task-* / apologetic / resigned / intimate-farewell (對話 / 負面 / 結束類 · 不適合待機 random)
   IdleRotator.prototype._pickPreCallRich = function () {
     var r = Math.random();
-    if (r < 0.65) return IDLE_VARIANTS[Math.floor(Math.random() * IDLE_VARIANTS.length)];
-    if (r < 0.80) return "stroke-hair";
-    if (r < 0.92) return "playful";
-    return "greeting";
+    if (r < 0.55) return IDLE_VARIANTS[Math.floor(Math.random() * IDLE_VARIANTS.length)];
+    if (r < 0.68) return "stroke-hair";
+    if (r < 0.79) return "playful";
+    if (r < 0.86) return "greeting";
+    if (r < 0.93) return "happy";
+    if (r < 0.97) return "acknowledgement";
+    return "intimate-greeting";
   };
   IdleRotator.prototype.pickNext = function () {
     var h = new Date().getHours();
@@ -659,7 +665,11 @@
       "idle-4": "/static/sophie-idle-4.mp4",
       "stroke-hair": "/static/sophie-stroke-hair.mp4",
       "playful": "/static/sophie-playful.mp4",
-      "greeting": "/static/sophie-greeting.mp4"
+      "greeting": "/static/sophie-greeting.mp4",
+      // v2.0.23 · 加情緒類 (Edward 5/26 catch · 待機更生動)
+      "happy": "/static/sophie-happy.mp4",
+      "acknowledgement": "/static/sophie-acknowledgement.mp4",
+      "intimate-greeting": "/static/sophie-intimate-greeting.mp4"
     };
     // 走 preload-first swap (preload next 完才切 · is-rotating opacity 1 · 不透底色)
     // 動作類 (stroke-hair / playful / greeting) 播完接回 random idle (loop)
