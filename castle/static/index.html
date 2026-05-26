@@ -1551,7 +1551,7 @@
   <script src="/static/session-memory.js?v=2.0.6"></script>
   <script src="/static/conversation-memory.js?v=2.0.6"></script>
   <script src="/static/avatar-director.js?v=2.0.6"></script>
-  <script src="/static/animation-pool.js?v=2.0.16-revert-talking-idle"></script>
+  <script src="/static/animation-pool.js?v=2.0.20-response-create-guard"></script>
   <script src="/static/phrase-matcher.js?v=2.0.6"></script>
 
   <script>
@@ -2081,6 +2081,30 @@
         })();
         log("sophie session id: " + window.__sophieSessionId);
         var dc = peerConn.createDataChannel("oai-events");
+        // v2.0.20 · 修「Conversation already has an active response in progress」
+        // root: server_vad 模式下 OpenAI 偵到使用者一發出聲音就自動建 response
+        // 開頭問候那 2 條路徑只檢查 __sophiePendingGreeting · 沒檢查 active response → 雙觸發
+        // 統一 guard helper · 4 條送 response.create 都走這
+        function sendResponseCreateGuarded(source) {
+          if (window.__sophieResponseActive) {
+            log("[GUARD] skip response.create from " + source + " · response already active");
+            return false;
+          }
+          if (window.__sophieResponseCreateSentAt && (Date.now() - window.__sophieResponseCreateSentAt) < 4000) {
+            log("[GUARD] skip response.create from " + source + " · sent " + (Date.now() - window.__sophieResponseCreateSentAt) + "ms ago · waiting response.created");
+            return false;
+          }
+          try {
+            dc.send(JSON.stringify({ type: "response.create" }));
+            window.__sophieResponseCreateSentAt = Date.now();
+            log("response.create sent (" + source + ")");
+            return true;
+          } catch (e) {
+            log("response.create send fail (" + source + "): " + e.message);
+            return false;
+          }
+        }
+        window.__sophieSendResponseCreate = sendResponseCreateGuarded;
         dc.addEventListener("open", function () {
           log("dc open");
 
@@ -2580,13 +2604,8 @@
             // fallback: 1800ms 後若還沒 trigger 就強制 send (避免 session.updated 事件丟失永遠不講)
             setTimeout(function () {
               if (window.__sophiePendingGreeting) {
-                try {
-                  dc.send(JSON.stringify({ type: "response.create" }));
-                  window.__sophiePendingGreeting = false;
-                  log("response.create sent (fallback timer · 1800ms)");
-                } catch (e) {
-                  log("response.create fallback send fail: " + e.message);
-                }
+                window.__sophiePendingGreeting = false;
+                sendResponseCreateGuarded("fallback timer · 1800ms");
               }
             }, 1800);
           } catch (e) {
@@ -2664,12 +2683,7 @@
               // v1.2.0d · session.updated 後立刻 trigger opening greeting · 確保 GPT 開頭就講 HELLO
               if (data.type === "session.updated" && window.__sophiePendingGreeting) {
                 window.__sophiePendingGreeting = false;
-                try {
-                  dc.send(JSON.stringify({ type: "response.create" }));
-                  log("response.create sent (session.updated trigger)");
-                } catch (e) {
-                  log("response.create send fail: " + e.message);
-                }
+                sendResponseCreateGuarded("session.updated trigger");
               }
               // v1.3.1 · response.created 時 reset speaking trigger flag (每次新回應重新等第一個 audio delta)
               if (data.type === "response.created") {
@@ -2682,6 +2696,7 @@
                 window.__sophieSpeakingTriggered = false;
                 window.__sophiePhraseMatched = false;
                 window.__sophieResponseActive = true;
+                window.__sophieResponseCreateSentAt = 0;  // v2.0.20 · 確認收到 · 清 sent timestamp
                 sophieTextBuffer = "";
                 // v1.9.15 · 霍爾刀 3 · reset 視覺鎖 (上輪可能 lipsync 中斷沒清乾淨)
                 window.__sophieLipsyncActive = false;
@@ -2691,6 +2706,7 @@
                 clearLipsyncKick();
                 // v1.9.12 · response 結束 · 清標記
                 window.__sophieResponseActive = false;
+                window.__sophieResponseCreateSentAt = 0;  // v2.0.20 · response 結束 · 清 sent timestamp
                 if (window.__sophieSpeakingTriggered && !window.__sophieStopSpeakingTimer) {
                   window.__sophieStopSpeakingTimer = setTimeout(function () {
                     window.__sophieStopSpeakingTimer = null;
@@ -2902,13 +2918,8 @@
                             output: String(output)
                           }
                         }));
-                        // v1.9.12 · 修雙聲音 bug · 只在沒有 active response 時才 trigger 新的
-                        if (!window.__sophieResponseActive) {
-                          dc.send(JSON.stringify({ type: "response.create" }));
-                          log("[BRAIN] response.create sent (no active response)");
-                        } else {
-                          log("[BRAIN] skip response.create · response already active · 避免雙聲音");
-                        }
+                        // v1.9.12 + v2.0.20 · 走統一 guard helper · 同時擋 active + 4 秒內已送
+                        sendResponseCreateGuarded("[BRAIN] " + fnName + " result");
                       } catch (sErr) {
                         log("[BRAIN] dc.send result fail: " + sErr.message);
                       }
@@ -2924,9 +2935,7 @@
                             output: "我大腦現在卡住、等下再試"
                           }
                         }));
-                        if (!window.__sophieResponseActive) {
-                          dc.send(JSON.stringify({ type: "response.create" }));
-                        }
+                        sendResponseCreateGuarded("[BRAIN] " + fnName + " fetch fail");
                       } catch (e2) {}
                     });
                 }
@@ -3211,7 +3220,7 @@
       });
     }
 
-    log("Voice Path v2.0.19 ready - readyState guard + load buffer warming - 2026-05-26");
+    log("Voice Path v2.0.20 ready - response.create guard (修「Conversation already has an active response in progress」) - 2026-05-26");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
