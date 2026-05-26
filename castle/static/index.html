@@ -472,7 +472,8 @@
       pointer-events: none;
       transition: opacity 280ms ease-out;
     }
-    .ready-overlay.is-active { opacity: 1; pointer-events: auto; }
+    /* v2.0.24 hotfix · pointer-events 永遠 none · 純視覺、不擋下層點擊 (Edward 5/26「沒辦法點」緊急修) */
+    .ready-overlay.is-active { opacity: 1; }
     .ready-overlay-inner {
       display: flex;
       flex-direction: column;
@@ -682,6 +683,7 @@
       .actions { gap: 24px; }
     }
     /* v2.0.22 · Edward 5/26 catch · 桌面打開蘇菲不會被拉超大 · 中央 portrait window + letterbox */
+    /* v2.0.24 hotfix · 移除 .top / .bottom 的 transform 限寬 (Edward 5/26「沒辦法點」緊急修) */
     /* 觸發條件: 寬 ≥ 768px AND 寬高比 ≥ 1 (即桌面 / 平板橫向) · 手機豎屏完全不影響 */
     @media (min-width: 768px) and (min-aspect-ratio: 1 / 1) {
       .shell {
@@ -691,16 +693,10 @@
         max-width: calc(100dvh * 9 / 16);
         margin-left: auto;
         margin-right: auto;
-        background: #1f120b; /* v2.0.23 · 桌面 stage 也改深棕 · 跟手機版一致 · 切換不閃橘 */
+        background: #1f120b; /* v2.0.23 · 桌面 stage 也改深棕 · 切換不閃橘 */
       }
-      /* top / bottom 跟著 stage 同寬居中 · 不橫跨黑色 letterbox (cinema 風) */
-      .top, .bottom {
-        left: 50%;
-        right: auto;
-        transform: translateX(-50%);
-        width: calc(100dvh * 9 / 16);
-        max-width: calc(100dvh * 9 / 16);
-      }
+      /* v2.0.24 · top / bottom 維持跨整個 shell 寬度 · 按鈕點得到 · 文字在 letterbox 上 OK */
+      /* (v2.0.22 用 transform translateX 居中疑似讓 button hit-area 偏移 · Edward 點不到) */
     }
     @media (max-width: 393px) and (orientation: portrait) {
       .name { font-size: 17px; }
@@ -3399,7 +3395,7 @@
       });
     }
 
-    log("Voice Path v2.0.23 ready - 情緒動畫鬆綁 + overlay 早關 + 待機池加情緒 + 閃頻緩解 - 2026-05-26");
+    log("Voice Path v2.0.24 hotfix - 修「沒辦法點」(top/bottom transform 還原 + ready overlay 永遠不擋) - 2026-05-26");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
