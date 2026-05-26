@@ -434,27 +434,55 @@
     /* fade 機制改：先 ready 再 swap · transition 500ms 接縫平順 */
     .live-video.is-rotating { opacity: 1; transition: opacity 500ms ease-out; }
 
-    /* v2.0.21 · Self-view 右下角小窗 · 用戶看自己鏡頭確認有開 (Edward 5/26 catch) */
+    /* v2.0.28 · Self-view 右上角 · 無邊框 · 精緻陰影 (Edward 5/26 二次調) */
+    /* 3:4 portrait 跟 shape · webcam 4:3 用 cover 裁左右、剛好留中央臉 · 跟蘇菲影片直式風格呼應 */
     .self-view {
       position: absolute;
-      right: 12px;
-      bottom: 12px;
-      width: 110px;
-      height: 82px;
+      right: 16px;
+      top: 16px;
+      width: 96px;
+      height: 128px;
       object-fit: cover;
-      border-radius: 10px;
-      border: 1.5px solid rgba(255, 255, 255, 0.35);
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+      border-radius: 16px;
+      border: 0;
+      /* 無輪廓、靠多層柔和陰影 + 微內反光浮起 */
+      box-shadow:
+        0 14px 36px rgba(0, 0, 0, 0.55),
+        0 4px 12px rgba(0, 0, 0, 0.38),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
       background: #000;
-      z-index: 6;
+      z-index: 25;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 250ms ease-out;
-      transform: scaleX(-1); /* 鏡像 · 像照鏡子自然 */
+      /* 進場柔和淡入 + 微下沉 · 比硬閃自然 */
+      transition: opacity 360ms ease-out, transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+      transform: translateY(-6px) scale(0.94);
+      will-change: transform, opacity;
+      backface-visibility: hidden;
     }
-    .self-view.is-active { opacity: 1; pointer-events: auto; }
+    .self-view video, .self-view {
+      /* 鏡像 · 像照鏡子自然 */
+    }
+    .self-view.is-active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0) scale(1);
+    }
+    /* 鏡像放在 inner 樣式、避開 transform 跟 translateY 衝突 → 用 filter 不會擋 transform animation */
+    .self-view { transform-origin: top right; }
+    .self-view.is-active { transform: translateY(0) scale(1) scaleX(-1); }
+    .self-view { transform: translateY(-6px) scale(0.94) scaleX(-1); }
     @media (max-width: 600px) {
-      .self-view { width: 88px; height: 66px; right: 10px; bottom: 96px; }
+      .self-view {
+        width: 76px;
+        height: 102px;
+        right: 12px;
+        top: 12px;
+        border-radius: 13px;
+        box-shadow:
+          0 10px 26px rgba(0, 0, 0, 0.52),
+          0 3px 8px rgba(0, 0, 0, 0.36);
+      }
     }
 
     /* v2.0.21 · 暖機 overlay · 連線好之前不讓用戶以為可以馬上講 (Edward 5/26 catch) */
@@ -3398,7 +3426,7 @@
       });
     }
 
-    log("Voice Path v2.0.27 - 視覺管線誠實止血 (Modal 雲端沒實體鏡頭、蘇菲不再亂講看到) - 2026-05-26");
+    log("Voice Path v2.0.28 - 鏡頭小窗移右上 + 無邊框 + 雙層柔陰影 + 進場淡入 - 2026-05-26");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
