@@ -690,10 +690,12 @@
         background: #0a0a0a; /* letterbox 深色 · 取代滿屏橘 */
       }
       .stage-canvas {
-        max-width: calc(100dvh * 9 / 16);
-        margin-left: auto;
-        margin-right: auto;
-        background: #1f120b; /* v2.0.23 · 桌面 stage 也改深棕 · 切換不閃橘 */
+        /* v2.0.26 · Edward 5/26 catch · 桌面整片黑、影片寬度 0 · root cause = flex column + margin auto = 寬度被壓成 0 */
+        /* 改用固定 width + align-self center 居中 · 不再靠 margin auto */
+        width: calc(100dvh * 9 / 16);
+        max-width: 100vw;
+        align-self: center;
+        background: #1f120b; /* 切換不閃橘 */
       }
       /* v2.0.24 · top / bottom 維持跨整個 shell 寬度 · 按鈕點得到 · 文字在 letterbox 上 OK */
       /* (v2.0.22 用 transform translateX 居中疑似讓 button hit-area 偏移 · Edward 點不到) */
@@ -3395,7 +3397,7 @@
       });
     }
 
-    log("Voice Path v2.0.25 critical hotfix - 修 v2.0.23 SyntaxError (animDirective 結尾缺引號分號 · 全頁 JS crash 按鈕全死) - 2026-05-26");
+    log("Voice Path v2.0.26 - 修桌面整片黑 (stage flex+margin-auto 寬度 0 → 改 width + align-self center) - 2026-05-26");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
