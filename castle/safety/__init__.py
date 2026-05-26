@@ -1,20 +1,11 @@
 # castle-voice-engine / castle/safety/
 # (c) 2026 Edward / BeyondPath
 #
-# 安全守則程式碼層 implementation · ADR-018 / ADR-020 hard rules 落 code
+# v0.3.0 (2026-05-26): subject_guard 砍除
+# 原因: 內含的「Sally 6 歲 hard rule」基於錯誤前提建立
+#       (Sally = Qiana 家人成年女性 · 非未成年 · 紀律記憶被污染)
+# 後續: 真有未成年互動場景再重做、不留死碼養鬼影
 #
-# 跨 Phase 共用 (Phase 2 後半段 SpeechBrain enrollment / Phase 3 鏡頭 / Phase 3.2 SoulX)
+# 保留此目錄佔位、後續安全機制有真實需求時再 implement。
 
-from castle.safety.subject_guard import (
-    SubjectGuardError,
-    SallyHardRule,
-    enforce_subject_whitelist,
-    check_age_metadata,
-)
-
-__all__ = [
-    "SubjectGuardError",
-    "SallyHardRule",
-    "enforce_subject_whitelist",
-    "check_age_metadata",
-]
+__all__ = []

@@ -18,11 +18,12 @@ Phase 3.2 PoC (2026-05-22) - Edward 拍板「自用 + 不商業化 + 超強蘇�
   - 不上傳 weights 到 git (gitignored models/)
   - 不餵 Sally 樣本 (hard rule)
 
-Edward 邊界規則 (個人自用):
+Edward 邊界規則 (個人自用 · 2026-05-26 校正):
   - Edward 自己樣本: OK
-  - Qiana 自願試: OK
-  - Sally 6 歲: 永遠不餵 (hard rule)
-  - 訪客: 不餵
+  - Qiana 自願試 (informed consent): OK
+  - 訪客 / 旁邊路過的人: 不主動錄
+  - 真有未成年互動場景出現時、屆時以真實需求重做安全機制
+  - (v0.3.0 移除原「Sally 6 歲」hard rule · 記憶污染、實際無此對象)
 """
 
 from __future__ import annotations

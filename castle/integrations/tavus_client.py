@@ -20,7 +20,7 @@
 #
 # Discipline:
 #   - API key read from env (TAVUS_API_KEY) · never hardcoded · never logged
-#   - Sally hard rule enforced by callers (subject_guard.enforce_subject_whitelist)
+#   - v0.3.0 (2026-05-26): subject_guard 已砍 · 不再 enforce subject hard rule
 #   - All async (httpx.AsyncClient) · does not block FastAPI loop
 #   - No official Python SDK exists; this is the thin idiomatic wrapper
 #

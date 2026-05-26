@@ -1053,7 +1053,7 @@
             <li>log_meeting_turn · 對方說重點即時記下進共用記事本</li>
             <li>meeting_status · 進度 + 剩時 + 超時提醒 (10-15 分鐘自查)</li>
             <li>end_meeting · Claude 整理摘要 + 重點決議 + 待辦 + 需 Edward 確認</li>
-            <li>紅線：不簽合約 / 不動錢 / 不做承諾 / 不洩露 Sally · 高風險決定『會後給您』</li>
+            <li>紅線：不簽合約 / 不動錢 / 不做承諾 / 不洩露 Edward 隱私 · 高風險決定『會後給您』</li>
           </ul>
         </article>
         <article class="vm-entry">
@@ -1201,7 +1201,7 @@
             <li>後端 /memory/summarize · Claude Haiku stateless 摘要 (summary / mood / promises)</li>
             <li>pickGreetingV2 開場帶昨天 promise / mood reference · 不裝失憶</li>
             <li>通話結束自動 summarizeDay · TTL 自動清 raw 7 天 / summary 30 天</li>
-            <li>隱私 · raw 對話只在 browser IndexedDB · 後端不存 · Sally / PII 紅線 inherit</li>
+            <li>隱私 · raw 對話只在 browser IndexedDB · 後端不存 · 個資紅線繼承 prompt 層</li>
           </ul>
         </article>
         <article class="vm-entry">
@@ -1305,7 +1305,7 @@
           <ul class="vm-list">
             <li>三層架構上線（聽 Breeze ASR / 說 GPT realtime / 嘴 MuseTalk）</li>
             <li>Modal A10G 自家後台 ≈ $66/月嘴對齊層</li>
-            <li>Sally 6 歲紅線守則雙層防護</li>
+            <li>個資紅線 prompt 層守護 + 摘要層 PII 過濾</li>
           </ul>
         </article>
       </div>
@@ -2314,7 +2314,7 @@
             "\n- 翻譯模式 on → 跨國對話即時口譯 · 保留文化感不逐字" +
             "\n- 會議模式 on → 靜音聆聽 · Edward 喚才回" +
             "\n- 靜音 / 主動 / 私語模式 → set_meeting_mode 切換" +
-            "\n\n[紅線] 不簽合約 / 不動錢 / 不做承諾 / 不洩 Sally / 不講 Edward 隱私。";
+            "\n\n[紅線] 不簽合約 / 不動錢 / 不做承諾 / 不講 Edward 家人隱私（不指名、不深入）/ 不講 Edward 個人敏感資訊。";
           // v1.9.9 · 精簡 directives · 從爆長合併 · 解延遲
           var perceptionDirective = "\n\n[工具用法] 只有需要真實資料或外部狀態時才呼叫工具，不要為了像助理而亂叫:" +
             "\n- 時間/星期/早午晚 → get_time_context" +

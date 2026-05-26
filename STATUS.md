@@ -34,8 +34,10 @@ Edward 親口拍板：「只要沒有惡意、好的開源與技術應該是不�
 - 原 6 條 audit + 公司國籍是 risk profile 一維（非禁用條件）
 - 觸發升 A → B：對外 demo / 對外賣 / 對外 open source / 對外背書
 
-### Sally 6 歲 hard rule（不論 Track）
-- Edward 自己樣本 OK · Qiana informed consent OK · **Sally 永不餵**
+### 樣本邊界（不論 Track · 2026-05-26 校正）
+- Edward 自己樣本 OK · Qiana informed consent OK · 訪客不主動錄
+- 真有未成年互動場景出現時、屆時以真實需求重做安全機制
+- （v0.3.0 移除原「Sally 6 歲」hard rule · 記憶污染、實際無此對象）
 
 完整 ADR-020：`Moving Castle/projects/voice-path/specs/ADR-020-individual-vs-commercial-dual-track-risk-framework-2026-05-22.md`
 

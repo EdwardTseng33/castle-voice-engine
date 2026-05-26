@@ -13,7 +13,7 @@
 # 隱私守則 (沙利曼 audit point):
 #   - ANTHROPIC_API_KEY from os.environ - 沒 hardcode
 #   - 不存原文 - Anthropic API call 後 response 回 client、server 不留
-#   - 摘要 ≤ 80 字 - 不夾原文 - Sally / 個資 / 紅線交給前端 subject_guard 不在此處兜底
+#   - 摘要 ≤ 80 字 - 不夾原文 - 個資（email / 手機 / 身分證 / 住址）由 prompt 排除
 #   - DEBUG_MEMORY=1 才 log raw - 預設 OFF
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ _SYSTEM_PROMPT = (
     " summary (≤ 80 字、第一人稱『我/Edward』、不是『user/assistant』)、"
     " mood (Edward 當下心情 · enum: accomplished/stressed/tired/happy/anxious/calm/neutral)、"
     " promises (蘇菲承諾要做的事 array · 沒有就 [])。"
-    "重要：不要在 summary 中提及任何 Sally / 小孩 / 個資（email / 手機 / 身分證 / 住址）。如果對話包含這些、跳過該段不摘要。"
+    "重要：不要在 summary 中提及任何個資（email / 手機 / 身分證 / 住址）。如果對話包含這些、跳過該段不摘要。"
     "範例: "
     "{\"summary\": \"Edward 跟我聊 v1.1.0 ship、看起來很累但完成了\", "
     "\"mood\": \"accomplished\", "

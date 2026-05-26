@@ -13,7 +13,7 @@
 #   Server: castle-voice-engine-musetalk-poc.modal.run (breeze_poc/app_musetalk.py)
 #   接口:    /musetalk/health · /musetalk/stream (WebSocket)
 #
-# Sally hard rule enforcement: 任何 reference image upload / inference 必過 subject_guard
+# v0.3.0 (2026-05-26): 移除錯誤建立的 Sally hard rule (記憶污染 · 詳 CHANGELOG)
 
 from __future__ import annotations
 
@@ -23,12 +23,6 @@ from dataclasses import dataclass
 from typing import Optional, AsyncIterator
 
 import httpx
-
-from castle.safety.subject_guard import (
-    enforce_subject_whitelist,
-    check_age_metadata,
-    SubjectGuardError,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -59,12 +53,7 @@ class MuseTalkConfig:
 
 
 class MuseTalkClient:
-    """Thin async client for the MuseTalk Modal app.
-
-    Subject guard enforcement is the caller's responsibility through
-    `enroll_reference` / `inference_start`. Direct websocket consumers
-    must call `_check_subject` before sending any audio.
-    """
+    """Thin async client for the MuseTalk Modal app."""
 
     def __init__(self, config: Optional[MuseTalkConfig] = None) -> None:
         self.config = config or MuseTalkConfig.from_env()
@@ -72,16 +61,6 @@ class MuseTalkClient:
     @property
     def _auth_headers(self) -> dict:
         return {"Authorization": f"Bearer {self.config.auth_token}"}
-
-    @staticmethod
-    def _check_subject(subject: str, age: Optional[int], operation: str) -> None:
-        """Sally hard rule gate · raises SubjectGuardError on violation.
-
-        sulima audit C12 requirement: every MuseTalk reference upload /
-        inference must pass subject_guard before touching the model.
-        """
-        enforce_subject_whitelist(subject, operation)
-        check_age_metadata(age, subject, operation)
 
     async def health(self) -> dict:
         async with httpx.AsyncClient(timeout=self.config.timeout_seconds) as client:
@@ -102,10 +81,9 @@ class MuseTalkClient:
 
         Args:
             image_bytes: PNG bytes (>=1024x1024 recommended).
-            subject: identifier (must be in subject_guard whitelist).
-            age: optional age metadata (if provided, must be >=18).
+            subject: identifier (free-form, passed to server as metadata).
+            age: optional age metadata (currently unused, retained for future use).
         """
-        self._check_subject(subject, age, "musetalk.enroll_reference")
         async with httpx.AsyncClient(timeout=self.config.timeout_seconds) as client:
             r = await client.post(
                 f"{self.config.base_url}/musetalk/enroll",
@@ -117,17 +95,14 @@ class MuseTalkClient:
             return r.json()
 
     def stream_url(self, subject: str, age: Optional[int] = None) -> str:
-        """Return WebSocket URL with subject pre-checked.
+        """Return WebSocket URL for the MuseTalk stream endpoint.
 
         Caller must connect with `Authorization: Bearer <token>` header.
-        The server also re-verifies subject_guard on init frame.
         """
-        self._check_subject(subject, age, "musetalk.stream_url")
         return f"{self.config.base_url.replace('https://', 'wss://')}/musetalk/stream"
 
 
 __all__ = [
     "MuseTalkConfig",
     "MuseTalkClient",
-    "SubjectGuardError",
 ]

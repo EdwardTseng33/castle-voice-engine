@@ -14,10 +14,7 @@
 #   browser → POST /tavus/conversation/end (when user closes)
 #     → server ends conversation (Tavus stops billing minutes)
 #
-# Sally hard rule:
-#   - subject_guard.enforce_subject_whitelist gates every replica/persona
-#     touchpoint that names a person
-#   - default subject="edward" for all PoC routes (Edward 自用 Track A)
+# v0.3.0 (2026-05-26): 移除錯誤建立的 subject_guard hard rule (記憶污染 · 詳 CHANGELOG)
 #
 # API key discipline:
 #   - tavus_client._get_api_key reads from env TAVUS_API_KEY
@@ -43,8 +40,6 @@ from castle.integrations import (
     tavus_get_replica,
     TAVUS_DEFAULT_STOCK_REPLICA,
 )
-from castle.safety import SubjectGuardError, enforce_subject_whitelist
-
 logger = logging.getLogger(__name__)
 
 
@@ -97,19 +92,6 @@ class CreateReplicaFromImageRequest(BaseModel):
     voice_name: str = "anna"
 
 
-# ============ Sally guard helper ============
-
-def _ensure_subject_allowed(operation: str, subject: str = "edward") -> None:
-    """Wrap subject_guard with HTTP-friendly error."""
-    try:
-        enforce_subject_whitelist(subject, operation)
-    except SubjectGuardError as e:
-        raise HTTPException(
-            status_code=403,
-            detail={"error": "subject_hard_rule_block", "reason": str(e)[:200]},
-        )
-
-
 # ============ Tavus API error → HTTP ============
 
 def _tavus_error_to_http(e: TavusAPIError) -> JSONResponse:
@@ -135,8 +117,6 @@ def attach_tavus_routes(app):
         Start a live Tavus conversation. Returns conversation_url for browser
         to embed in iframe (per Tavus CVI embedding docs).
         """
-        _ensure_subject_allowed("tavus_conversation_start", "edward")
-
         replica_id = req.replica_id or TAVUS_DEFAULT_STOCK_REPLICA
         # v0.5.0: 強制中文 + 蘇菲 persona 注入 conversational_context
         # (Tavus stock Anna 是英文 lipsync · 強制中文嘴會對不齊、但至少音是中文 ·
@@ -192,8 +172,6 @@ def attach_tavus_routes(app):
     @app.post("/tavus/persona")
     async def persona_create(req: CreatePersonaRequest):
         """Create a persistent Sophie persona on Tavus side · cache persona_id."""
-        _ensure_subject_allowed("tavus_persona_create", "edward")
-
         try:
             data = await tavus_create_persona(
                 persona_name=req.persona_name,
@@ -217,8 +195,6 @@ def attach_tavus_routes(app):
         Kick off image-to-replica training (3-4 hr async).
         Returns replica_id · poll /tavus/replica/{id} until status=='completed'.
         """
-        _ensure_subject_allowed("tavus_replica_create", "edward")
-
         try:
             data = await tavus_create_replica_from_image(
                 replica_name=req.replica_name,

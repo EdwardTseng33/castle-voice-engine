@@ -5,6 +5,12 @@
 
 ---
 
+## v0.3.0 · 2026-05-26
+- **移除 subject_guard 模組整個**：早期版本的「Sally 6 歲女兒 hard rule」基於錯誤前提（Sally 實為 Qiana 家人成年女性、非未成年），紀律記憶被污染並跨多 session 自我繁殖
+- 砍除：`castle/safety/subject_guard.py` 整檔 / `castle/safety/__init__.py` 改空 / `tavus_endpoints.py` / `musetalk_client.py` / `tavus_client.py` 移除 import 與所有 enforce 呼叫
+- 改寫：`index.html` 紅線文字 / `conversation-memory.js` 註解 / `memory_endpoints.py` summary prompt
+- 未來真有未成年互動場景再以真實需求重做、不留死碼養鬼影
+
 ## v1.2.0 (v1.0 GA) · 2026-05-23
 - 訪客模式 ship · 不再強制前置登入頁、進站直接看蘇菲 idle 動畫 + UI
 - Start 點擊才觸發 Google 登入：whoami 200 → 進通話 · 401 → 彈 in-page GIS modal · 403 → 顯示邀請畫面
@@ -41,7 +47,7 @@
 - 後端 /memory/summarize stateless · Claude Haiku 摘要對話成 {summary, mood, promises}
 - 開場招呼語升級 pickGreetingV2 · 帶昨天 promise / mood reference 不裝失憶
 - 通話結束自動 summarizeDay(today) + TTL cleanup (raw > 7 天 / summary > 30 天)
-- 隱私 · raw 對話只在 browser IndexedDB · 後端不存 · Sally / PII 紅線 inherit prompt 層
+- 隱私 · raw 對話只在 browser IndexedDB · 後端不存 · 個資紅線 inherit prompt 層
 - 5/min/email rate limit · ANTHROPIC_API_KEY from Modal Secret
 - SW CACHE bump v1.1.1 → v1.1.2 (+ conversation-memory.js precache)
 
@@ -89,7 +95,7 @@
   - 說 = OpenAI gpt-realtime-2（marin 中文聲 + 蘇菲人設）
   - 嘴 = MuseTalk v1.5（Lyra Lab/Tencent Music · MIT 授權）
 - **三方計畫書**：沙利曼信任巡檢 + 女巫純黑 Duix 介面 + 卡西法 Modal 部署
-- **Sally 6 歲紅線守則**：subject_guard 雙層防護（客戶端 + 服務端）
+- **subject_guard 模組**：早期版本含基於錯誤前提建立的「Sally 6 歲」hard rule，已於 v0.3.0 (2026-05-26) 完整移除（記憶污染、實際無此對象）
 - **Modal A10G 自家後台**：≈ $66/月 嘴對齊層、scale-to-zero 不用 $0
 - 整體月費 $185（聽 $46 + 說 $72 + 嘴 $66 + 健康檢查 $1）
 

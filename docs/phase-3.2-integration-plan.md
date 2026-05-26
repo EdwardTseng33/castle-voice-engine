@@ -139,7 +139,8 @@ visual_persona:
 
 - ✅ Edward 自己樣本 OK
 - ✅ Qiana informed consent OK
-- ❌ Sally 6 歲永不餵（hard rule · 個人自用也守）
+- ⚠ 訪客 / 旁邊路過的人不主動錄
+- ⚠ 真有未成年互動場景出現時、屆時以真實需求重做安全機制（v0.3.0 移除原「Sally 6 歲」hard rule · 記憶污染、實際無此對象）
 - ❌ 不對外公開生成的 clip（除非重審 Track B）
 - ❌ 不上中國雲（仍守 Modal 美國雲架構）
 

@@ -7,7 +7,7 @@
  *   - raw transcript only in browser IndexedDB (not on backend)
  *   - backend /memory/summarize is stateless (Claude Haiku - no log raw unless DEBUG_MEMORY=1)
  *   - raw turns 7 day TTL / summaries 30 day TTL / cleanup auto purge
- *   - Sally 6yo redline inherited (subject_guard at prompt layer)
+ *   - PII / family privacy inherited via prompt-layer guardrails (subject_guard removed in v0.3.0)
  *   - Edward purge = chrome devtools > Application > IndexedDB > sophie-memory-v1 > Delete database
  *
  * ES5 only - auth gate auto via fetch cookie credentials
