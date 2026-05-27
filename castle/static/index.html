@@ -2946,7 +2946,12 @@
             } else if (data.type === "response.audio.done" || data.type === "response.output_audio.done") {
               // v1.9.15 · 霍爾刀 2 · 砍掉 response.audio_transcript.done · 它只是文字完成 ≠ 視覺可停
               // 文字 done 早於 audio done 觸發 stopSpeaking 會打斷 lipsync
-              scheduleSpeakingStop("audio.done", 650);
+              // v2.0.32 · Edward 5/27 catch · 砍 12 秒保護鎖 · 讓 stopSpeaking 立刻能停
+              // root cause: audio.delta 每筆都 extendSpeakingHold(12000) · audio.done 後保護鎖還 hold 著
+              //   → 嘴繼續動到 12 秒 hold 結束 (用戶看到「講 5 秒、動 10 秒」)
+              // 修法: audio.done 時 reset hold = 0 · 不再擋 stopSpeaking · 250ms 後真停
+              window.__sophieSpeakingHoldUntil = 0;
+              scheduleSpeakingStop("audio.done", 250);
               clearLipsyncKick();
               // v1.3.1 · reset trigger flag (下次回應重新等)
               window.__sophieSpeakingTriggered = false;
@@ -3455,7 +3460,7 @@
       });
     }
 
-    log("Voice Path v2.0.31 - 修自己小窗跑出蘇菲框 (transform-origin top right → center) - 2026-05-27");
+    log("Voice Path v2.0.32 - 修「講 5 秒動 10 秒」(audio.done 砍 12 秒保護鎖 · 立刻停動畫) - 2026-05-27");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
