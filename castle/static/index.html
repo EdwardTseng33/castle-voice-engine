@@ -852,10 +852,7 @@
         aria-hidden="true"
       ></video>
 
-      <!-- v2.0.35 · Edward 5/27 思考表情 · 她在想 三個小點 (用戶講完 → 蘇菲開口前 800ms 死時間提示) -->
-      <div class="thinking-dots" id="thinkingDots" aria-hidden="true">
-        <span></span><span></span><span></span>
-      </div>
+      <!-- v2.0.35 砍 (Edward 5/27「不要這個設計、干擾」) · 思考三個小點移除 -->
 
       <!-- v2.0.21 · Edward 5/26 catch · 暖機提示 overlay (連線好之前不讓用戶以為可以馬上講) -->
       <div class="ready-overlay" id="readyOverlay" role="status">
@@ -2930,11 +2927,6 @@
                 // v1.9.15 · 霍爾刀 3 · reset 視覺鎖 (上輪可能 lipsync 中斷沒清乾淨)
                 window.__sophieLipsyncActive = false;
                 window.__sophieVisualMode = "thinking";
-                // v2.0.35 · 思考表情 · 顯示「她在想」三個小點 (蘇菲開口前 800ms 死時間提示)
-                try {
-                  var _td = document.getElementById("thinkingDots");
-                  if (_td) _td.classList.add("is-active");
-                } catch (eTh) {}
               }
               if (data.type === "response.done") {
                 clearLipsyncKick();
@@ -3604,7 +3596,7 @@
       });
     }
 
-    log("Voice Path v2.0.35 - 思考表情「她在想」三個小點 (用戶講完 → 蘇菲開口前 死時間提示) - 2026-05-27");
+    log("Voice Path v2.0.36 - 砍三個小點 (Edward 5/27「不要這個設計、干擾」) - 2026-05-27");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
