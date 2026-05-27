@@ -463,15 +463,15 @@
     .self-view video, .self-view {
       /* 鏡像 · 像照鏡子自然 */
     }
+    /* v2.0.31 · 修桌面 portrait window 模式下 · scaleX(-1) + transform-origin: top right 把小窗推出 stage 右邊 */
+    /* 改 transform-origin: center → 鏡像 + 縮放都對 element 中心進行 · 不偏移 layout 位置 */
+    .self-view { transform-origin: center; }
+    .self-view { transform: translateY(-6px) scale(0.94) scaleX(-1); }
     .self-view.is-active {
       opacity: 1;
       pointer-events: auto;
-      transform: translateY(0) scale(1);
+      transform: translateY(0) scale(1) scaleX(-1);
     }
-    /* 鏡像放在 inner 樣式、避開 transform 跟 translateY 衝突 → 用 filter 不會擋 transform animation */
-    .self-view { transform-origin: top right; }
-    .self-view.is-active { transform: translateY(0) scale(1) scaleX(-1); }
-    .self-view { transform: translateY(-6px) scale(0.94) scaleX(-1); }
     @media (max-width: 600px) {
       .self-view {
         width: 76px;
@@ -3455,7 +3455,7 @@
       });
     }
 
-    log("Voice Path v2.0.30 - 講話池 4 檔升級 (3s / 5s / 7s / 10s · 7s 從 10s 源剪同風格) - 2026-05-27");
+    log("Voice Path v2.0.31 - 修自己小窗跑出蘇菲框 (transform-origin top right → center) - 2026-05-27");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
