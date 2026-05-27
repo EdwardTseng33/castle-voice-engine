@@ -2836,13 +2836,39 @@
             // 600ms timeout 不可靠 (有時 session.updated 還沒回來) · 改成等 session.updated 事件後再 trigger
             // window flag 給 dc message handler 抓
             window.__sophiePendingGreeting = true;
-            // fallback: 1800ms 後若還沒 trigger 就強制 send (避免 session.updated 事件丟失永遠不講)
+            window.__sophieOpeningSent = false;  // v2.0.38 · mutex 防兩條 path 重複送
+            // v2.0.38 · 開頭問候強制送 · 繞 guard (Edward 5/27「她沒打招呼」修)
+            // root cause: OpenAI 自動 VAD 偵到背景音 + 自動 trigger response · guard 擋掉開頭問候
+            // 修法: 兩條 path 都強送 · mutex 確保只送一次 · 不靠 guard
             setTimeout(function () {
-              if (window.__sophiePendingGreeting) {
-                window.__sophiePendingGreeting = false;
-                sendResponseCreateGuarded("fallback timer · 1800ms");
-              }
+              if (window.__sophieOpeningSent) return;
+              window.__sophieOpeningSent = true;
+              window.__sophiePendingGreeting = false;
+              try {
+                dc.send(JSON.stringify({ type: "response.cancel" }));  // 先清掉 OpenAI 自動 trigger 的
+              } catch (e) {}
+              setTimeout(function () {
+                try {
+                  dc.send(JSON.stringify({ type: "response.create" }));
+                  window.__sophieResponseCreateSentAt = Date.now();
+                  log("[OPENING] 1800ms fallback · cancel + create forced");
+                } catch (e) { log("[OPENING] fallback send fail: " + e.message); }
+              }, 220);
             }, 1800);
+            // 二次 fallback · 3500ms · 防第一次 race / fail
+            setTimeout(function () {
+              if (window.__sophieOpeningSent) return;
+              window.__sophieOpeningSent = true;
+              try {
+                dc.send(JSON.stringify({ type: "response.cancel" }));
+                setTimeout(function () {
+                  try {
+                    dc.send(JSON.stringify({ type: "response.create" }));
+                    log("[OPENING] 3500ms second fallback forced");
+                  } catch (e) {}
+                }, 220);
+              } catch (e) {}
+            }, 3500);
           } catch (e) {
             log("session.update send fail: " + e.message);
           }
@@ -2916,9 +2942,20 @@
                        data.type === "response.created" || data.type === "response.done") {
               log("OAI evt: " + data.type);
               // v1.2.0d · session.updated 後立刻 trigger opening greeting · 確保 GPT 開頭就講 HELLO
-              if (data.type === "session.updated" && window.__sophiePendingGreeting) {
+              // v2.0.38 · 強送 + mutex · 繞 guard (Edward 5/27「她沒打招呼」修)
+              if (data.type === "session.updated" && window.__sophiePendingGreeting && !window.__sophieOpeningSent) {
+                window.__sophieOpeningSent = true;
                 window.__sophiePendingGreeting = false;
-                sendResponseCreateGuarded("session.updated trigger");
+                try {
+                  dc.send(JSON.stringify({ type: "response.cancel" }));  // 清 OpenAI 自動 trigger
+                } catch (e) {}
+                setTimeout(function () {
+                  try {
+                    dc.send(JSON.stringify({ type: "response.create" }));
+                    window.__sophieResponseCreateSentAt = Date.now();
+                    log("[OPENING] session.updated · cancel + create forced");
+                  } catch (e) { log("[OPENING] session.updated send fail: " + e.message); }
+                }, 220);
               }
               // v1.3.1 · response.created 時 reset speaking trigger flag (每次新回應重新等第一個 audio delta)
               if (data.type === "response.created") {
@@ -3637,7 +3674,7 @@
       });
     }
 
-    log("Voice Path v2.0.37 - 3 層對話路由 (基礎即時 / 基本資訊工具 / 進階問 Claude / 大任務派 Code) - 2026-05-27");
+    log("Voice Path v2.0.38 - 開頭問候強送 (繞 guard · 雙 fallback 1800/3500ms · cancel + create) - 2026-05-27");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
