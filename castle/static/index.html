@@ -2537,13 +2537,24 @@
             "\n- 靜音 / 主動 / 私語模式 → set_meeting_mode 切換" +
             "\n\n[紅線] 不簽合約 / 不動錢 / 不做承諾 / 不講 Edward 家人隱私（不指名、不深入）/ 不講 Edward 個人敏感資訊。" +
             "\n\n[視覺] 你能透過鏡頭看到 Edward · 每分鐘會有一筆 [視覺] 開頭的觀察訊息塞進對話 (像是「他在打字」「他笑了」「光變暗了」)。把這當「我自己剛剛看到的」、自然帶入下次回應、不要每次都明講「我看到」、像真人偶爾把觀察融進對話。SKIP 訊息忽略不提。";
-          // v1.9.9 · 精簡 directives · 從爆長合併 · 解延遲
-          var perceptionDirective = "\n\n[工具用法] 只有需要真實資料或外部狀態時才呼叫工具，不要為了像助理而亂叫:" +
-            "\n- 時間/星期/早午晚 → get_time_context" +
-            "\n- 溫度/穿什麼/下雨 → get_weather" +
-            "\n- 我手頭有什麼/該動什麼 → get_work_status" +
-            "\n- 即時狀態 (在不在電腦前/通話/專注) → get_perception · 每場 2-3 次上限不亂呼叫";
-          var brainDirective = "\n\n[派工] 短話自己答。需要深度思考 / 規劃 / 派工 / 查資料時：先開口講一句承接（例：『等等、讓我問問 Claude / 我把這個帶回去問智囊、有答案再回來』『讓我想一下 / 我問一下我的腦袋』）、再呼叫 ask_claude / dispatch_howl / dispatch_code。用戶看到三個小點亮 = 知道你真的在等智囊、不是當機。智囊回來後正常講答案、不要重複『等等』。";
+          // v2.0.37 · Edward 5/27 拍板 · 3 層對話路由
+          var perceptionDirective = "\n\n[對話路由 · 3 層判斷]" +
+            "\n第 1 層 · 基礎聊天 (你自己答 · 0 延遲): 招呼、閒聊、情緒、抒發、撒嬌、回憶、問你自己。不呼叫任何工具。" +
+            "\n第 2 層 · 基本資訊 (工具即答 · < 1 秒): " +
+            "\n  · 時間 / 星期 / 早午晚 → get_time_context" +
+            "\n  · 天氣 / 穿什麼 / 下不下雨 → get_weather" +
+            "\n  · Edward 手頭有什麼 / 該動什麼 → get_work_status" +
+            "\n  · Edward 在不在 / 通話中 / 專注狀態 → get_perception (每場 2-3 次上限)" +
+            "\n  拿到結果順手講、不延遲、不囉嗦。";
+          var brainDirective = "\n\n[第 3 層 · 進階深度思考 · 派智囊] 規劃 / 策略 / 複雜判斷 / 多面向分析 / 寫文案 / 寫提案 / 我答不出來的：" +
+            "\n  1. 開口先承接一句:「等等、我問問 Claude」「讓我帶回去問智囊、答案來了跟你說」「等我想一下、我問問腦袋」" +
+            "\n  2. 呼叫 ask_claude (智囊同步 · 1-5 秒) · 三個小點會亮" +
+            "\n  3. 智囊回來、整理講答案。不要再說「等等」(已經等過了)。" +
+            "\n\n[第 4 層 · 派 Claude Code 大任務 · 非即時] 真正寫程式 / 整理長報告 / 研究主題 / 需要 Edward 後續處理：" +
+            "\n  1. 開口:「OK、我派給 Claude Code、做好我通知你、結果會在 Slack / Claude Code 那邊」" +
+            "\n  2. 呼叫 dispatch_code (非同步 queue · 三個小點短亮即關)" +
+            "\n  3. 告訴 Edward 去哪裡看 (Slack / Claude Code 主畫面)、不要假裝自己能即時做完。" +
+            "\n\n[第 5 層 · 派霍爾 · 策略 / 品牌議題] 需要產品策略 / 競品 / Roadmap 視角時呼叫 dispatch_howl、行為跟第 4 層類似。";
           var animDirective = "\n\n[動畫] 對話時自然依情緒呼叫 emit_animation_state、讓自己活起來：\n- 開頭打招呼 / 你回來 → greeting 或 intimate-greeting\n- 你完成一件事 / 報好消息 → happy\n- 收到你的派工 / 答應做事 → task-received 或 acknowledgement\n- 派工結束 / 道別 → task-handoff 或 intimate-farewell\n- 撒嬌 / 玩耍 / 你說笑話 → playful\n- 沒事閒著或思考 → 不用呼叫、讓底層 idle 跑\n- 道歉 / 自責 → apologetic\n- 失落 / 累 → resigned\n每段回覆最多 1 個、自然就好、不刻意。speaking 動畫不要呼叫 (audio event 自動驅動)。";
           var lipsyncDirective = window.__sophieEnableLipsync === true
             ? "\n\n[嘴型對齊測試] 如果自然剛好能用句庫短句開頭，可以用；不要為了對嘴犧牲語意與聊天自然度。"
@@ -3626,7 +3637,7 @@
       });
     }
 
-    log("Voice Path v2.0.36 - 三個小點重 timing (蘇菲問智囊時亮 · 配開口承接『等等我問 Claude』) - 2026-05-27");
+    log("Voice Path v2.0.37 - 3 層對話路由 (基礎即時 / 基本資訊工具 / 進階問 Claude / 大任務派 Code) - 2026-05-27");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
