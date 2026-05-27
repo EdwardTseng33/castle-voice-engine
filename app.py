@@ -79,6 +79,7 @@ def fastapi_app():
     from castle.server.memory_endpoints import attach_memory_routes  # v1.1.2 IndexedDB summary backend
     from castle.server.brain_endpoints import attach_brain_routes  # v1.6.0 Claude 真大腦 + 派工接口
     from castle.server.livekit_endpoints import attach_livekit_routes  # v0.10 Phase 2 LiveKit WebRTC SFU
+    from castle.server.vision_now_endpoints import attach_vision_now_routes  # v0.4.0 真視覺接通
 
     attach_realtime_routes(fastapi_instance)
     attach_camera_routes(fastapi_instance)
@@ -87,6 +88,7 @@ def fastapi_app():
     attach_memory_routes(fastapi_instance)  # v1.1.2 Phase 3.3: 記憶連續性 (Claude Haiku 摘要 · 後端 stateless)
     attach_brain_routes(fastapi_instance)  # v1.6.0 雙腦混合 · ask_claude / dispatch_howl / dispatch_code
     attach_livekit_routes(fastapi_instance)  # v0.10 Phase 2: LiveKit WebRTC SFU integration
+    attach_vision_now_routes(fastapi_instance)  # v0.4.0 (2026-05-27): 前端送 frame → Claude vision · Edward 拍板「動視覺」
 
     # v1.5.0 · 嘴對齊 100 句預生 mp4 serve · 從 modal.Volume sophie-lipsync-cache 讀
     import os as _os
