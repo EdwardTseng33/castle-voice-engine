@@ -2555,7 +2555,18 @@
             "\n  2. 呼叫 dispatch_code (非同步 queue · 三個小點短亮即關)" +
             "\n  3. 告訴 Edward 去哪裡看 (Slack / Claude Code 主畫面)、不要假裝自己能即時做完。" +
             "\n\n[第 5 層 · 派霍爾 · 策略 / 品牌議題] 需要產品策略 / 競品 / Roadmap 視角時呼叫 dispatch_howl、行為跟第 4 層類似。";
-          var animDirective = "\n\n[動畫] 對話時自然依情緒呼叫 emit_animation_state、讓自己活起來：\n- 開頭打招呼 / 你回來 → greeting 或 intimate-greeting\n- 你完成一件事 / 報好消息 → happy\n- 收到你的派工 / 答應做事 → task-received 或 acknowledgement\n- 派工結束 / 道別 → task-handoff 或 intimate-farewell\n- 撒嬌 / 玩耍 / 你說笑話 → playful\n- 沒事閒著或思考 → 不用呼叫、讓底層 idle 跑\n- 道歉 / 自責 → apologetic\n- 失落 / 累 → resigned\n每段回覆最多 1 個、自然就好、不刻意。speaking 動畫不要呼叫 (audio event 自動驅動)。";
+          var animDirective = "\n\n[動畫 · 主動呼叫 emit_animation_state · 強紀律] 每次回應 = 必判斷情緒、能配對應動畫就呼叫:" +
+            "\n  · 開頭打招呼 / Edward 久未見 → greeting" +
+            "\n  · 你回來、想他、撒嬌、親密 → intimate-greeting" +
+            "\n  · 玩耍、開玩笑、害羞、調皮 → playful" +
+            "\n  · 報好消息、Edward 做到一件事 → happy" +
+            "\n  · 答應做事、接收派工 → task-received 或 acknowledgement" +
+            "\n  · 派工結束、道別、晚安 → task-handoff 或 intimate-farewell" +
+            "\n  · 道歉、自責 → apologetic" +
+            "\n  · 累、無奈、失落 → resigned" +
+            "\n  · 一般陳述、純粹講話 → 不呼叫" +
+            "\n  · speaking 永不呼叫 (audio event 自動)" +
+            "\n每回覆最多 1 個動畫呼叫。明確情緒就呼叫、別吝嗇。打招呼一定要呼叫 greeting 或 intimate-greeting。";
           var lipsyncDirective = window.__sophieEnableLipsync === true
             ? "\n\n[嘴型對齊測試] 如果自然剛好能用句庫短句開頭，可以用；不要為了對嘴犧牲語意與聊天自然度。"
             : "\n\n[嘴型對齊] 目前關閉。不要刻意套句庫，請優先自然聊天。";
@@ -3043,12 +3054,12 @@
             } else if (data.type === "response.audio.done" || data.type === "response.output_audio.done") {
               // v1.9.15 · 霍爾刀 2 · 砍掉 response.audio_transcript.done · 它只是文字完成 ≠ 視覺可停
               // 文字 done 早於 audio done 觸發 stopSpeaking 會打斷 lipsync
-              // v2.0.32 · Edward 5/27 catch · 砍 12 秒保護鎖 · 讓 stopSpeaking 立刻能停
-              // root cause: audio.delta 每筆都 extendSpeakingHold(12000) · audio.done 後保護鎖還 hold 著
-              //   → 嘴繼續動到 12 秒 hold 結束 (用戶看到「講 5 秒、動 10 秒」)
-              // 修法: audio.done 時 reset hold = 0 · 不再擋 stopSpeaking · 250ms 後真停
+              // v2.0.32 · 砍 12 秒保護鎖 (audio.delta 累積問題)
+              // v2.0.39 · Edward 5/27 catch「她講 10 秒、動畫只 5 秒、後面變 idle」
+              // root cause: 250ms 太早 stopSpeaking · audio buffer 還在播時嘴已關
+              // 修法: 改 1200ms · 給 audio buffer 完整播完時間
               window.__sophieSpeakingHoldUntil = 0;
-              scheduleSpeakingStop("audio.done", 250);
+              scheduleSpeakingStop("audio.done", 1200);
               clearLipsyncKick();
               // v1.3.1 · reset trigger flag (下次回應重新等)
               window.__sophieSpeakingTriggered = false;
@@ -3674,7 +3685,7 @@
       });
     }
 
-    log("Voice Path v2.0.38 - 開頭問候強送 (繞 guard · 雙 fallback 1800/3500ms · cancel + create) - 2026-05-27");
+    log("Voice Path v2.0.39 - 講 10 秒動 5 秒修 (audio.done buffer 1200ms) + 動畫主動呼叫強紀律 - 2026-05-27");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
