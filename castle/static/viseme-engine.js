@@ -198,10 +198,12 @@
     VISEME_NAMES: ["rest", "i", "e", "a", "o", "u", "f", "smile"],
 
     /**
-     * 取得 viseme 對應的 mp4 url (predefined naming)
+     * 取得 viseme 對應的 image url
+     * v0.2: 改 jpg 靜態貼圖 · 從 sophie-speak-10s.mp4 抽 8 個 keyframe 直接用
+     * (mp4 影片過渡反而會閃 · 200ms 切一張靜態圖最穩)
      */
     visemeUrl: function (id) {
-      return "/static/sophie-viseme-" + id + ".mp4";
+      return "/static/sophie-viseme-" + id + ".jpg";
     },
   };
 

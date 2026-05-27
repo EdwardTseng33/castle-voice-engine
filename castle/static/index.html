@@ -873,16 +873,13 @@
 
       <!-- viseme-poc-v0.1 · 業界輕量 lipsync overlay -->
       <!-- 平常 display: none · ?viseme=1 啟動時跟 transcript.delta 流切 src -->
-      <!-- 8 個 mp4 預期 path: /static/sophie-viseme-0.mp4 ~ /static/sophie-viseme-7.mp4 -->
-      <video
+      <!-- v0.2 · 改 8 張 jpg 靜態貼圖 · /static/sophie-viseme-0.jpg ~ sophie-viseme-7.jpg -->
+      <img
         class="live-video viseme-overlay"
         id="visemeOverlay"
-        autoplay
-        playsinline
-        muted
-        preload="auto"
+        alt=""
         aria-hidden="true"
-      ></video>
+      ></img>
       <!-- debug 浮層 · 顯示當前 viseme 名 · 沒 mp4 也能驗證映射 -->
       <div class="viseme-debug" id="visemeDebug" aria-hidden="true">嘴形: -</div>
 
@@ -1779,7 +1776,7 @@
   <script src="/static/phrase-matcher.js?v=2.0.6"></script>
   <!-- viseme-poc-v0.1 · 業界輕量 lipsync (Duix / Tavus / HeyGen 同款路線 · CPU 即可) -->
   <!-- feature flag: ?viseme=1 啟動 · 預設 off · 不影響主線 -->
-  <script src="/static/viseme-engine.js?v=poc-v0.1"></script>
+  <script src="/static/viseme-engine.js?v=poc-v0.2-jpg"></script>
 
   <script>
   (function () {
@@ -1845,15 +1842,15 @@
 
       var currentSched = null;
       var lastVid = -1;
-      // mp4 載入失敗時 (Edward 還沒產素材) 自動降級 · 只跑 debug 文字 · 不秀黑塊
+      // 素材載入失敗時 (jpg 還沒到位) 自動降級 · 只跑 debug 文字 · 不秀破圖
       var assetMissing = false;
       try {
         overlayEl.addEventListener("error", function () {
           assetMissing = true;
           overlayEl.classList.remove("is-on");
-          log("[viseme] mp4 載入 fail · 降級為 debug-text mode (素材就位後自動恢復)");
+          log("[viseme] 素材載入 fail · 降級為 debug-text mode");
         });
-        overlayEl.addEventListener("loadeddata", function () {
+        overlayEl.addEventListener("load", function () {
           assetMissing = false;
         });
       } catch (eL) {}
@@ -1866,8 +1863,6 @@
           overlayEl.src = url;
           if (!assetMissing) {
             overlayEl.classList.add("is-on");
-            var p = overlayEl.play();
-            if (p && typeof p.catch === "function") p.catch(function () {});
           }
         } catch (e) {}
         if (debugEl && debugOn) {
