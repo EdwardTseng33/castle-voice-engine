@@ -852,7 +852,14 @@
         aria-hidden="true"
       ></video>
 
-      <!-- v2.0.35 砍 (Edward 5/27「不要這個設計、干擾」) · 思考三個小點移除 -->
+      <!-- v2.0.36 · Edward 5/27 校正 · 三個小點 timing 重做 -->
+      <!--   舊: response.created 亮 (每次回應都亮、用戶困惑「這啥」)
+            新: 蘇菲呼叫智囊 (ask_claude / dispatch_*) 時才亮 · 配合她開口承接「等等、我問 Claude」
+                Claude 回覆 + 蘇菲講答案 → 點消失
+                用戶看到 = 知道「她真的在等智囊、不是當機」 -->
+      <div class="thinking-dots" id="thinkingDots" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </div>
 
       <!-- v2.0.21 · Edward 5/26 catch · 暖機提示 overlay (連線好之前不讓用戶以為可以馬上講) -->
       <div class="ready-overlay" id="readyOverlay" role="status">
@@ -2536,7 +2543,7 @@
             "\n- 溫度/穿什麼/下雨 → get_weather" +
             "\n- 我手頭有什麼/該動什麼 → get_work_status" +
             "\n- 即時狀態 (在不在電腦前/通話/專注) → get_perception · 每場 2-3 次上限不亂呼叫";
-          var brainDirective = "\n\n[派工] 短話自己答。需要深度思考/規劃/判斷時，先用一句自然話承接，再 ask_claude；不要一開口就像在派工。";
+          var brainDirective = "\n\n[派工] 短話自己答。需要深度思考 / 規劃 / 派工 / 查資料時：先開口講一句承接（例：『等等、讓我問問 Claude / 我把這個帶回去問智囊、有答案再回來』『讓我想一下 / 我問一下我的腦袋』）、再呼叫 ask_claude / dispatch_howl / dispatch_code。用戶看到三個小點亮 = 知道你真的在等智囊、不是當機。智囊回來後正常講答案、不要重複『等等』。";
           var animDirective = "\n\n[動畫] 對話時自然依情緒呼叫 emit_animation_state、讓自己活起來：\n- 開頭打招呼 / 你回來 → greeting 或 intimate-greeting\n- 你完成一件事 / 報好消息 → happy\n- 收到你的派工 / 答應做事 → task-received 或 acknowledgement\n- 派工結束 / 道別 → task-handoff 或 intimate-farewell\n- 撒嬌 / 玩耍 / 你說笑話 → playful\n- 沒事閒著或思考 → 不用呼叫、讓底層 idle 跑\n- 道歉 / 自責 → apologetic\n- 失落 / 累 → resigned\n每段回覆最多 1 個、自然就好、不刻意。speaking 動畫不要呼叫 (audio event 自動驅動)。";
           var lipsyncDirective = window.__sophieEnableLipsync === true
             ? "\n\n[嘴型對齊測試] 如果自然剛好能用句庫短句開頭，可以用；不要為了對嘴犧牲語意與聊天自然度。"
@@ -3101,6 +3108,15 @@
                   catch (jErr) { brainArgs = {}; log("brain args parse fail: " + jErr.message); }
                   var endpoint = "/brain/" + fnName;
                   log("[BRAIN] " + fnName + " call · args=" + rawArgs.slice(0, 100));
+                  // v2.0.36 · 三個小點重 timing · 蘇菲呼叫智囊 (ask_claude / dispatch_*) 時亮、智囊回來關
+                  // 配合 prompt 教蘇菲先開口承接「等等、我問問 Claude」· 用戶看到 = 知道她在等智囊
+                  var _brainDots = (fnName === "ask_claude" || fnName === "dispatch_howl" || fnName === "dispatch_code");
+                  if (_brainDots) {
+                    try {
+                      var _tdBrain = document.getElementById("thinkingDots");
+                      if (_tdBrain) _tdBrain.classList.add("is-active");
+                    } catch (eTb) {}
+                  }
                   fetch(endpoint, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -3179,6 +3195,13 @@
                         output = JSON.stringify(result).slice(0, 500);
                       }
                       log("[BRAIN] " + fnName + " result: " + String(output).slice(0, 80));
+                      // v2.0.36 · 智囊回來 · 關三個小點
+                      if (_brainDots) {
+                        try {
+                          var _tdOff = document.getElementById("thinkingDots");
+                          if (_tdOff) _tdOff.classList.remove("is-active");
+                        } catch (eToff) {}
+                      }
                       // 把 function result 回傳給 OpenAI realtime · 蘇菲會接續講
                       try {
                         dc.send(JSON.stringify({
@@ -3197,6 +3220,13 @@
                     })
                     ["catch"](function (bErr) {
                       log("[BRAIN] " + fnName + " fetch fail: " + bErr.message);
+                      // v2.0.36 · 智囊 fail 也關小點 · 不要卡住一直亮
+                      if (_brainDots) {
+                        try {
+                          var _tdOffErr = document.getElementById("thinkingDots");
+                          if (_tdOffErr) _tdOffErr.classList.remove("is-active");
+                        } catch (eToe) {}
+                      }
                       try {
                         dc.send(JSON.stringify({
                           type: "conversation.item.create",
@@ -3596,7 +3626,7 @@
       });
     }
 
-    log("Voice Path v2.0.36 - 砍三個小點 (Edward 5/27「不要這個設計、干擾」) - 2026-05-27");
+    log("Voice Path v2.0.36 - 三個小點重 timing (蘇菲問智囊時亮 · 配開口承接『等等我問 Claude』) - 2026-05-27");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
