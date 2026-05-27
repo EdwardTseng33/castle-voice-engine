@@ -2855,30 +2855,33 @@
               if (window.__sophieOpeningSent) return;
               window.__sophieOpeningSent = true;
               window.__sophiePendingGreeting = false;
-              try {
-                dc.send(JSON.stringify({ type: "response.cancel" }));  // 先清掉 OpenAI 自動 trigger 的
-              } catch (e) {}
+              // v2.0.40 · 只在真的 active 時才 cancel · 避免 OpenAI「no active response」error
+              var _needCancel = !!window.__sophieResponseActive;
+              if (_needCancel) {
+                try { dc.send(JSON.stringify({ type: "response.cancel" })); } catch (e) {}
+              }
               setTimeout(function () {
                 try {
                   dc.send(JSON.stringify({ type: "response.create" }));
                   window.__sophieResponseCreateSentAt = Date.now();
-                  log("[OPENING] 1800ms fallback · cancel + create forced");
+                  log("[OPENING] 1800ms fallback · " + (_needCancel ? "cancel + " : "") + "create forced");
                 } catch (e) { log("[OPENING] fallback send fail: " + e.message); }
-              }, 220);
+              }, _needCancel ? 220 : 0);
             }, 1800);
             // 二次 fallback · 3500ms · 防第一次 race / fail
             setTimeout(function () {
               if (window.__sophieOpeningSent) return;
               window.__sophieOpeningSent = true;
-              try {
-                dc.send(JSON.stringify({ type: "response.cancel" }));
-                setTimeout(function () {
-                  try {
-                    dc.send(JSON.stringify({ type: "response.create" }));
-                    log("[OPENING] 3500ms second fallback forced");
-                  } catch (e) {}
-                }, 220);
-              } catch (e) {}
+              var _needCancel2 = !!window.__sophieResponseActive;
+              if (_needCancel2) {
+                try { dc.send(JSON.stringify({ type: "response.cancel" })); } catch (e) {}
+              }
+              setTimeout(function () {
+                try {
+                  dc.send(JSON.stringify({ type: "response.create" }));
+                  log("[OPENING] 3500ms second fallback · " + (_needCancel2 ? "cancel + " : "") + "create forced");
+                } catch (e) {}
+              }, _needCancel2 ? 220 : 0);
             }, 3500);
           } catch (e) {
             log("session.update send fail: " + e.message);
@@ -2947,8 +2950,13 @@
             }
 
             if (data.type === "error") {
+              var _errMsg = data.error && data.error.message ? data.error.message : "未知錯誤";
               log("OAI error: " + JSON.stringify(data.error || data).slice(0, 300));
-              showError("OpenAI: " + (data.error && data.error.message ? data.error.message : "未知錯誤"));
+              // v2.0.40 · 已知無害 error 不嚇用戶 (cancel 失敗、active response 重複等)
+              var _silent = _errMsg.indexOf("Cancellation failed") !== -1 ||
+                            _errMsg.indexOf("no active response") !== -1 ||
+                            _errMsg.indexOf("already has an active response") !== -1;
+              if (!_silent) showError("OpenAI: " + _errMsg);
             } else if (data.type === "session.created" || data.type === "session.updated" ||
                        data.type === "response.created" || data.type === "response.done") {
               log("OAI evt: " + data.type);
@@ -2957,16 +2965,18 @@
               if (data.type === "session.updated" && window.__sophiePendingGreeting && !window.__sophieOpeningSent) {
                 window.__sophieOpeningSent = true;
                 window.__sophiePendingGreeting = false;
-                try {
-                  dc.send(JSON.stringify({ type: "response.cancel" }));  // 清 OpenAI 自動 trigger
-                } catch (e) {}
+                // v2.0.40 · 只在真的 active 才 cancel
+                var _needCancelSU = !!window.__sophieResponseActive;
+                if (_needCancelSU) {
+                  try { dc.send(JSON.stringify({ type: "response.cancel" })); } catch (e) {}
+                }
                 setTimeout(function () {
                   try {
                     dc.send(JSON.stringify({ type: "response.create" }));
                     window.__sophieResponseCreateSentAt = Date.now();
-                    log("[OPENING] session.updated · cancel + create forced");
+                    log("[OPENING] session.updated · " + (_needCancelSU ? "cancel + " : "") + "create forced");
                   } catch (e) { log("[OPENING] session.updated send fail: " + e.message); }
-                }, 220);
+                }, _needCancelSU ? 220 : 0);
               }
               // v1.3.1 · response.created 時 reset speaking trigger flag (每次新回應重新等第一個 audio delta)
               if (data.type === "response.created") {
@@ -3685,7 +3695,7 @@
       });
     }
 
-    log("Voice Path v2.0.39 - 講 10 秒動 5 秒修 (audio.done buffer 1200ms) + 動畫主動呼叫強紀律 - 2026-05-27");
+    log("Voice Path v2.0.40 - cancel 只在 active 才送 + 已知無害 error 靜音 - 2026-05-27");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
