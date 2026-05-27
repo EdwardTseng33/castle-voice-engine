@@ -6,6 +6,18 @@
 
 ---
 
+## ⛔ 鐵律 · 任何 voice-path 技術決策前必讀
+
+**[docs/voice-path-deadends-memo.md](docs/voice-path-deadends-memo.md)** ← 死路備忘錄（憲法級）
+
+立檔：2026-05-27 · Edward 親口拍板「任何技術決策之前要先看過這個備忘錄」
+
+含：8 條已撞過的死路（MuseTalk / SoulX / Tavus 誤用 / LiveKit / viseme 整圖切換 / 補丁式 timing fix...）+ 7 條已驗證可動路線 + 決策前 SOP。
+
+**違反 = 同類問題重犯 = critical**。
+
+---
+
 ## 📋 Phase 狀態（事實 only · 全部對得起 git log）
 
 | Phase | 狀態 | 證據 |
