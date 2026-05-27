@@ -1689,7 +1689,7 @@
   <script src="/static/session-memory.js?v=2.0.6"></script>
   <script src="/static/conversation-memory.js?v=2.0.6"></script>
   <script src="/static/avatar-director.js?v=2.0.6"></script>
-  <script src="/static/animation-pool.js?v=2.0.23-emotion-pool-and-flicker"></script>
+  <script src="/static/animation-pool.js?v=2.0.29-speak-length-pool"></script>
   <script src="/static/phrase-matcher.js?v=2.0.6"></script>
 
   <script>
@@ -2064,6 +2064,18 @@
         } else if (_sv) {
           log("[v2.0.19] speakingVideo already ready · readyState=" + _sv.readyState);
         }
+        // v2.0.29 · 預載 3s + 10s 講話池 (避免第一次切換時冷快取卡頓)
+        ["/static/sophie-speak-3s.mp4", "/static/sophie-speak-10s.mp4"].forEach(function (src) {
+          try {
+            var pre = document.createElement("video");
+            pre.preload = "auto"; pre.muted = true; pre.style.display = "none";
+            pre.src = src;
+            document.body.appendChild(pre);
+            pre.load();
+            setTimeout(function () { try { pre.parentNode && pre.parentNode.removeChild(pre); } catch (e) {} }, 8000);
+          } catch (e) {}
+        });
+        log("[v2.0.29] speak pool preload: 3s + 10s 影片暖機中");
         var _iv = document.getElementById("liveVideo");
         if (_iv && _iv.paused) {
           var _ivp = _iv.play();
@@ -2905,14 +2917,29 @@
                 } catch (e) {}
               }
               // v1.3.1 CRITICAL FIX · OpenAI Realtime 不 emit *.start · 改聽第一個 audio delta trigger startSpeaking
+              // v2.0.29 · Edward 5/27 字數選池 · 等 180ms 看 transcript 累積字數選對應長度影片
               if (!window.__sophieSpeakingTriggered && animPool && typeof animPool.startSpeaking === "function") {
                 window.__sophieSpeakingTriggered = true;
-                // v1.9.13 · 霍爾刀 3 · 記錄 audio 開始時間 · lipsync 命中時對齊 currentTime
                 window.__sophieAudioStartTs = Date.now();
                 window.__sophieLipsyncActive = false;
-                animPool.startSpeaking();
                 scheduleLipsyncKick(data.type);
-                log("audio.delta first chunk -> startSpeaking · audio ts " + window.__sophieAudioStartTs);
+                // 180ms 評估後再 setSpeakingSrc + startSpeaking
+                // (textBuffer 此時應已累積 3-8 字 · 足夠估「短/中/長」三池)
+                setTimeout(function () {
+                  var n = (sophieTextBuffer || "").length;
+                  var src;
+                  if (n <= 3) src = "/static/sophie-speak-3s.mp4";
+                  else if (n >= 12) src = "/static/sophie-speak-10s.mp4";
+                  else src = "/static/sophie-speaking.mp4";
+                  try {
+                    if (animPool && typeof animPool.setSpeakingSrc === "function") {
+                      animPool.setSpeakingSrc(src);
+                    }
+                  } catch (eSrc) { log("[v2.0.29] setSrc fail: " + eSrc.message); }
+                  animPool.startSpeaking();
+                  log("[v2.0.29] speak pool · " + n + " chars → " + src.split("/").pop());
+                }, 180);
+                log("audio.delta first chunk -> queue length eval (180ms) · ts " + window.__sophieAudioStartTs);
               }
             } else if (data.type === "response.audio.done" || data.type === "response.output_audio.done") {
               // v1.9.15 · 霍爾刀 2 · 砍掉 response.audio_transcript.done · 它只是文字完成 ≠ 視覺可停
@@ -3426,7 +3453,7 @@
       });
     }
 
-    log("Voice Path v2.0.28 - 鏡頭小窗移右上 + 無邊框 + 雙層柔陰影 + 進場淡入 - 2026-05-26");
+    log("Voice Path v2.0.29 - 講話動畫池字數選池 (3s 短回 / 5s 中等 / 10s 長句 · 180ms 評估) - 2026-05-27");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();

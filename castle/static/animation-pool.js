@@ -791,6 +791,31 @@
     this.speakingCtrl.stop();
   };
 
+  // v2.0.29 · Edward 5/27 字數選池 · 蘇菲講話長度動態配對應影片
+  // 3s 影片 (短回 / 1-3 字 / 嗯啦 對啊)
+  // 5s 影片 (中等 / 4-11 字 / 預設 · sophie-speaking.mp4)
+  // 10s 影片 (長句 / 12+ 字 / 完整段落)
+  // 規格紀律: 三支影片首尾都是 idle 第 1 幀 · 接 idle 無縫
+  AnimationPool.prototype.setSpeakingSrc = function (srcUrl) {
+    var v = this.speakingVideo;
+    if (!v) return false;
+    try {
+      var current = v.getAttribute("src") || "";
+      // 已是同 src · 不必 reload
+      if (current.indexOf(srcUrl) !== -1) {
+        this._log("[v2.0.29] setSpeakingSrc no-op: " + srcUrl.split("/").pop());
+        return true;
+      }
+      v.src = srcUrl;
+      try { v.load(); } catch (loadErr) {}
+      this._log("[v2.0.29] setSpeakingSrc → " + srcUrl.split("/").pop());
+      return true;
+    } catch (e) {
+      this._log("[v2.0.29] setSpeakingSrc fail: " + e.message);
+      return false;
+    }
+  };
+
   AnimationPool.prototype._maybeFireGreeting = function () {
     try {
       var rec = localStorage.getItem(GREETED_KEY);
