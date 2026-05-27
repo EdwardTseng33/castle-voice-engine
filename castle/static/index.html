@@ -2064,8 +2064,8 @@
         } else if (_sv) {
           log("[v2.0.19] speakingVideo already ready · readyState=" + _sv.readyState);
         }
-        // v2.0.29 · 預載 3s + 10s 講話池 (避免第一次切換時冷快取卡頓)
-        ["/static/sophie-speak-3s.mp4", "/static/sophie-speak-10s.mp4"].forEach(function (src) {
+        // v2.0.30 · 預載 3s + 7s + 10s 講話池 (避免第一次切換時冷快取卡頓 · 5s 預設 element 已有)
+        ["/static/sophie-speak-3s.mp4", "/static/sophie-speak-7s.mp4", "/static/sophie-speak-10s.mp4"].forEach(function (src) {
           try {
             var pre = document.createElement("video");
             pre.preload = "auto"; pre.muted = true; pre.style.display = "none";
@@ -2928,16 +2928,18 @@
                 setTimeout(function () {
                   var n = (sophieTextBuffer || "").length;
                   var src;
-                  if (n <= 3) src = "/static/sophie-speak-3s.mp4";
-                  else if (n >= 12) src = "/static/sophie-speak-10s.mp4";
-                  else src = "/static/sophie-speaking.mp4";
+                  // v2.0.30 · 4 檔池子 (Edward 5/27 從 10s 源剪 7s 補中間檔)
+                  if (n <= 3) src = "/static/sophie-speak-3s.mp4";        // 短回 嗯啦 對啊
+                  else if (n <= 10) src = "/static/sophie-speaking.mp4";  // 中等 5s
+                  else if (n <= 18) src = "/static/sophie-speak-7s.mp4";  // 稍長 7s
+                  else src = "/static/sophie-speak-10s.mp4";              // 長句 10s
                   try {
                     if (animPool && typeof animPool.setSpeakingSrc === "function") {
                       animPool.setSpeakingSrc(src);
                     }
-                  } catch (eSrc) { log("[v2.0.29] setSrc fail: " + eSrc.message); }
+                  } catch (eSrc) { log("[v2.0.30] setSrc fail: " + eSrc.message); }
                   animPool.startSpeaking();
-                  log("[v2.0.29] speak pool · " + n + " chars → " + src.split("/").pop());
+                  log("[v2.0.30] speak pool · " + n + " chars → " + src.split("/").pop());
                 }, 180);
                 log("audio.delta first chunk -> queue length eval (180ms) · ts " + window.__sophieAudioStartTs);
               }
@@ -3453,7 +3455,7 @@
       });
     }
 
-    log("Voice Path v2.0.29 - 講話動畫池字數選池 (3s 短回 / 5s 中等 / 10s 長句 · 180ms 評估) - 2026-05-27");
+    log("Voice Path v2.0.30 - 講話池 4 檔升級 (3s / 5s / 7s / 10s · 7s 從 10s 源剪同風格) - 2026-05-27");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
