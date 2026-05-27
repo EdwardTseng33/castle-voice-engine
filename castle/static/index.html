@@ -2868,21 +2868,33 @@
                 } catch (e) { log("[OPENING] fallback send fail: " + e.message); }
               }, _needCancel ? 220 : 0);
             }, 1800);
-            // 二次 fallback · 3500ms · 防第一次 race / fail
-            setTimeout(function () {
-              if (window.__sophieOpeningSent) return;
-              window.__sophieOpeningSent = true;
-              var _needCancel2 = !!window.__sophieResponseActive;
-              if (_needCancel2) {
-                try { dc.send(JSON.stringify({ type: "response.cancel" })); } catch (e) {}
+            // v2.0.41 · 保險重試 · 每 2 秒 check 蘇菲開口了沒、沒開口就重送 · 最多 3 次
+            // 用 __sophieSpeakingTriggered 判斷 (audio.delta 第一筆就會 true)
+            window.__sophieOpeningRetries = 0;
+            window.__sophieOpeningRetryTimer = setInterval(function () {
+              if (window.__sophieSpeakingTriggered) {
+                clearInterval(window.__sophieOpeningRetryTimer);
+                log("[OPENING] ✅ 蘇菲已開口、停止重試");
+                return;
               }
-              setTimeout(function () {
-                try {
-                  dc.send(JSON.stringify({ type: "response.create" }));
-                  log("[OPENING] 3500ms second fallback · " + (_needCancel2 ? "cancel + " : "") + "create forced");
-                } catch (e) {}
-              }, _needCancel2 ? 220 : 0);
-            }, 3500);
+              window.__sophieOpeningRetries++;
+              if (window.__sophieOpeningRetries > 3) {
+                clearInterval(window.__sophieOpeningRetryTimer);
+                log("[OPENING] ❌ 3 次重試後蘇菲仍未開口、放棄 (可能 OpenAI 帳戶 / 網路問題)");
+                return;
+              }
+              log("[OPENING] 重試 #" + window.__sophieOpeningRetries + " · 強送 response.create");
+              try {
+                if (window.__sophieResponseActive) {
+                  try { dc.send(JSON.stringify({ type: "response.cancel" })); } catch (e) {}
+                }
+                setTimeout(function () {
+                  try {
+                    dc.send(JSON.stringify({ type: "response.create" }));
+                  } catch (e) { log("[OPENING] retry send fail: " + e.message); }
+                }, 200);
+              } catch (e) {}
+            }, 2500);  // 首次 2.5 秒後 check (前面 1800ms 已送一次、給時間)
           } catch (e) {
             log("session.update send fail: " + e.message);
           }
@@ -3545,6 +3557,7 @@
       stopEmotionPoll();
       stopPoseHandsPoll();  // v1.1.3
       try { stopVisionNowPoll(); } catch (e) {}  // v2.0.34 真視覺接通
+      try { if (window.__sophieOpeningRetryTimer) clearInterval(window.__sophieOpeningRetryTimer); } catch (e) {}  // v2.0.41 清開頭重試 timer
       try {
         var _tdEnd = document.getElementById("thinkingDots");
         if (_tdEnd) _tdEnd.classList.remove("is-active");  // v2.0.35 思考點清除
@@ -3695,7 +3708,7 @@
       });
     }
 
-    log("Voice Path v2.0.40 - cancel 只在 active 才送 + 已知無害 error 靜音 - 2026-05-27");
+    log("Voice Path v2.0.41 - 開頭問候 3 次重試保險 (每 2.5 秒 check · 沒開口就重送) - 2026-05-27");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
