@@ -2165,9 +2165,65 @@
         });
     }
 
+    // v2.0.42 · Edward 5/27 拍板 · 預錄招呼語 cache · 點 Start 立刻播 (用 100 句 lipsync cache 內現成招呼)
+    // 不靠 OpenAI 連線、不靠用戶產素材 · 純前端依時段選 mp4 + 播
+    function playPreRollGreeting() {
+      try {
+        if (!window.PhraseMatcher || typeof window.PhraseMatcher.listPhrases !== "function") return false;
+        var phrases = window.PhraseMatcher.listPhrases();
+        if (!phrases || !phrases.length) return false;
+        // 依當前時段選關鍵字
+        var h = new Date().getHours();
+        var key;
+        if (h >= 5 && h < 11) key = "早";
+        else if (h >= 11 && h < 14) key = "午";
+        else if (h >= 14 && h < 18) key = "下午";
+        else if (h >= 18 && h < 22) key = "晚上";
+        else key = "晚安";
+        // 也接受「嗨」「見面」當泛用
+        var bank = phrases.filter(function (p) {
+          var s = (p.sentence || "");
+          return s.indexOf(key) === 0 || s.indexOf("嗨") === 0 || s.indexOf("Edward") !== -1 && (s.indexOf(key) !== -1 || s.indexOf("見面") !== -1);
+        });
+        if (!bank.length) bank = phrases.filter(function (p) {
+          var s = (p.sentence || "");
+          return s.indexOf("嗨") === 0 || s.indexOf("早") === 0 || s.indexOf("晚") === 0;
+        });
+        if (!bank.length) return false;
+        var pick = bank[Math.floor(Math.random() * bank.length)];
+        log("[PREROLL] greeting · key=" + key + " · pick='" + pick.sentence + "' · " + (pick.mp4_url || pick.url));
+        // 用 liveVideo 直接播 · 含聲音 (不 muted)
+        var v = document.getElementById("liveVideo");
+        if (!v) return false;
+        v.classList.add("is-switching");
+        v.src = pick.mp4_url || pick.url;
+        v.loop = false;
+        v.muted = false;  // 招呼影片有聲音 · 不 mute
+        v.volume = 1.0;
+        var pp = v.play();
+        if (pp && pp["catch"]) pp["catch"](function (e) { log("[PREROLL] play fail: " + e.message); });
+        window.__sophiePrerollPlaying = true;
+        var onEnd = function () {
+          v.removeEventListener("ended", onEnd);
+          v.classList.remove("is-switching");
+          v.muted = true;  // 播完恢復 mute (避免後面 lipsync 跟 OpenAI audio 重疊)
+          v.loop = true;
+          window.__sophiePrerollPlaying = false;
+          log("[PREROLL] greeting ended · back to idle");
+        };
+        v.addEventListener("ended", onEnd, { once: true });
+        return true;
+      } catch (e) {
+        log("[PREROLL] fail: " + e.message);
+        return false;
+      }
+    }
+
     async function startConversation() {
       if (shell.getAttribute("data-state") !== "idle") return;
       startBtn.disabled = true;
+      // v2.0.42 · 立刻播 preroll 招呼 (不等 OpenAI 連線)
+      playPreRollGreeting();
       // v2.0.21 · 顯示「正在喚醒蘇菲」overlay · ready 後 (蘇菲第一個 audio.delta) 隱藏
       try {
         var _ro = document.getElementById("readyOverlay");
@@ -2570,7 +2626,8 @@
           var lipsyncDirective = window.__sophieEnableLipsync === true
             ? "\n\n[嘴型對齊測試] 如果自然剛好能用句庫短句開頭，可以用；不要為了對嘴犧牲語意與聊天自然度。"
             : "\n\n[嘴型對齊] 目前關閉。不要刻意套句庫，請優先自然聊天。";
-          var greetingDirective = "\n\n[Opening Greeting] 連線一建立、你的第一句話必須是: 「" + greeting + "」(不可改寫、不可前後加字、自然語氣念出來。念完才開始正常對話。)";
+          // v2.0.42 · 開頭問候由前端 preroll mp4 處理 · OpenAI 不再講開頭、等用戶開口才回
+          var greetingDirective = "\n\n[Opening] 你已經透過預錄影片打過招呼了 (「" + greeting + "」)。不要再講任何開頭問候 / 自我介紹。安靜等 Edward 開口、然後正常對話。";
           var instructions = baseInstr + perceptionDirective + brainDirective + animDirective + lipsyncDirective + greetingDirective;
           try {
             dc.send(JSON.stringify({
@@ -3096,6 +3153,25 @@
                   }
                 } catch (e) {}
               }
+            } else if (data.type === "input_audio_buffer.speech_started") {
+              // v2.0.42 · Barge-in · Edward 一開口就立刻 cancel 蘇菲講話 + 停動畫
+              log("[BARGE-IN] user 開口 · cancel 蘇菲 + 停嘴");
+              try {
+                if (window.__sophieResponseActive) {
+                  dc.send(JSON.stringify({ type: "response.cancel" }));
+                }
+              } catch (e) {}
+              try {
+                window.__sophieSpeakingHoldUntil = 0;  // 砍保護鎖、讓 stopSpeaking 立刻能停
+                if (animPool && typeof animPool.stopSpeaking === "function") {
+                  animPool.stopSpeaking();
+                }
+                // 順手清掉 audio buffer 殘留
+                var _la = document.getElementById("liveAudio");
+                if (_la) {
+                  try { _la.pause(); _la.currentTime = 0; } catch (e2) {}
+                }
+              } catch (e) {}
             } else if (data.type === "response.audio_transcript.delta" || data.type === "response.output_audio_transcript.delta") {
               // v2.0.23 · transcript.delta 也算 ready · 隱藏「正在喚醒蘇菲」overlay (蘇菲開始輸出文字 = 連線成功)
               if (!window.__sophieReady) {
@@ -3708,7 +3784,7 @@
       });
     }
 
-    log("Voice Path v2.0.41 - 開頭問候 3 次重試保險 (每 2.5 秒 check · 沒開口就重送) - 2026-05-27");
+    log("Voice Path v2.0.42 - barge-in 中斷對話 + 預錄招呼 cache (Edward 5/27 兩條優化合 ship) - 2026-05-27");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();

@@ -143,9 +143,15 @@
     return { loaded: true, total: (MANIFEST.phrases || []).length };
   }
 
+  // v2.0.42 · 暴露 phrases 給 preroll greeting 用
+  function listPhrases() {
+    return (MANIFEST && MANIFEST.phrases) ? MANIFEST.phrases.slice() : [];
+  }
+
   global.PhraseMatcher = {
     init: init,
     findMatching: findMatching,
     manifestInfo: manifestInfo,
+    listPhrases: listPhrases,
   };
 })(window);
