@@ -429,6 +429,35 @@
     .live-video-speaking.is-visible { opacity: 1; }
     /* v1.9.7 · 砍雙層回單 · idle 永遠在 · 命中 lipsync 才切片 · 切片時 opacity 0.75 隱載入空檔 */
     .live-video.is-switching { opacity: 1; transition: none; }
+
+    /* viseme-poc-v0.1 · 業界輕量 lipsync overlay · 預設 hidden · ?viseme=1 啟動 */
+    /* z-index 3 · 蓋在 speaking 層之上 · 沒命中 viseme 時 display: none 把底層秀出 */
+    .viseme-overlay {
+      z-index: 3;
+      display: none;
+      opacity: 0;
+      transition: opacity 80ms linear;
+      will-change: opacity;
+      pointer-events: none;
+    }
+    .viseme-overlay.is-on { display: block; opacity: 1; }
+    /* debug 浮層 · 顯示當前 viseme 名 · 沒 mp4 也能用文字驗證映射對 */
+    .viseme-debug {
+      position: absolute;
+      left: 12px;
+      top: 12px;
+      padding: 6px 10px;
+      background: rgba(0, 0, 0, 0.55);
+      color: #fff;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      border-radius: 8px;
+      z-index: 26;
+      display: none;
+      pointer-events: none;
+    }
+    .viseme-debug.is-on { display: block; }
     /* v2.0.15-no-orange-flash · Edward 5/25 catch "橘色底色閃" · root cause = stage-canvas 底色橘 (#C95B2E) 透出 */
     /* 修法：is-rotating 期間 opacity 保持 1 · 不透底色 · 改用 video.src preload 完才切 (next idle ready 才換) */
     /* fade 機制改：先 ready 再 swap · transition 500ms 接縫平順 */
@@ -841,6 +870,21 @@
         src="/static/sophie-speaking.mp4"
       ></video>
       <audio class="live-audio" id="liveAudio" autoplay playsinline></audio>
+
+      <!-- viseme-poc-v0.1 · 業界輕量 lipsync overlay -->
+      <!-- 平常 display: none · ?viseme=1 啟動時跟 transcript.delta 流切 src -->
+      <!-- 8 個 mp4 預期 path: /static/sophie-viseme-0.mp4 ~ /static/sophie-viseme-7.mp4 -->
+      <video
+        class="live-video viseme-overlay"
+        id="visemeOverlay"
+        autoplay
+        playsinline
+        muted
+        preload="auto"
+        aria-hidden="true"
+      ></video>
+      <!-- debug 浮層 · 顯示當前 viseme 名 · 沒 mp4 也能驗證映射 -->
+      <div class="viseme-debug" id="visemeDebug" aria-hidden="true">嘴形: -</div>
 
       <!-- v2.0.21 · Edward 5/26 catch · 視訊 self-view 右下角小窗 (用戶確認自己鏡頭有開) -->
       <video
@@ -1733,6 +1777,9 @@
   <script src="/static/avatar-director.js?v=2.0.6"></script>
   <script src="/static/animation-pool.js?v=2.0.29-speak-length-pool"></script>
   <script src="/static/phrase-matcher.js?v=2.0.6"></script>
+  <!-- viseme-poc-v0.1 · 業界輕量 lipsync (Duix / Tavus / HeyGen 同款路線 · CPU 即可) -->
+  <!-- feature flag: ?viseme=1 啟動 · 預設 off · 不影響主線 -->
+  <script src="/static/viseme-engine.js?v=poc-v0.1"></script>
 
   <script>
   (function () {
@@ -1769,6 +1816,94 @@
     // 講話視覺改靠 SpeakingController 切上層 sophie-speaking.mp4 (嘴自然律動 · 5 frame evidence 嘴開合明顯)
     window.__sophieEnableLipsync = qs.get("lipsync") === "1" || qs.get("lipsync") === "true";
     window.__sophieLipsyncTest = qs.get("lipsync_test") || qs.get("test_lipsync") || "";
+
+    // viseme-poc-v0.1 · 業界輕量 lipsync runtime · feature flag ?viseme=1 啟動 · 預設 off
+    // Duix / Tavus / HeyGen 同款路線 (非 neural · CPU 即可)
+    // 沒命中時 visemeOverlay display: none、底層 idle / speaking 維持原樣 (不影響主線)
+    (function initVisemeRuntime() {
+      var enabled = window.VisemeEngine && window.VisemeEngine.isEnabled();
+      var debugOn = qs.get("viseme_debug") === "1" || enabled;  // 開 viseme 預設也開 debug 字
+      if (!enabled) {
+        log("[viseme] flag off · ?viseme=1 啟動");
+        return;
+      }
+      var overlayEl = document.getElementById("visemeOverlay");
+      var debugEl = document.getElementById("visemeDebug");
+      if (!overlayEl) {
+        log("[viseme] visemeOverlay element 找不到 · 跳過");
+        return;
+      }
+      // 預載 8 個 mp4 (沒檔不 fatal · 缺時 display: none 自然 fallback)
+      var preload = [];
+      for (var pi = 0; pi < window.VisemeEngine.VISEME_COUNT; pi++) {
+        preload.push(window.VisemeEngine.visemeUrl(pi));
+      }
+      log("[viseme] enabled · preload paths: " + preload.join(", "));
+
+      var msPerViseme = parseInt(qs.get("viseme_ms") || "200", 10);
+      if (isNaN(msPerViseme) || msPerViseme < 80 || msPerViseme > 600) msPerViseme = 200;
+
+      var currentSched = null;
+      var lastVid = -1;
+      // mp4 載入失敗時 (Edward 還沒產素材) 自動降級 · 只跑 debug 文字 · 不秀黑塊
+      var assetMissing = false;
+      try {
+        overlayEl.addEventListener("error", function () {
+          assetMissing = true;
+          overlayEl.classList.remove("is-on");
+          log("[viseme] mp4 載入 fail · 降級為 debug-text mode (素材就位後自動恢復)");
+        });
+        overlayEl.addEventListener("loadeddata", function () {
+          assetMissing = false;
+        });
+      } catch (eL) {}
+
+      function setViseme(vid) {
+        if (vid === lastVid) return;
+        lastVid = vid;
+        try {
+          var url = window.VisemeEngine.visemeUrl(vid);
+          overlayEl.src = url;
+          if (!assetMissing) {
+            overlayEl.classList.add("is-on");
+            var p = overlayEl.play();
+            if (p && typeof p.catch === "function") p.catch(function () {});
+          }
+        } catch (e) {}
+        if (debugEl && debugOn) {
+          debugEl.classList.add("is-on");
+          var name = (window.VisemeEngine.VISEME_NAMES[vid] || "?");
+          debugEl.textContent = "嘴形 V" + vid + " · " + name + (assetMissing ? " (素材缺)" : "");
+        }
+      }
+
+      function stop() {
+        if (currentSched) { try { currentSched.cancel(); } catch (e) {} currentSched = null; }
+        try { overlayEl.classList.remove("is-on"); } catch (e) {}
+        if (debugEl) { try { debugEl.classList.remove("is-on"); } catch (e) {} }
+        lastVid = -1;
+      }
+
+      // feed(deltaText) · 來自 audio_transcript.delta 一段一段累積進來
+      // 策略: 每 chunk 重新 schedule (cancel 舊的 · 用 chunk 文字接著動)
+      function feed(deltaText) {
+        if (!deltaText) return;
+        var ids = window.VisemeEngine.textToVisemes(deltaText);
+        if (!ids || ids.length === 0) return;
+        if (currentSched) { try { currentSched.cancel(); } catch (e) {} currentSched = null; }
+        currentSched = window.VisemeEngine.scheduleVisemes(ids, msPerViseme, function (vid, idx) {
+          // idx === ids.length → onTick(0, n) 收尾 rest · stop() 讓底層秀出
+          if (idx >= ids.length) {
+            stop();
+            return;
+          }
+          setViseme(vid);
+        });
+      }
+
+      window.__sophieVisemeRuntime = { feed: feed, stop: stop, setViseme: setViseme };
+      log("[viseme] runtime ready · msPerViseme=" + msPerViseme);
+    })();
 
     try {
       if (typeof AvatarDirector === "function") {
@@ -3140,6 +3275,15 @@
               window.__sophieSpeakingHoldUntil = 0;
               scheduleSpeakingStop("audio.done", 1200);
               clearLipsyncKick();
+              // viseme-poc-v0.1 · 收尾停 viseme overlay (讓底層 idle/speaking 自然秀出)
+              try {
+                if (window.__sophieVisemeRuntime && typeof window.__sophieVisemeRuntime.stop === "function") {
+                  // 給 audio buffer 撐到 ~1200ms 後再 stop · 避免嘴比聲早關
+                  setTimeout(function () {
+                    try { window.__sophieVisemeRuntime.stop(); } catch (e) {}
+                  }, 1200);
+                }
+              } catch (vErr) {}
               // v1.3.1 · reset trigger flag (下次回應重新等)
               window.__sophieSpeakingTriggered = false;
               // v1.1.0 · flush transcript buffer 進 lastSophieText
@@ -3165,6 +3309,10 @@
                 window.__sophieSpeakingHoldUntil = 0;  // 砍保護鎖、讓 stopSpeaking 立刻能停
                 if (animPool && typeof animPool.stopSpeaking === "function") {
                   animPool.stopSpeaking();
+                }
+                // viseme-poc-v0.1 · barge-in 立刻停 viseme overlay
+                if (window.__sophieVisemeRuntime && typeof window.__sophieVisemeRuntime.stop === "function") {
+                  window.__sophieVisemeRuntime.stop();
                 }
                 // 順手清掉 audio buffer 殘留
                 var _la = document.getElementById("liveAudio");
@@ -3193,6 +3341,17 @@
               extendSpeakingHold(9000, data.type);
               if (typeof data.delta === "string") {
                 sophieTextBuffer += data.delta;
+                // viseme-poc-v0.1 · feature flag on 才跑 · 不影響主線
+                try {
+                  if (window.VisemeEngine && window.VisemeEngine.isEnabled() && data.delta) {
+                    var __vRuntime = window.__sophieVisemeRuntime;
+                    if (__vRuntime && typeof __vRuntime.feed === "function") {
+                      __vRuntime.feed(data.delta);
+                    }
+                  }
+                } catch (vErr) {
+                  log("[viseme] feed fail: " + vErr.message);
+                }
               }
               // v1.9.13 · 霍爾刀 2+3 · 砍 5 字 gate (讓 PhraseMatcher 自管短長)
               // + 命中時用 audio elapsed time 對齊 video.currentTime · 嘴不晚半拍
