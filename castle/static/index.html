@@ -3277,6 +3277,11 @@
               window.__sophieSpeakingHoldUntil = 0;
               scheduleSpeakingStop("audio.done", 1200);
               clearLipsyncKick();
+              // v0.4.x-hotfix · 清 semantic debounce timer (避免 audio 結束後仍打後端)
+              if (window.__sophieSemDebounce) {
+                clearTimeout(window.__sophieSemDebounce);
+                window.__sophieSemDebounce = null;
+              }
               // viseme-poc-v0.1 · 收尾停 viseme overlay (讓底層 idle/speaking 自然秀出)
               try {
                 if (window.__sophieVisemeRuntime && typeof window.__sophieVisemeRuntime.stop === "function") {
@@ -3315,6 +3320,11 @@
                 // viseme-poc-v0.1 · barge-in 立刻停 viseme overlay
                 if (window.__sophieVisemeRuntime && typeof window.__sophieVisemeRuntime.stop === "function") {
                   window.__sophieVisemeRuntime.stop();
+                }
+                // v0.4.x-hotfix · barge-in 也清 semantic debounce
+                if (window.__sophieSemDebounce) {
+                  clearTimeout(window.__sophieSemDebounce);
+                  window.__sophieSemDebounce = null;
                 }
                 // 順手清掉 audio buffer 殘留
                 var _la = document.getElementById("liveAudio");
@@ -3358,23 +3368,31 @@
               // v1.9.13 · 霍爾刀 2+3 · 砍 5 字 gate (讓 PhraseMatcher 自管短長)
               // + 命中時用 audio elapsed time 對齊 video.currentTime · 嘴不晚半拍
               // v0.4.x · ?semantic=1 啟動意思向量比對 (取代 Levenshtein 字面)
+              // v0.4.x-hotfix · semantic 加 debounce 250ms · 避免每 chunk 打後端塞爆
               if (window.PhraseMatcher && !window.__sophiePhraseMatched && sophieTextBuffer.length >= 1) {
                 if (window.__sophieEnableSemanticMatch === true &&
                     typeof window.PhraseMatcher.findMatchingSemantic === "function") {
-                  // 意思向量比對 · async · 用 closure 鎖當前 buffer
-                  (function (bufSnap) {
-                    window.PhraseMatcher.findMatchingSemantic(bufSnap)
-                      .then(function (match) {
-                        if (!match || window.__sophiePhraseMatched) return;
-                        if (window.__sophieEnableLipsync === true) {
-                          playLipsyncVisual(match.phrase.mp4_url, match.phrase.sentence, "HIT-semantic", true);
-                        } else {
-                          window.__sophiePhraseMatched = true;
-                          log("[LIPSYNC READY PAUSED · semantic] " + match.phrase.sentence + " · score=" + (match.score || 0).toFixed(2));
-                        }
-                      })
-                      .catch(function () {});
-                  })(sophieTextBuffer);
+                  // debounce: 蘇菲講完整段 (250ms 沒新字進來) 才打 1 次
+                  // 條件: buffer 至少 5 字 (太短沒意思)
+                  if (sophieTextBuffer.length >= 5) {
+                    if (window.__sophieSemDebounce) clearTimeout(window.__sophieSemDebounce);
+                    window.__sophieSemDebounce = setTimeout(function () {
+                      window.__sophieSemDebounce = null;
+                      if (window.__sophiePhraseMatched) return;
+                      var bufSnap = sophieTextBuffer;
+                      window.PhraseMatcher.findMatchingSemantic(bufSnap)
+                        .then(function (match) {
+                          if (!match || window.__sophiePhraseMatched) return;
+                          if (window.__sophieEnableLipsync === true) {
+                            playLipsyncVisual(match.phrase.mp4_url, match.phrase.sentence, "HIT-semantic", true);
+                          } else {
+                            window.__sophiePhraseMatched = true;
+                            log("[LIPSYNC READY PAUSED · semantic] " + match.phrase.sentence + " · score=" + (match.score || 0).toFixed(2));
+                          }
+                        })
+                        .catch(function () {});
+                    }, 250);
+                  }
                 } else {
                   // 舊路 · Levenshtein 字面比對 (sync)
                   var match = window.PhraseMatcher.findMatching(sophieTextBuffer);
