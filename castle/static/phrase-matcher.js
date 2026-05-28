@@ -148,9 +148,96 @@
     return (MANIFEST && MANIFEST.phrases) ? MANIFEST.phrases.slice() : [];
   }
 
+  // v0.4.x · 意思向量比對 (取代 Levenshtein 字面比對 · 透過後端 /lipsync/match)
+  // 用法: ?semantic=1 啟動 · 觸發走 findMatchingSemantic() 取代 findMatching()
+  // 回傳 promise → { phrase, distance: null, ratio: 1 - score, score, semantic } 或 null
+
+  var _semCache = {};
+  var _semCacheKeys = [];
+  var _SEM_CACHE_MAX = 200;
+  var _inflightKey = null;
+  var _inflightPromise = null;
+
+  function _semCachePut(key, val) {
+    _semCache[key] = val;
+    _semCacheKeys.push(key);
+    while (_semCacheKeys.length > _SEM_CACHE_MAX) {
+      var old = _semCacheKeys.shift();
+      delete _semCache[old];
+    }
+  }
+
+  function findMatchingSemantic(text) {
+    if (!text || typeof text !== "string") return Promise.resolve(null);
+    var nt = _normalize(text);
+    if (!nt) return Promise.resolve(null);
+    if (Object.prototype.hasOwnProperty.call(_semCache, nt)) {
+      return Promise.resolve(_semCache[nt]);
+    }
+    if (_inflightKey === nt && _inflightPromise) return _inflightPromise;
+    _inflightKey = nt;
+    _inflightPromise = fetch("/lipsync/match", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ text: text }),
+    })
+      .then(function (r) {
+        if (!r.ok) return null;
+        return r.json();
+      })
+      .then(function (data) {
+        if (!data || !data.ok || !data.match) {
+          _semCachePut(nt, null);
+          return null;
+        }
+        var matchPhrase = null;
+        if (MANIFEST && MANIFEST.phrases) {
+          for (var i = 0; i < MANIFEST.phrases.length; i++) {
+            if (MANIFEST.phrases[i].phrase_id === data.match.phrase_id) {
+              matchPhrase = MANIFEST.phrases[i];
+              break;
+            }
+          }
+        }
+        if (!matchPhrase) {
+          matchPhrase = {
+            phrase_id: data.match.phrase_id,
+            sentence: data.match.sentence,
+            mp4_url: data.match.mp4_url,
+          };
+        }
+        var out = {
+          phrase: matchPhrase,
+          distance: null,
+          ratio: 1 - data.match.score,
+          score: data.match.score,
+          semantic: true,
+        };
+        _semCachePut(nt, out);
+        try {
+          console.log("[PhraseMatcher.semantic] HIT · " + matchPhrase.sentence +
+            " · score=" + data.match.score.toFixed(3) + " · buffer=" + nt.slice(0, 40));
+        } catch (e) {}
+        return out;
+      })
+      .catch(function (e) {
+        try { console.warn("[PhraseMatcher.semantic] fail:", e.message); } catch (_) {}
+        return null;
+      })
+      .finally(function () {
+        if (_inflightKey === nt) {
+          _inflightKey = null;
+          _inflightPromise = null;
+        }
+      });
+    return _inflightPromise;
+  }
+
   global.PhraseMatcher = {
     init: init,
     findMatching: findMatching,
+    findMatchingSemantic: findMatchingSemantic,
     manifestInfo: manifestInfo,
     listPhrases: listPhrases,
   };

@@ -1773,7 +1773,7 @@
   <script src="/static/conversation-memory.js?v=2.0.6"></script>
   <script src="/static/avatar-director.js?v=2.0.6"></script>
   <script src="/static/animation-pool.js?v=2.0.29-speak-length-pool"></script>
-  <script src="/static/phrase-matcher.js?v=2.0.6"></script>
+  <script src="/static/phrase-matcher.js?v=0.4.x-semantic"></script>
   <!-- viseme-poc-v0.1 · 業界輕量 lipsync (Duix / Tavus / HeyGen 同款路線 · CPU 即可) -->
   <!-- feature flag: ?viseme=1 啟動 · 預設 off · 不影響主線 -->
   <script src="/static/viseme-engine.js?v=poc-v0.2-jpg"></script>
@@ -1813,6 +1813,13 @@
     // 講話視覺改靠 SpeakingController 切上層 sophie-speaking.mp4 (嘴自然律動 · 5 frame evidence 嘴開合明顯)
     window.__sophieEnableLipsync = qs.get("lipsync") === "1" || qs.get("lipsync") === "true";
     window.__sophieLipsyncTest = qs.get("lipsync_test") || qs.get("test_lipsync") || "";
+
+    // v0.4.x · 意思向量比對 (取代 Levenshtein) · ?semantic=1 啟動 · 預設 off
+    // 開時 PhraseMatcher.findMatchingSemantic 走 /lipsync/match endpoint · OpenAI text-embedding-3-small
+    window.__sophieEnableSemanticMatch = qs.get("semantic") === "1" || qs.get("semantic") === "true";
+    if (window.__sophieEnableSemanticMatch) {
+      try { log("[semantic] 意思向量比對 ON · /lipsync/match endpoint"); } catch (e) {}
+    }
 
     // viseme-poc-v0.1 · 業界輕量 lipsync runtime · feature flag ?viseme=1 啟動 · 預設 off
     // Duix / Tavus / HeyGen 同款路線 (非 neural · CPU 即可)
@@ -3350,14 +3357,34 @@
               }
               // v1.9.13 · 霍爾刀 2+3 · 砍 5 字 gate (讓 PhraseMatcher 自管短長)
               // + 命中時用 audio elapsed time 對齊 video.currentTime · 嘴不晚半拍
+              // v0.4.x · ?semantic=1 啟動意思向量比對 (取代 Levenshtein 字面)
               if (window.PhraseMatcher && !window.__sophiePhraseMatched && sophieTextBuffer.length >= 1) {
-                var match = window.PhraseMatcher.findMatching(sophieTextBuffer);
-                if (match) {
-                  if (window.__sophieEnableLipsync === true) {
-                    playLipsyncVisual(match.phrase.mp4_url, match.phrase.sentence, "HIT", true);
-                  } else {
-                    window.__sophiePhraseMatched = true;
-                    log("[LIPSYNC READY PAUSED] " + match.phrase.sentence + " · Director path ready, feature flag off");
+                if (window.__sophieEnableSemanticMatch === true &&
+                    typeof window.PhraseMatcher.findMatchingSemantic === "function") {
+                  // 意思向量比對 · async · 用 closure 鎖當前 buffer
+                  (function (bufSnap) {
+                    window.PhraseMatcher.findMatchingSemantic(bufSnap)
+                      .then(function (match) {
+                        if (!match || window.__sophiePhraseMatched) return;
+                        if (window.__sophieEnableLipsync === true) {
+                          playLipsyncVisual(match.phrase.mp4_url, match.phrase.sentence, "HIT-semantic", true);
+                        } else {
+                          window.__sophiePhraseMatched = true;
+                          log("[LIPSYNC READY PAUSED · semantic] " + match.phrase.sentence + " · score=" + (match.score || 0).toFixed(2));
+                        }
+                      })
+                      .catch(function () {});
+                  })(sophieTextBuffer);
+                } else {
+                  // 舊路 · Levenshtein 字面比對 (sync)
+                  var match = window.PhraseMatcher.findMatching(sophieTextBuffer);
+                  if (match) {
+                    if (window.__sophieEnableLipsync === true) {
+                      playLipsyncVisual(match.phrase.mp4_url, match.phrase.sentence, "HIT", true);
+                    } else {
+                      window.__sophiePhraseMatched = true;
+                      log("[LIPSYNC READY PAUSED] " + match.phrase.sentence + " · Director path ready, feature flag off");
+                    }
                   }
                 }
               }

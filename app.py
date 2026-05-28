@@ -80,6 +80,7 @@ def fastapi_app():
     from castle.server.brain_endpoints import attach_brain_routes  # v1.6.0 Claude 真大腦 + 派工接口
     from castle.server.livekit_endpoints import attach_livekit_routes  # v0.10 Phase 2 LiveKit WebRTC SFU
     from castle.server.vision_now_endpoints import attach_vision_now_routes  # v0.4.0 真視覺接通
+    from castle.server.lipsync_match_endpoint import attach_lipsync_match_routes  # v0.4.x 意思向量比對
 
     attach_realtime_routes(fastapi_instance)
     attach_camera_routes(fastapi_instance)
@@ -95,6 +96,9 @@ def fastapi_app():
     import json as _json
     from fastapi.responses import FileResponse
     LIPSYNC_DIR = "/lipsync_cache"
+
+    # v0.4.x · 意思向量比對 endpoint (取代 Levenshtein) · 共享 LIPSYNC_DIR + volume
+    attach_lipsync_match_routes(fastapi_instance, lipsync_dir=LIPSYNC_DIR, lipsync_volume=lipsync_volume)
 
     @fastapi_instance.get("/lipsync/manifest.json")
     async def _lipsync_manifest():
