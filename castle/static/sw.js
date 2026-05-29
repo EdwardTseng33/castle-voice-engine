@@ -5,17 +5,20 @@
 // v2.0.31 (2026-05-29): Edward 5/29 catch 後卡西法掃出「SW sophie-v2.0.6 鎖舊版」·
 //   CACHE_VERSION 從 v1 起沒動過、activate 不清舊 cache、用戶拿到 stale index.html/js。
 //   bump 版本 → activate 清掉所有 sophie-* 舊 cache · 配 skipWaiting + clients.claim 強制換新。
-const CACHE_VERSION = 'v2.0.34';
+// v2.0.35 (2026-05-29 · Step 0 交付層根治): 今天鬼打牆 50% = SW 餵舊版 code。
+//   舊版 .js / index.html 是 network-first (成功後仍 cache.put + 失敗 fallback cache) →
+//   慢網路 / 部署 propagate 空檔仍可能吃到 stale code。
+//   改成「程式碼純 network-only · 完全不碰 cache」: index.html + 所有 .js 不寫不讀 cache。
+//   只有圖片 / icon 這類靜態資產才走 cache (這些不會 stale 出 bug)。mp4 由 fetch bypass。
+//   skipWaiting + clients.claim + controllerchange 自動 reload (非通話中) 保持不變。
+const CACHE_VERSION = 'v2.0.35';
 const CACHE_NAME = 'sophie-' + CACHE_VERSION;
 
-// 不 precache mp4 (5MB+ · 阻塞 install) · video element 自己 streaming load 即可
+// v2.0.35 · 程式碼 (.js / index.html / manifest) 一律不 precache · 純 network-only。
+//   只留真正靜態、不會 stale 出 bug 的圖片資產走快取 (PWA 離線 icon 用)。
 const SHELL_ASSETS = [
-  '/static/index.html',
-  '/static/avatar-director.js',
-  '/static/animation-pool.js',
-  '/static/session-memory.js',
-  '/static/conversation-memory.js',  // v1.1.2 · IndexedDB 7 day raw / 30 day summary
-  '/static/phrase-matcher.js',       // v1.5.0 · 嘴對齊 fuzzy match
+  '/static/icon-192.png',
+  '/static/icon-512.png',
   '/static/manifest.json'
 ];
 
@@ -29,6 +32,16 @@ const NEVER_CACHE = [
   '/health',
   '/session/'
 ];
+
+// v2.0.35 · 程式碼資產 = 純 network-only · 完全不碰 cache (杜絕 stale code 來源)。
+//   index.html / 任何 .js 命中 → fetch 直送、不寫 cache、不讀 cache fallback。
+function isCodeAsset(url) {
+  return url.pathname === '/static/index.html' ||
+         url.pathname === '/' ||
+         url.pathname === '/static/' ||
+         url.pathname.endsWith('.html') ||
+         url.pathname.endsWith('.js');
+}
 
 self.addEventListener('install', function (event) {
   event.waitUntil(
@@ -78,24 +91,15 @@ self.addEventListener('fetch', function (event) {
     }
   }
 
-  // v1.9.5 · index.html = network-first 強制
-  // v1.9.14 · 霍爾刀 3 · 擴大到所有 .js · QA 期間避免 stale 動畫 / phrase-matcher 邏輯
-  if (url.pathname === '/static/index.html' || url.pathname.endsWith('.js')) {
-    event.respondWith(
-      fetch(event.request).then(function (resp) {
-        if (resp && resp.ok) {
-          var clone = resp.clone();
-          caches.open(CACHE_NAME).then(function (c) { c.put(event.request, clone); });
-        }
-        return resp;
-      }).catch(function () {
-        return caches.match(event.request);
-      })
-    );
+  // v2.0.35 · 程式碼 (index.html / 所有 .js) = 純 network-only。
+  //   不寫 cache、不讀 cache fallback → 永遠拿 server 最新版、杜絕 stale code。
+  //   離線時拿不到 = 直接 fail (程式碼不該離線用 · 待機 shell 由圖片資產 + video 自身撐)。
+  if (isCodeAsset(url)) {
+    event.respondWith(fetch(event.request));
     return;
   }
 
-  // 其他 shell asset = stale-while-revalidate
+  // 其他 shell asset (圖片 / icon) = stale-while-revalidate (這些不會 stale 出 bug)
   if (event.request.method === 'GET' && SHELL_ASSETS.indexOf(url.pathname) !== -1) {
     event.respondWith(
       caches.match(event.request).then(function (cached) {
@@ -168,8 +172,6 @@ self.addEventListener('notificationclick', function (event) {
 self.addEventListener('sync', function (event) {
   if (event.tag === 'sophie-pending-messages') {
     event.waitUntil(
-      // 未來：fetch /messages/pending → 顯示通知
-      // baseline · 純 framework · 不做事
       Promise.resolve()
     );
   }

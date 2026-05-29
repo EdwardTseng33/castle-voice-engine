@@ -1779,6 +1779,8 @@
   <!-- viseme-poc-v0.1 · 業界輕量 lipsync (Duix / Tavus / HeyGen 同款路線 · CPU 即可) -->
   <!-- feature flag: ?viseme=1 啟動 · 預設 off · 不影響主線 -->
   <script src="/static/viseme-engine.js?v=poc-v0.2-jpg"></script>
+  <!-- AvatarStage rebuild #2 stage1 · 只在 ?controller=new 啟用 · 預設不執行 -->
+  <script src="/static/avatar-stage.js?v=rebuild-stage1b"></script>
 
   <script>
   (function () {
@@ -1805,6 +1807,9 @@
     var camIcon    = document.getElementById("camIcon");
     var avatarDirector = null;
     var qs = new URLSearchParams(window.location.search || "");
+    // rebuild #2 · controller=new 走 AvatarStage · 預設 / old 走現狀 (止血陽春版)
+    window.__sophieController = (qs.get("controller") === "new") ? "new" : "old";
+    window.__sophieAvatarStage = null;
     // v2.0.15-pre-call-rotation-on · Edward 5/25 catch · pre-call rotator 從來沒啟動 (flag = false 寫死)
     // 改 __sophieEnableAvatarIdleRotation = true · pre-call (未 Start) 走 rich pool (idle 65 / stroke-hair 15 / playful 12 / greeting 8)
     window.__sophieStableSingleVideo = true;
@@ -1914,8 +1919,11 @@
       log("[viseme] runtime ready · msPerViseme=" + msPerViseme);
     })();
 
+    // rebuild #2 stage1 · controller=new 時不建 AvatarDirector (待機由 AvatarStage 獨佔 · 不打架)。
+    //   AvatarDirector 的 boot idle init 會跟 AvatarStage 搶 video.src → play() interrupted → 卡 readyState 0。
+    //   階段 2 搬講話視覺進 AvatarStage 後再正規化。預設 / old 完全不變。
     try {
-      if (typeof AvatarDirector === "function") {
+      if (window.__sophieController !== "new" && typeof AvatarDirector === "function") {
         avatarDirector = new AvatarDirector(liveVideo, {
           log: function (msg) { log("[AvatarDirector] " + msg); }
         });
@@ -1928,9 +1936,11 @@
     }
 
     // v0.8 · 4-state animation pool init
+    //   rebuild #2 stage1 · controller=new 時不建 AnimationPool (它建構即 _initIdle → 跟 AvatarStage 搶 video)。
+    //   待機完全交給 AvatarStage。後續引用 animPool 處皆有 if (animPool) guard · null 不炸。
     var animPool = null;
     try {
-      if (typeof AnimationPool === "function") {
+      if (window.__sophieController !== "new" && typeof AnimationPool === "function") {
         animPool = new AnimationPool(liveVideo, speakingVideo);
         window.animPool = animPool;
         // v1.3.5 · 重啟未 Start 待機豐富輪播 · 砍掉情緒反應類 (適合訪客場景)
@@ -1949,6 +1959,24 @@
       }
     } catch (e) {
       console.warn("[sophie] animation pool init fail:", e.message);
+    }
+
+    // rebuild #2 stage1 · 只在 ?controller=new 啟用 AvatarStage 接管待機。
+    //   預設 / ?controller=old 完全不碰、走上面現狀 (止血陽春版)。
+    if (window.__sophieController === "new") {
+      try {
+        if (typeof AvatarStage === "function") {
+          window.__sophieAvatarStage = new AvatarStage(liveVideo, {
+            log: function (msg) { log("[AvatarStage] " + msg); }
+          });
+          window.__sophieAvatarStage.showIdle("/static/sophie-idle.mp4");
+          log("[controller=new] AvatarStage 接管 · showIdle()");
+        } else {
+          log("[controller=new] AvatarStage 未載入 · fallback 現狀");
+        }
+      } catch (e) {
+        log("[controller=new] AvatarStage init fail: " + e.message + " · fallback 現狀");
+      }
     }
 
     // v1.1.1 · 環境感知 · visibilitychange listener
@@ -4018,7 +4046,7 @@
       });
     }
 
-    log("Voice Path v2.0.42 - barge-in 中斷對話 + 預錄招呼 cache (Edward 5/27 兩條優化合 ship) - 2026-05-27");
+    log("Voice Path v2.0.44 - avatar rebuild #2 stage1b (AvatarStage play race fix) - 2026-05-29");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();
