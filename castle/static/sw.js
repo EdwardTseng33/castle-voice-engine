@@ -5,7 +5,7 @@
 // v2.0.31 (2026-05-29): Edward 5/29 catch 後卡西法掃出「SW sophie-v2.0.6 鎖舊版」·
 //   CACHE_VERSION 從 v1 起沒動過、activate 不清舊 cache、用戶拿到 stale index.html/js。
 //   bump 版本 → activate 清掉所有 sophie-* 舊 cache · 配 skipWaiting + clients.claim 強制換新。
-const CACHE_VERSION = 'v2.0.32';
+const CACHE_VERSION = 'v2.0.33';
 const CACHE_NAME = 'sophie-' + CACHE_VERSION;
 
 // 不 precache mp4 (5MB+ · 阻塞 install) · video element 自己 streaming load 即可
