@@ -1774,7 +1774,7 @@
   <script src="/static/session-memory.js?v=2.0.6"></script>
   <script src="/static/conversation-memory.js?v=2.0.6"></script>
   <script src="/static/avatar-director.js?v=2.0.6"></script>
-  <script src="/static/animation-pool.js?v=2.0.32-mobile-perf"></script>
+  <script src="/static/animation-pool.js?v=2.0.34-no-rotation"></script>
   <script src="/static/phrase-matcher.js?v=0.4.x-semantic"></script>
   <!-- viseme-poc-v0.1 · 業界輕量 lipsync (Duix / Tavus / HeyGen 同款路線 · CPU 即可) -->
   <!-- feature flag: ?viseme=1 啟動 · 預設 off · 不影響主線 -->
@@ -1808,7 +1808,12 @@
     // v2.0.15-pre-call-rotation-on · Edward 5/25 catch · pre-call rotator 從來沒啟動 (flag = false 寫死)
     // 改 __sophieEnableAvatarIdleRotation = true · pre-call (未 Start) 走 rich pool (idle 65 / stroke-hair 15 / playful 12 / greeting 8)
     window.__sophieStableSingleVideo = true;
-    window.__sophieEnableAvatarIdleRotation = true;
+    // v2.0.34 · Edward 5/29 catch「桌機+手機 avatar 整個亂跳 + Start 開不了」
+    //   root cause: pre-call rotation + cold-start watchdog 同時搶 video.src → 來回跳 + 卡 main thread
+    //   止血: 全關「自動換畫面」· 待機 = 靜態臉 poster + 單支 idle.mp4 靜靜 loop (沒東西換 = 不跳)
+    //   ?rotation=1 可重開 (debug / 之後大重整再正規化)
+    window.__sophieEnableAvatarIdleRotation = (qs.get("rotation") === "1");
+    window.__sophieEnableColdStartWatchdog = (qs.get("rotation") === "1");
     window.__sophieEnableAvatarActions = false;
     // v2.0.17 · Edward 2026-05-26 03:01 catch「剛開始講話仍然看到一個嘴巴在臉上」= 100 句 lipsync cache 命中 mp4 是「貼嘴」感
     // 撤 v2.0.13-lipsync-default-on · 改回預設 false · 加 ?lipsync=1 才開

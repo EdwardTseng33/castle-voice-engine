@@ -228,17 +228,21 @@
     this._installManualLoop();
     this._preloadCriticalActions();
     this._maybeFireGreeting();
-    // v2.0.30 · cold-start blank self-heal · Modal 冷啟對 mp4 Range request 偶發 503 → video 卡 readyState 0 = 空白
-    // watchdog: 2.5s 後若 live video 還 readyState < 2 (或 error) → 重 nudge playIdle (新 _seq · 重發 Range · 暖 Modal) · 最多 4 次
-    this._startColdStartWatchdog();
-    // v2.0.12-idle-rotator · 4 idle 變體 30-60s 隨機輪播 + fade 蓋切換空檔
-    // v2.0.32 mobile-perf-safe-fix #2 (root cause: idle rotator + pre-call rotation two timers fight same video)
-    //   desktop: 30-60s (unchanged) · mobile: 120-180s (3x slower) -> fewer video swaps fighting pre-call
-    //   pre-call rotation (14-22s rich pool) already covers idle rotation visually · mobile dont need both high-freq
-    if (IS_MOBILE) {
-      this._startIdleRotator(120000, 180000);
-    } else {
-      this._startIdleRotator(30000, 60000);
+    // v2.0.34 · Edward 5/29 catch「桌機+手機 avatar 整個亂跳」· 預設全關「自動換畫面」
+    //   watchdog + idle rotator + (index 的 pre-call rotation) 三者搶 video.src = 亂跳 + 卡 Start
+    //   止血: 預設只播單支 idle.mp4 靜靜 loop + 靜態臉 poster · 沒東西換 = 不跳
+    //   ?rotation=1 才重開 (debug / 之後單一管家大重整再正規化)
+    // watchdog (冷啟自癒 · 偶發空白用 · 但會 nudge 重載造成跳) · 預設關 · poster 已兜底空白
+    if (global.__sophieEnableColdStartWatchdog === true) {
+      this._startColdStartWatchdog();
+    }
+    // idle rotator (4 變體輪播 · 預設關 · 待機就單支 idle 不換)
+    if (global.__sophieEnableAvatarIdleRotation === true) {
+      if (IS_MOBILE) {
+        this._startIdleRotator(120000, 180000);
+      } else {
+        this._startIdleRotator(30000, 60000);
+      }
     }
   }
 
