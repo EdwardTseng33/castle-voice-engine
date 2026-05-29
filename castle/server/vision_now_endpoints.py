@@ -110,9 +110,17 @@ def attach_vision_now_routes(app):
         except ImportError:
             return JSONResponse({"ok": False, "error": "sdk_missing", "detail": "anthropic SDK not installed"}, status_code=503)
 
-        anth_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+        # v0.4.1 fix (Edward 5/29「看不到我」)· Modal secret "anthropic-key" 的 env 變數名非標準
+        #   brain_endpoints 能用 Claude 是因為它試 4 種名字、vision_now 之前只找 ANTHROPIC_API_KEY = 永遠 no_key
+        #   → 同 brain 的多名解析
+        anth_key = ""
+        for _kname in ("ANTHROPIC_API_KEY", "ANTHROPIC_KEY", "anthropic_key", "ANTHROPIC", "anthropic-key"):
+            _v = os.environ.get(_kname, "").strip()
+            if _v:
+                anth_key = _v
+                break
         if not anth_key:
-            return JSONResponse({"ok": False, "error": "no_key", "detail": "ANTHROPIC_API_KEY not set"}, status_code=503)
+            return JSONResponse({"ok": False, "error": "no_key", "detail": "Anthropic key not found in env (tried 5 names)"}, status_code=503)
 
         # 4. call Claude vision
         t0 = time.time()
