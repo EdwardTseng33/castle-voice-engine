@@ -71,6 +71,25 @@
 
 ---
 
+## Step 0（新增 · 今天血淚教訓 · 必先做）· 修交付/快取層
+
+今天整個下午鬼打牆 50% 主因 = **Service Worker 餵舊版 + 部署非即時**、改了 Edward 收不到。
+重整前必先根治、否則做得再好也驗不到：
+- SW 對 index.html / .js **改成純 network-only（不准 cache 程式碼）** · 只 cache 真正靜態的圖/影片
+- 新版上線自動接管（skipWaiting + clients.claim 已有）· 非通話中自動 reload 一次
+- 部署後蘇菲必 curl 確認版本字串對上才請 Edward 測（部署 propagate 有延遲）
+- 驗收: 改一行 → 部署 → Edward 不清快取直接重整就看到新版
+
+## 分階段（每階段驗一個、不累積）
+
+| 階段 | 做什麼 | 驗收 |
+|---|---|---|
+| **0 交付層** | SW 改 network-only for code + 部署即時驗證 SOP | 改→重整就看到新版 |
+| **1 單一管家骨架 + 待機** | AvatarStage 接管 video · 先只做待機顯示（靜態臉→idle loop）· 藏 `?controller=new` | 冷開機不空白/不跳 + Start 能按 |
+| **2 招呼 + 講話** | 開場招呼 + 講話視覺都走管家 | 招呼播 + 講話嘴動 + 不打架 |
+| **3 嘴對齊 + 待機輪播** | lipsync + idle rotation 走管家 | 全功能回來 + 不跳 |
+| **4 切預設 + 收尾** | `?controller=new` 變預設 · 舊路保留 `?controller=old` | Edward 真機簽收全綠 |
+
 ## 工時 + 做法
 
 - **誰做**：卡西法主刀（他今天已摸熟這塊）、蘇菲整合 + 派工 + 驗收把關（不自審）
