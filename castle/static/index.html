@@ -3981,9 +3981,29 @@
                 if (!nw) return;
                 nw.addEventListener("statechange", function () {
                   if (nw.state === "installed" && navigator.serviceWorker.controller) {
-                    log("[v2.0.18] new SW installed · please refresh to activate");
+                    // v2.0.31 · Edward 5/29 catch「SW 鎖舊版」· 新 SW 裝好後自動換新
+                    //   但只在「沒通話中」才自動 reload (通話中 reload 會斷線 · 等通話結束 / 下次開頁自然生效)
+                    var inCall = shell && shell.getAttribute("data-state") !== "idle";
+                    if (inCall) {
+                      log("[v2.0.31] 新版已就緒 · 通話中暫不重整 · 結束後刷新生效");
+                      return;
+                    }
+                    log("[v2.0.31] 新版已就緒 · 自動套用最新版");
+                    try {
+                      if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
+                    } catch (e) {}
                   }
                 });
+              });
+              // 新 SW 接管 → reload 一次拿最新 HTML/JS (只在非通話中)
+              var _swReloaded = false;
+              navigator.serviceWorker.addEventListener("controllerchange", function () {
+                if (_swReloaded) return;
+                var inCall = shell && shell.getAttribute("data-state") !== "idle";
+                if (inCall) return;
+                _swReloaded = true;
+                log("[v2.0.31] SW 換新 · reload 拿最新版");
+                window.location.reload();
               });
             } catch (updErr) {}
           })
