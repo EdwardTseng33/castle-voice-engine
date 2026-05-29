@@ -1774,7 +1774,7 @@
   <script src="/static/session-memory.js?v=2.0.6"></script>
   <script src="/static/conversation-memory.js?v=2.0.6"></script>
   <script src="/static/avatar-director.js?v=2.0.6"></script>
-  <script src="/static/animation-pool.js?v=2.0.34-no-rotation"></script>
+  <script src="/static/animation-pool.js?v=2.0.36-audio-driven-stop"></script>
   <script src="/static/phrase-matcher.js?v=0.4.x-semantic"></script>
   <!-- viseme-poc-v0.1 · 業界輕量 lipsync (Duix / Tavus / HeyGen 同款路線 · CPU 即可) -->
   <!-- feature flag: ?viseme=1 啟動 · 預設 off · 不影響主線 -->
@@ -2120,6 +2120,18 @@
           window.__sophieStopSpeakingTimer = setTimeout(tryStopSpeaking, Math.min(wait + 120, 1800));
           log(reason + " delayed by speaking hold");
           return;
+        }
+        // v2.0.36 · Edward 5/29「講 10 秒嘴只動 3-5 秒」根本解
+        //   資料訊號的 done 早於聲音播完 (蘇菲腦袋講完 ≠ 喇叭播完)。
+        //   停之前先問真實聲音：近 700ms 還有蘇菲的聲音 = 還在講 → 不停、嘴跟著聲音動到真靜音。
+        //   ceiling 18s 防卡死 (analyser 萬一失準也不會永遠不停)。
+        if (!window.__sophieLipsyncActive && animPool && typeof animPool.msSinceAudio === "function") {
+          var _sinceAudio = animPool.msSinceAudio();
+          var _speechElapsed = window.__sophieAudioStartTs ? (Date.now() - window.__sophieAudioStartTs) : 0;
+          if (_sinceAudio < 700 && _speechElapsed < 18000) {
+            window.__sophieStopSpeakingTimer = setTimeout(tryStopSpeaking, 350);
+            return;
+          }
         }
         window.__sophieStopSpeakingTimer = null;
         if (animPool && typeof animPool.stopSpeaking === "function" && !window.__sophieLipsyncActive) {

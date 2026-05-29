@@ -549,6 +549,12 @@
     }
   };
 
+  // v2.0.36 · Edward 5/29「講 10 秒嘴只動 3-5 秒」· 暴露「距上次偵測到蘇菲聲音多久 (ms)」
+  //   讓 index.html 的 scheduleSpeakingStop defer 給真實聲音 (資料訊號的 done 早於播放完 = 嘴早停)
+  AnimationPool.prototype.msSinceAudio = function () {
+    return Date.now() - (this._lastRemoteAudioMs || 0);
+  };
+
   AnimationPool.prototype._startBreathLoop = function () {
     if (this._breathRAF) return;
     var self = this;
