@@ -233,9 +233,25 @@ def fastapi_app():
 
             resp = await call_next(request)
             if path.startswith("/static/"):
-                resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-                resp.headers["Pragma"] = "no-cache"
-                resp.headers["Expires"] = "0"
+                # v2.0.30 · cold-start blank fix · 大型 media (mp4 5.6MB) 不能 no-store
+                # no-store 逼 Chrome 每個 Range request 都重打 Modal cold function → readyState 卡 0 = 空白
+                # media 改 cacheable (filename 已是版本 · ETag 兜底) · HTML/JS 維持 no-store 確保拿最新
+                lower = path.lower()
+                is_media = (lower.endswith(".mp4") or lower.endswith(".webm") or
+                            lower.endswith(".m4a") or lower.endswith(".ogg") or
+                            lower.endswith(".png") or lower.endswith(".jpg") or
+                            lower.endswith(".jpeg") or lower.endswith(".webp"))
+                if is_media:
+                    resp.headers["Cache-Control"] = "public, max-age=86400"
+                    # 清掉可能殘留的 no-cache 指令 (確保 media 可被 browser buffer 持久化)
+                    if "Pragma" in resp.headers:
+                        del resp.headers["Pragma"]
+                    if "Expires" in resp.headers:
+                        del resp.headers["Expires"]
+                else:
+                    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+                    resp.headers["Pragma"] = "no-cache"
+                    resp.headers["Expires"] = "0"
             return resp
 
     return fastapi_instance

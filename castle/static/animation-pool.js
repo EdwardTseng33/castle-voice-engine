@@ -207,9 +207,63 @@
     this._installManualLoop();
     this._preloadCriticalActions();
     this._maybeFireGreeting();
+    // v2.0.30 · cold-start blank self-heal · Modal 冷啟對 mp4 Range request 偶發 503 → video 卡 readyState 0 = 空白
+    // watchdog: 2.5s 後若 live video 還 readyState < 2 (或 error) → 重 nudge playIdle (新 _seq · 重發 Range · 暖 Modal) · 最多 4 次
+    this._startColdStartWatchdog();
     // v2.0.12-idle-rotator · 4 idle 變體 30-60s 隨機輪播 + fade 蓋切換空檔
     this._startIdleRotator(30000, 60000);
   }
+
+  // v2.0.30 · cold-start blank self-heal watchdog
+  // 偵測 live video 冷啟卡 readyState 0 (Modal 503 / 冷啟網路 stall) · 重 nudge 載入直到能播
+  AnimationPool.prototype._startColdStartWatchdog = function () {
+    var self = this;
+    var v = this.video;
+    if (!v) return;
+    var attempts = 0;
+    var MAX_ATTEMPTS = 4;
+    var check = function () {
+      // 已能播 (readyState >= 2 HAVE_CURRENT_DATA · 有畫面) → 收工
+      if (v.readyState >= 2 && v.videoWidth > 0) {
+        self._log("coldstart watchdog OK · readyState=" + v.readyState + " · vw=" + v.videoWidth + " · attempts=" + attempts);
+        return;
+      }
+      // 講話 / lipsync 中 → 上層覆蓋 · 不干預底層 · reschedule
+      if (global.__sophieLipsyncActive || global.__sophieVisualMode === "lipsync" || global.__sophieVisualMode === "speaking") {
+        setTimeout(check, 2500);
+        return;
+      }
+      if (attempts >= MAX_ATTEMPTS) {
+        self._log("coldstart watchdog give up after " + attempts + " attempts · readyState=" + v.readyState);
+        return;
+      }
+      attempts++;
+      var idleSrc = "/static/sophie-idle.mp4";
+      try {
+        if (self.idleRotator && self.idleRotator.pickIdleOnly) {
+          var pick = self.idleRotator.pickIdleOnly();
+          if (ANIMATION_POOL[pick]) idleSrc = ANIMATION_POOL[pick];
+        }
+      } catch (e) {}
+      self._log("coldstart watchdog nudge #" + attempts + " · readyState=" + v.readyState + " · err=" + (v.error ? v.error.code : "none") + " · re-load " + idleSrc.split("/").pop());
+      if (self.director && self.director.playIdle) {
+        // 新 _seq · 重發 v.src= + v.play() = 重新 fetch Range (暖 Modal · 同手動 fetch 的恢復路徑)
+        self.director.playIdle(idleSrc, "coldstart-heal");
+      } else {
+        try {
+          if (v.getAttribute("src") !== idleSrc) v.src = idleSrc;
+          v.loop = true; v.muted = true;
+          try { v.load(); } catch (loadErr) {}
+          var p = v.play();
+          if (p && p["catch"]) p["catch"](function () {});
+        } catch (e) { self._log("coldstart watchdog nudge fail: " + e.message); }
+      }
+      // backoff: 2.5s · 3.5s · 4.5s · 5.5s
+      setTimeout(check, 2500 + attempts * 1000);
+    };
+    // 首次延遲 2.5s 才檢 (給正常冷載一個合理 buffer 窗口 · 不過早干預)
+    setTimeout(check, 2500);
+  };
 
   // v2.0.14-idle-talk-queue · Edward 2026-05-25 拍板 · 4 idle 嘴微動 + 對話期間不切 + 結束 fade 切下個
   // 對話期間：visual mode === "speaking" / "idle-talk" / "lipsync" → 跳過 + reschedule
@@ -252,13 +306,20 @@
           swapped = true;
           try { pre.parentNode && pre.parentNode.removeChild(pre); } catch (e) {}
           v.classList.add("is-rotating");
-          try {
-            v.src = nextSrc;
-            v.loop = true;
-            v.muted = true;
-            var pp = v.play();
-            if (pp && pp["catch"]) pp["catch"](function () {});
-          } catch (e) { self._log("swap src fail: " + e.message); }
+          // v2.0.30 · cold-start race fix · 走 AvatarDirector 單一 owner (_seq guard)
+          // 不再裸 v.src= / v.play() · 避免打斷 init playIdle 的 pending play (AbortError 卡 readyState 0 = 空白)
+          // preload 已暖 (上面 pre.src 已 cache) · Director 的 v.src= 命中 cache · 不透橘底
+          if (self.director && self.director.playIdle) {
+            self.director.playIdle(nextSrc, "idle-rotator");
+          } else {
+            try {
+              v.src = nextSrc;
+              v.loop = true;
+              v.muted = true;
+              var pp = v.play();
+              if (pp && pp["catch"]) pp["catch"](function () {});
+            } catch (e) { self._log("swap src fail: " + e.message); }
+          }
           // 500ms 後移除 is-rotating · CSS transition 結束 fade 自然結尾
           setTimeout(function () { v.classList.remove("is-rotating"); }, 520);
           self._log("idle rotator [" + label + "] -> " + nextSrc.split("/").pop());
@@ -696,43 +757,72 @@
           self._endHandler = null;
         }
         v.classList.add("is-rotating");
-        try {
-          v.src = nextSrc;
-          v.loop = !!isIdle;  // idle loop · action one-shot
-          v.muted = true;
-          var pp = v.play();
-          if (pp && pp["catch"]) pp["catch"](function () {});
-        } catch (e) { self._log("preCall swap fail: " + e.message); }
-        setTimeout(function () { v.classList.remove("is-rotating"); }, 520);
-        // 動作 (non-loop) 播完接回 random idle
-        if (!isIdle) {
-          self._endHandler = function () {
+        // v2.0.30 · cold-start race fix · 走 AvatarDirector 單一 owner (_seq guard)
+        // 不再裸 v.src= / v.play() · 避免打斷 init playIdle 的 pending play (AbortError 卡 readyState 0 = 空白)
+        // 動作 (non-loop) 播完接回 random idle · 走 Director onEnded (內建 _seq guard · 不用裸 ended listener)
+        var afterAction = function () {
+          var idle = self.idleRotator.pickIdleOnly();
+          var idleSrc = ANIMATION_POOL_LOCAL[idle];
+          // 動作後接 idle · 再次 preload swap
+          var pre2 = document.createElement("video");
+          pre2.preload = "auto";
+          pre2.muted = true;
+          pre2.style.display = "none";
+          pre2.src = idleSrc;
+          var s2 = false;
+          var swap2 = function () {
+            if (s2) return; s2 = true;
+            try { pre2.parentNode && pre2.parentNode.removeChild(pre2); } catch (e) {}
+            v.classList.add("is-rotating");
+            if (self.director && self.director.playIdle) {
+              self.director.playIdle(idleSrc, "precall-action-idle");
+            } else {
+              try { v.src = idleSrc; v.loop = true; v.muted = true; var p2 = v.play(); if (p2 && p2["catch"]) p2["catch"](function () {}); } catch (e) {}
+            }
+            setTimeout(function () { v.classList.remove("is-rotating"); }, 520);
+            self._log("preCall action -> idle (" + idle + ")");
+          };
+          pre2.addEventListener("canplaythrough", swap2, { once: true });
+          pre2.addEventListener("canplay", swap2, { once: true });
+          setTimeout(swap2, 800);
+          try { document.body.appendChild(pre2); pre2.load(); } catch (e) { swap2(); }
+        };
+        if (self.director && self.director.play) {
+          if (isIdle) {
+            self.director.playIdle(nextSrc, "precall-idle");
+          } else {
+            self.director.play({
+              mode: "action",
+              src: nextSrc,
+              loop: false,
+              owner: "precall-rotation",
+              label: nextState,
+              onEnded: afterAction
+            });
+          }
+        } else {
+          // fallback (無 Director) · 保留舊裸 swap + 手動 ended listener
+          if (self._endHandler) {
             try { v.removeEventListener("ended", self._endHandler); } catch (e) {}
             self._endHandler = null;
-            var idle = self.idleRotator.pickIdleOnly();
-            var idleSrc = ANIMATION_POOL_LOCAL[idle];
-            // 動作後接 idle · 再次 preload swap
-            var pre2 = document.createElement("video");
-            pre2.preload = "auto";
-            pre2.muted = true;
-            pre2.style.display = "none";
-            pre2.src = idleSrc;
-            var s2 = false;
-            var swap2 = function () {
-              if (s2) return; s2 = true;
-              try { pre2.parentNode && pre2.parentNode.removeChild(pre2); } catch (e) {}
-              v.classList.add("is-rotating");
-              try { v.src = idleSrc; v.loop = true; v.muted = true; var p2 = v.play(); if (p2 && p2["catch"]) p2["catch"](function () {}); } catch (e) {}
-              setTimeout(function () { v.classList.remove("is-rotating"); }, 520);
-              self._log("preCall action -> idle (" + idle + ")");
+          }
+          try {
+            v.src = nextSrc;
+            v.loop = !!isIdle;
+            v.muted = true;
+            var pp = v.play();
+            if (pp && pp["catch"]) pp["catch"](function () {});
+          } catch (e) { self._log("preCall swap fail: " + e.message); }
+          if (!isIdle) {
+            self._endHandler = function () {
+              try { v.removeEventListener("ended", self._endHandler); } catch (e) {}
+              self._endHandler = null;
+              afterAction();
             };
-            pre2.addEventListener("canplaythrough", swap2, { once: true });
-            pre2.addEventListener("canplay", swap2, { once: true });
-            setTimeout(swap2, 800);
-            try { document.body.appendChild(pre2); pre2.load(); } catch (e) { swap2(); }
-          };
-          v.addEventListener("ended", self._endHandler, { once: true });
+            v.addEventListener("ended", self._endHandler, { once: true });
+          }
         }
+        setTimeout(function () { v.classList.remove("is-rotating"); }, 520);
         self.currentState = nextState;
         self._log("preCallRotation -> " + nextState);
       };
