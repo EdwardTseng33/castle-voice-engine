@@ -228,8 +228,11 @@
         self._log("coldstart watchdog OK · readyState=" + v.readyState + " · vw=" + v.videoWidth + " · attempts=" + attempts);
         return;
       }
-      // 講話 / lipsync 中 → 上層覆蓋 · 不干預底層 · reschedule
-      if (global.__sophieLipsyncActive || global.__sophieVisualMode === "lipsync" || global.__sophieVisualMode === "speaking") {
+      // 講話 / lipsync / 開場招呼播放中 → 不干預 · reschedule
+      // v0.4.2 · Edward 5/29 catch「開場招呼沒了」· watchdog 看到招呼載入時 readyState<2 誤判空白 → 蓋掉招呼
+      //   修: 加 __sophiePrerollPlaying guard · 招呼播放中 watchdog 讓路
+      if (global.__sophieLipsyncActive || global.__sophieVisualMode === "lipsync" ||
+          global.__sophieVisualMode === "speaking" || global.__sophiePrerollPlaying) {
         setTimeout(check, 2500);
         return;
       }
@@ -340,10 +343,11 @@
       var delay = minMs + Math.random() * (maxMs - minMs);
       self._idleRotatorTimer = setTimeout(function () {
         self._idleRotatorTimer = null;
-        // lipsync / speaking active 跳過 (上層覆蓋中 · 底層切了也看不見)
+        // lipsync / speaking / 開場招呼 active 跳過 (上層覆蓋中 · 底層切了也看不見)
         if (global.__sophieLipsyncActive ||
             global.__sophieVisualMode === "lipsync" ||
-            global.__sophieVisualMode === "speaking") {
+            global.__sophieVisualMode === "speaking" ||
+            global.__sophiePrerollPlaying) {
           schedule();
           return;
         }
