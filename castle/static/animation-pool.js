@@ -1,5 +1,6 @@
 /*!
- * Voice Path v2.0.16-revert-talking-idle · idle 嘴閉 · 講話切 sophie-speaking 上層
+ * Voice Path v2.0.32-mobile-perf-safe-fix (calcifer 2026-05-29 · 手機卡頓安全效能修 · 桌面不變)
+ * base: v2.0.16-revert-talking-idle · idle 嘴閉 · 講話切 sophie-speaking 上層
  * Edward 2026-05-25 21:36 catch: v2.0.14/15 方向反了 · idle 應該嘴閉 · 講話才嘴動
  * Phase C 真實價值保留:pre-call rotator flag + is-rotating opacity 1 + idle rotator 30-60s
  * 砍:in-call queue 7-10s + postSpeakWatcher (對話期間切 idle = 反向錯誤)
@@ -37,6 +38,26 @@
   var GREETED_KEY = "sophie_first_greeting_done";
   var GREETED_TTL_MS = 24 * 60 * 60 * 1000;
   var HIGH_PRIORITY = { "task-handoff": 1, "intimate-farewell": 1 };
+
+  // v2.0.32 (2026-05-29 calcifer mobile-perf-safe-fix) - pure detect - zero side effect - revertible
+  // root cause (Chrome MCP console evidence):
+  //   #1 open-page preload 15 large mp4 (5-8MB each) -> mobile 95MB + 15 retained in memory
+  //   #2 pre-call(14-22s) + idle rotator(30-60s) two timers fight same video -> play() interrupted x7
+  //   #3 coldstart watchdog races rotation - nudge #1-4 all give up - waste re-fetch 4 large mp4
+  // mobile strategy: preload only idle - longer rotation interval - preload=metadata not full - desktop unchanged
+  // ?perf=desktop force desktop path (debug) - ?perf=mobile force mobile path (verify on desktop)
+  var IS_MOBILE = (function () {
+    try {
+      var qs = (global.location && global.location.search) || "";
+      if (qs.indexOf("perf=desktop") !== -1) return false;
+      if (qs.indexOf("perf=mobile") !== -1) return true;
+      var ua = (global.navigator && global.navigator.userAgent) || "";
+      var uaMobile = /iPhone|iPad|iPod|Android|Mobile|Windows Phone/i.test(ua);
+      var lowCore = (global.navigator && global.navigator.hardwareConcurrency && global.navigator.hardwareConcurrency <= 4);
+      var lowMem = (global.navigator && global.navigator.deviceMemory && global.navigator.deviceMemory <= 4);
+      return !!(uaMobile || lowCore || lowMem);
+    } catch (e) { return false; }
+  })();
 
   function FrequencyGuard() { this._lastTrigger = {}; }
   FrequencyGuard.COOLDOWN_MS = {
@@ -211,7 +232,14 @@
     // watchdog: 2.5s 後若 live video 還 readyState < 2 (或 error) → 重 nudge playIdle (新 _seq · 重發 Range · 暖 Modal) · 最多 4 次
     this._startColdStartWatchdog();
     // v2.0.12-idle-rotator · 4 idle 變體 30-60s 隨機輪播 + fade 蓋切換空檔
-    this._startIdleRotator(30000, 60000);
+    // v2.0.32 mobile-perf-safe-fix #2 (root cause: idle rotator + pre-call rotation two timers fight same video)
+    //   desktop: 30-60s (unchanged) · mobile: 120-180s (3x slower) -> fewer video swaps fighting pre-call
+    //   pre-call rotation (14-22s rich pool) already covers idle rotation visually · mobile dont need both high-freq
+    if (IS_MOBILE) {
+      this._startIdleRotator(120000, 180000);
+    } else {
+      this._startIdleRotator(30000, 60000);
+    }
   }
 
   // v2.0.30 · cold-start blank self-heal watchdog
@@ -651,19 +679,25 @@
 
   AnimationPool.prototype._preloadCriticalActions = function () {
     var self = this;
-    var keys = Object.keys(ANIMATION_POOL);
+    // v2.0.32 mobile-perf-safe-fix #1 (root cause: open-page preload 15 large mp4)
+    //   desktop: keep original behavior (preload=auto all 16 - zero regression)
+    //   mobile: only preload idle variants (the only thing pre-call shows most) + preload=metadata
+    //           -> avoid ~95MB blast + 15 large videos retained in mobile RAM
+    var keys = IS_MOBILE ? IDLE_VARIANTS.slice() : Object.keys(ANIMATION_POOL);
+    var preloadMode = IS_MOBILE ? "metadata" : "auto";
     var primed = 0;
     keys.forEach(function (state) {
       if (state === self.currentState) return;
+      if (!ANIMATION_POOL[state]) return;
       var pre = document.createElement("video");
-      pre.preload = "auto";
+      pre.preload = preloadMode;
       pre.muted = true;
       pre.src = ANIMATION_POOL[state];
       pre.style.display = "none";
       try { pre.load(); primed++; } catch (e) {}
       self._preloaders[state] = pre;
     });
-    this._log("preload primed " + primed + "/" + keys.length);
+    this._log("preload primed " + primed + "/" + keys.length + " (mode=" + preloadMode + " mobile=" + IS_MOBILE + ")");
   };
 
   AnimationPool.prototype.playAction = function (state) {
@@ -848,10 +882,12 @@
         }
         doSwitchPreCall();
         schedule();
-      }, 14000 + Math.random() * 8000);  // v1.3.5 · 14-22s 隨機間隔
+      // v2.0.32 mobile-perf-safe-fix #3 (root cause: every switch builds hidden preload video + swap = decode cost)
+      //   desktop: 14-22s (unchanged) · mobile: 28-44s (2x slower) -> fewer hidden video creations + swaps
+      }, (IS_MOBILE ? 28000 : 14000) + Math.random() * (IS_MOBILE ? 16000 : 8000));
     };
     schedule();
-    this._log("preCallRotation v2.0.15 start · rich pool · idle 65 / stroke-hair 15 / playful 12 / greeting 8 · 14-22s · preload-first swap");
+    this._log("preCallRotation v2.0.15 start · rich pool · idle 65 / stroke-hair 15 / playful 12 / greeting 8 · interval=" + (IS_MOBILE ? "28-44s(mobile)" : "14-22s") + " · preload-first swap");
   };
 
   AnimationPool.prototype.stopPreCallRotation = function () {
