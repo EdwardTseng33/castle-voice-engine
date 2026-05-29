@@ -2395,7 +2395,13 @@
       try {
         try {
           localStream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
+            // v0.4.2-audio-fix · 明開回音消除 · 防蘇菲自己聲音被麥克風收回去誤觸 barge-in
+            // (舊碼只 audio:true · echoCancellation 不保證開 · 喇叭外放時回音會一直打斷她)
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+            },
             video: camOn ? { width: 640, height: 480 } : false
           });
         } catch (mediaErr) {
@@ -3326,11 +3332,13 @@
                   clearTimeout(window.__sophieSemDebounce);
                   window.__sophieSemDebounce = null;
                 }
-                // 順手清掉 audio buffer 殘留
-                var _la = document.getElementById("liveAudio");
-                if (_la) {
-                  try { _la.pause(); _la.currentTime = 0; } catch (e2) {}
-                }
+                // v0.4.2-audio-fix · Edward 5/29 catch「聽到我講話但聽不到她」
+                // root cause: liveAudio 是 WebRTC live MediaStream (蘇菲聲音一直在播這條)
+                //   舊碼 barge-in 時 _la.pause() + currentTime=0 → 暫停 live 串流後沒人 resume
+                //   → 蘇菲聲音被她自己的回音觸發 barge-in 永久靜音 (聽得到我、我聽不到她)
+                // 修法: 絕不暫停 live audio 元素。要蘇菲停話靠 response.cancel (server 端停生成、串流自然安靜)
+                //   pause/currentTime 對 live MediaStream 本就無意義 (不能 seek)、且會殺掉後續所有聲音
+                // → 移除 _la.pause()/currentTime · live 串流全程保持播放
               } catch (e) {}
             } else if (data.type === "response.audio_transcript.delta" || data.type === "response.output_audio_transcript.delta") {
               // v2.0.23 · transcript.delta 也算 ready · 隱藏「正在喚醒蘇菲」overlay (蘇菲開始輸出文字 = 連線成功)
