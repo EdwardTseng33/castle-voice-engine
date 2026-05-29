@@ -1774,7 +1774,7 @@
   <script src="/static/session-memory.js?v=2.0.6"></script>
   <script src="/static/conversation-memory.js?v=2.0.6"></script>
   <script src="/static/avatar-director.js?v=2.0.6"></script>
-  <script src="/static/animation-pool.js?v=2.0.36-audio-driven-stop"></script>
+  <script src="/static/animation-pool.js?v=2.0.37-single-greeting"></script>
   <script src="/static/phrase-matcher.js?v=0.4.x-semantic"></script>
   <!-- viseme-poc-v0.1 · 業界輕量 lipsync (Duix / Tavus / HeyGen 同款路線 · CPU 即可) -->
   <!-- feature flag: ?viseme=1 啟動 · 預設 off · 不影響主線 -->
@@ -2406,8 +2406,10 @@
     async function startConversation() {
       if (shell.getAttribute("data-state") !== "idle") return;
       startBtn.disabled = true;
-      // v2.0.42 · 立刻播 preroll 招呼 (不等 OpenAI 連線)
-      playPreRollGreeting();
+      // v2.0.37 · Edward 5/29 catch「開頭你好Edward聲音跟聊天聲音不一樣 + 一大堆話重疊」
+      //   root cause: 預錄招呼 mp4 (舊聲音) 跟 OpenAI 即時招呼 (marin) 兩套同時放 → 聲音不一 + 重疊
+      //   修: 砍預錄招呼、只用 OpenAI marin 講一句開頭 (聲音一致 · 不重疊) · poster 靜態臉撐連線空檔
+      // playPreRollGreeting();  ← 停用 (不同聲音來源)
       // v2.0.21 · 顯示「正在喚醒蘇菲」overlay · ready 後 (蘇菲第一個 audio.delta) 隱藏
       try {
         var _ro = document.getElementById("readyOverlay");
@@ -2817,7 +2819,8 @@
             ? "\n\n[嘴型對齊測試] 如果自然剛好能用句庫短句開頭，可以用；不要為了對嘴犧牲語意與聊天自然度。"
             : "\n\n[嘴型對齊] 目前關閉。不要刻意套句庫，請優先自然聊天。";
           // v2.0.42 · 開頭問候由前端 preroll mp4 處理 · OpenAI 不再講開頭、等用戶開口才回
-          var greetingDirective = "\n\n[Opening] 你已經透過預錄影片打過招呼了 (「" + greeting + "」)。不要再講任何開頭問候 / 自我介紹。安靜等 Edward 開口、然後正常對話。";
+          var greetingDirective = "\n\n[Opening] 通話一開始、你主動講「一句」簡短招呼就好 (例如「嗨 Edward、我在」或「欸、來啦」)。" +
+            "**只講一句、不要連續講多句、不要自我介紹、不要報告今天有什麼**。講完那一句就安靜、等 Edward 開口才繼續。";
           var instructions = baseInstr + perceptionDirective + brainDirective + animDirective + lipsyncDirective + greetingDirective;
           try {
             dc.send(JSON.stringify({
@@ -3115,33 +3118,9 @@
                 } catch (e) { log("[OPENING] fallback send fail: " + e.message); }
               }, _needCancel ? 220 : 0);
             }, 1800);
-            // v2.0.41 · 保險重試 · 每 2 秒 check 蘇菲開口了沒、沒開口就重送 · 最多 3 次
-            // 用 __sophieSpeakingTriggered 判斷 (audio.delta 第一筆就會 true)
-            window.__sophieOpeningRetries = 0;
-            window.__sophieOpeningRetryTimer = setInterval(function () {
-              if (window.__sophieSpeakingTriggered) {
-                clearInterval(window.__sophieOpeningRetryTimer);
-                log("[OPENING] ✅ 蘇菲已開口、停止重試");
-                return;
-              }
-              window.__sophieOpeningRetries++;
-              if (window.__sophieOpeningRetries > 3) {
-                clearInterval(window.__sophieOpeningRetryTimer);
-                log("[OPENING] ❌ 3 次重試後蘇菲仍未開口、放棄 (可能 OpenAI 帳戶 / 網路問題)");
-                return;
-              }
-              log("[OPENING] 重試 #" + window.__sophieOpeningRetries + " · 強送 response.create");
-              try {
-                if (window.__sophieResponseActive) {
-                  try { dc.send(JSON.stringify({ type: "response.cancel" })); } catch (e) {}
-                }
-                setTimeout(function () {
-                  try {
-                    dc.send(JSON.stringify({ type: "response.create" }));
-                  } catch (e) { log("[OPENING] retry send fail: " + e.message); }
-                }, 200);
-              } catch (e) {}
-            }, 2500);  // 首次 2.5 秒後 check (前面 1800ms 已送一次、給時間)
+            // v2.0.37 · Edward 5/29 catch「開頭一大堆話重疊」· 砍掉 v2.0.41 的 3 次重試
+            //   重試會在蘇菲還在講第一句時又強送 response.create → 多個回應疊在一起 = 一大堆 + 重疊
+            //   開頭招呼只送一次 (上面 mutex'd create) 就好、沒講到也不重試 (寧可漏一句、不要連珠炮)
           } catch (e) {
             log("session.update send fail: " + e.message);
           }

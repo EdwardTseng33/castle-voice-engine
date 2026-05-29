@@ -11,7 +11,7 @@
 //   改成「程式碼純 network-only · 完全不碰 cache」: index.html + 所有 .js 不寫不讀 cache。
 //   只有圖片 / icon 這類靜態資產才走 cache (這些不會 stale 出 bug)。mp4 由 fetch bypass。
 //   skipWaiting + clients.claim + controllerchange 自動 reload (非通話中) 保持不變。
-const CACHE_VERSION = 'v2.0.36';
+const CACHE_VERSION = 'v2.0.37';
 const CACHE_NAME = 'sophie-' + CACHE_VERSION;
 
 // v2.0.35 · 程式碼 (.js / index.html / manifest) 一律不 precache · 純 network-only。
