@@ -408,7 +408,8 @@
       overflow: hidden;
       /* v2.0.23 · Edward 5/26 catch · 切換閃頻緩解 · 從橘色 #C95B2E 改深棕 #1f120b */
       /* 之前橘色閃頻 = video swap 時 stage 底色透出橘色非常明顯 · 深棕 = 接近 video 暗部 = 切換時不違和 */
-      background: #1f120b;
+      /* v2.0.31 · Edward 5/29 手機黑屏 catch · 放蘇菲靜態臉當底圖 · 影片沒載出來前也看到臉、不黑屏 */
+      background: #1f120b url("/static/sophie-viseme-0.jpg") center/cover no-repeat;
     }
     .live-video {
       position: absolute;
@@ -857,6 +858,7 @@
         muted
         loop
         preload="auto"
+        poster="/static/sophie-viseme-0.jpg"
         src="/static/sophie-idle.mp4"
       ></video>
       <video
