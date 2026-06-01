@@ -82,3 +82,10 @@ edward_speaker_profile.bin
 # but commit Phase 7a evidence explicitly via git add -f for Edward visual review
 out/
 _viseme-extraction
+
+# 部署/驗證 runtime 產物 (側錄 mp4 / 截圖 / log · 本機 evidence · 不入庫)
+# 2026-06-01 卡西法 persona-director/v2-live prod 上線時新增
+_verify/
+
+# prod deploy approval gate runtime artifact (DEPLOY.md 明定不 commit · 跨 deploy 本機持久化)
+castle/qa/edward-approved-*.ok
