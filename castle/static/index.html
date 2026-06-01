@@ -612,6 +612,63 @@
       opacity: 0.72;
       letter-spacing: 0.3px;
     }
+
+    /* v2.1.0 思考中 overlay · 卡西法 6/1 · 中央置中「蘇菲正在查…」呼吸點 */
+    /*   亮: 所有 /brain/* 工具發出時 (tool-wait · 涵蓋全部工具)                 */
+    /*   滅: 結果回來 / 蘇菲開口 (audio.delta first) / call-end                  */
+    /*   pointer-events 永遠 none · 純視覺不擋下層互動 (沿用 ready-overlay 教訓)   */
+    .sophie-thinking {
+      position: absolute;
+      inset: 0;
+      z-index: 9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 240ms ease-out;
+    }
+    .sophie-thinking.is-active { opacity: 1; }
+    .sophie-thinking-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      padding: 22px 30px;
+      background: rgba(20, 12, 8, 0.62);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      color: rgba(255, 255, 255, 0.96);
+      text-align: center;
+    }
+    .sophie-thinking-orb {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 50% 45%,
+        rgba(255, 220, 190, 0.95) 0%,
+        var(--sophie-warm, #C95B2E) 60%,
+        rgba(201, 91, 46, 0.35) 100%);
+      box-shadow: 0 0 18px 4px rgba(201, 91, 46, 0.45);
+      animation: sophie-breathe 1.6s ease-in-out infinite;
+    }
+    @keyframes sophie-breathe {
+      0%, 100% { transform: scale(0.82); opacity: 0.72; }
+      50%      { transform: scale(1.06); opacity: 1; }
+    }
+    .sophie-thinking-text {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    @media (max-width: 480px) {
+      .sophie-thinking-inner { padding: 18px 22px; gap: 11px; }
+      .sophie-thinking-orb { width: 30px; height: 30px; }
+      .sophie-thinking-text { font-size: 14px; }
+    }
+
     .bottom {
       position: absolute;
       bottom: 0; left: 0; right: 0;
@@ -1004,6 +1061,14 @@
           <div class="ready-spinner"></div>
           <div class="ready-text">正在喚醒蘇菲...</div>
           <div class="ready-hint">她準備好會跟你打招呼</div>
+        </div>
+      </div>
+
+      <!-- v2.1.0 · 卡西法 6/1 · 思考中 overlay (蘇菲查智囊 / 任何 /brain/* 工具時亮) -->
+      <div class="sophie-thinking" id="sophieThinking" role="status" aria-live="polite">
+        <div class="sophie-thinking-inner">
+          <div class="sophie-thinking-orb"></div>
+          <div class="sophie-thinking-text" id="sophieThinkingText">蘇菲正在查…</div>
         </div>
       </div>
 
@@ -2425,6 +2490,28 @@
         });
     }
     window.__sophieRunDirector = runPersonaDirector;
+
+    // v2.1.0 · 卡西法 6/1 · 思考中 overlay 統一收口
+    //   __sophieShowThinking(label?) · 亮 (所有 /brain/* 工具發出時)
+    //   __sophieHideThinking()        · 滅 (結果回 / 蘇菲開口 / call-end)
+    //   CSS transition 240ms 防閃 · pointer-events none 不擋互動
+    window.__sophieShowThinking = function (label) {
+      try {
+        var el = document.getElementById("sophieThinking");
+        if (!el) return;
+        if (label) {
+          var t = document.getElementById("sophieThinkingText");
+          if (t) t.textContent = label;
+        }
+        el.classList.add("is-active");
+      } catch (e) {}
+    };
+    window.__sophieHideThinking = function () {
+      try {
+        var el = document.getElementById("sophieThinking");
+        if (el) el.classList.remove("is-active");
+      } catch (e) {}
+    };
     // v1.1.1 · 環境感知 · visibilitychange listener
     // 切走 → idleRotator.pause() (節省 CPU · 不再隨機切手勢)
     // 回前景非通話中 → 12% 機率 acknowledgement (蘇菲輕點頭認到你回來)
@@ -3764,6 +3851,8 @@
                   log("[v2.0.30] speak pool · " + n + " chars → " + src.split("/").pop());
                 }, 180);
                 log("audio.delta first chunk -> queue length eval (180ms) · ts " + window.__sophieAudioStartTs);
+                // v2.1.0 · 卡西法 · 蘇菲開口 = 思考中 overlay 滅 (兜底、即使工具沒回也關)
+                try { if (window.__sophieHideThinking) window.__sophieHideThinking(); } catch (eHt) {}
                 // v2.0.35 · 蘇菲開口 = 隱藏「她在想」三個小點
                 try {
                   var _tdHide = document.getElementById("thinkingDots");
@@ -3983,6 +4072,14 @@
                   log("[BRAIN] " + fnName + " call · args=" + rawArgs.slice(0, 100));
                   // persona-director/v2-live · 派工到後端 = tool-wait · 跑 Director (waiting -> acknowledgement 偶發)
                   try { if (window.__sophieRunDirector) window.__sophieRunDirector({ phase: "tool-wait", is_tool_wait: true }); } catch (eDw) {}
+                  // v2.1.0 · 卡西法 · 思考中 overlay 亮 (所有 /brain/* 工具、不只 3 個)
+                  try {
+                    var _thinkLabel = (fnName === "get_weather") ? "蘇菲在看天氣…"
+                      : (fnName === "news_brief") ? "蘇菲在翻新聞…"
+                      : (fnName === "dispatch_howl" || fnName === "dispatch_code") ? "蘇菲在派工…"
+                      : "蘇菲正在查…";
+                    if (window.__sophieShowThinking) window.__sophieShowThinking(_thinkLabel);
+                  } catch (eShow) {}
                   // v2.0.36 · 三個小點重 timing · 蘇菲呼叫智囊 (ask_claude / dispatch_*) 時亮、智囊回來關
                   // 配合 prompt 教蘇菲先開口承接「等等、我問問 Claude」· 用戶看到 = 知道她在等智囊
                   var _brainDots = (fnName === "ask_claude" || fnName === "dispatch_howl" || fnName === "dispatch_code");
@@ -4072,6 +4169,8 @@
                       log("[BRAIN] " + fnName + " result: " + String(output).slice(0, 80));
                       // persona-director/v2-live · 工具回來 = tool-result · 跑 Director (非 high_risk -> happy 低頻)
                       try { if (window.__sophieRunDirector) window.__sophieRunDirector({ phase: "tool-result" }); } catch (eDr) {}
+                      // v2.1.0 · 卡西法 · 結果回來 · 思考中 overlay 滅
+                      try { if (window.__sophieHideThinking) window.__sophieHideThinking(); } catch (eHide) {}
                       // v2.0.36 · 智囊回來 · 關三個小點
                       if (_brainDots) {
                         try {
@@ -4097,6 +4196,8 @@
                     })
                     ["catch"](function (bErr) {
                       log("[BRAIN] " + fnName + " fetch fail: " + bErr.message);
+                      // v2.1.0 · 卡西法 · 工具 fail · 思考中 overlay 滅 (不要卡住一直亮)
+                      try { if (window.__sophieHideThinking) window.__sophieHideThinking(); } catch (eHf) {}
                       // v2.0.36 · 智囊 fail 也關小點 · 不要卡住一直亮
                       if (_brainDots) {
                         try {
@@ -4384,6 +4485,8 @@
       log("end cleanup");
       // persona-director/v2-live · 掛斷前先跑 Director call-end (care 才放 farewell · 趁 in-call 還 true)
       try { if (window.__sophieRunDirector) window.__sophieRunDirector({ phase: "call-end" }); } catch (eDe) {}
+      // v2.1.0 · 卡西法 · 掛斷 · 思考中 overlay 滅
+      try { if (window.__sophieHideThinking) window.__sophieHideThinking(); } catch (eHce) {}
       // 給 farewell 淡入 3s 後再關引擎 (避免立刻 inCall=false 擋掉 farewell)
       setTimeout(function () {
         window.__sophieInCall = false;

@@ -55,6 +55,19 @@ def attach_brain_routes(app):
         context = body.get("context", "")
         if not question or not isinstance(question, str):
             return JSONResponse({"ok": False, "detail": "question missing"}, status_code=400)
+        # v2.1.0 latency config (卡西法 6/1 · staging 實測校準):
+        #   實測 (warm · gen_ms): Sonnet@200 ~6.6-8.3s / Haiku@200 ~2.3-4.1s / @120 會截斷句子 (不可用)
+        #   預設模型走 env BRAIN_MODEL · Edward 可在 Modal Secret 一鍵切 Haiku、不必改 code
+        #   max_tokens 鎖 200 (≥200 才不會把答案切在句中、語音聽起來不會斷尾)
+        #   body 可帶 _model / _max_tokens 做臨時 A/B (測試用、不影響預設)
+        _env_model = os.environ.get("BRAIN_MODEL", "").strip()
+        _test_model = body.get("_model")
+        _test_maxtok = body.get("_max_tokens")
+        use_model = (
+            _test_model if isinstance(_test_model, str) and _test_model
+            else (_env_model if _env_model else "claude-sonnet-4-5")
+        )
+        use_maxtok = _test_maxtok if isinstance(_test_maxtok, int) and 100 <= _test_maxtok <= 500 else 200
 
         api_key = _resolve_anthropic_key()
         if not api_key:
@@ -67,10 +80,19 @@ def attach_brain_routes(app):
 
         try:
             client = Anthropic(api_key=api_key)
+            # v2.1.0 latency fix (卡西法 6/1):
+            #   舊: messages.create 非串流 + max_tokens=500 · 等整段生完才 return → 用戶乾等 5-15s
+            #   新: messages.stream 串流邊生邊累積 + max_tokens=200
+            #       生成在最後一個 token 即結束、不必等滿 500 budget · prompt 本就要求 ≤120 字
+            #   注意: 前端 (index.html ~4084) 把 answer 整段回 OpenAI Realtime 當 function_call_output、
+            #         Realtime 是真正講話的語音模型、它需要「完整字串」才生語音。
+            #         所以這裡不對前端逐字 stream (架構不支持)、stream 純為「最短生成時間」。
+            t0 = time.time()
+            parts = []
             # 用 Sonnet · 速度 + 品質平衡 (Haiku 太短不夠深 · Opus 太貴)
-            msg = client.messages.create(
-                model="claude-sonnet-4-5",
-                max_tokens=500,
+            with client.messages.stream(
+                model=use_model,
+                max_tokens=use_maxtok,
                 system=(
                     "你是 Sophie · Edward 的個人 AI 蘇菲的深度大腦。"
                     "Edward 透過 Voice Path 蘇菲問你一個需要深度思考的問題。"
@@ -86,11 +108,14 @@ def attach_brain_routes(app):
                         (f"[上下文]\n{context}\n\n" if context else "")
                         + f"[Edward 問]\n{question}"
                     )}
-                ]
-            )
-            answer = msg.content[0].text if msg.content else ""
-            logger.info("[brain] ask_claude OK · q=%s · a=%s", question[:50], answer[:50])
-            return JSONResponse({"ok": True, "answer": answer})
+                ],
+            ) as stream:
+                for text in stream.text_stream:
+                    parts.append(text)
+            answer = "".join(parts).strip()
+            dt_ms = int((time.time() - t0) * 1000)
+            logger.info("[brain] ask_claude OK · %dms · q=%s · a=%s", dt_ms, question[:50], answer[:50])
+            return JSONResponse({"ok": True, "answer": answer, "gen_ms": dt_ms, "model": use_model, "max_tokens": use_maxtok})
         except Exception as e:
             logger.exception("[brain] ask_claude fail")
             return JSONResponse(
