@@ -1681,6 +1681,70 @@
     var notifAskedThisSession = false;
     var lastSophieText    = "";
     var sophieTextBuffer  = "";
+    window.__sophieLastDirectorDecision = null;
+    window.__sophieLastVoiceInputTs = Date.now();
+
+    function collectDirectorPayload(extra) {
+      extra = extra || {};
+      var lastHeard = window.__sophieLastVoiceInputTs || Date.now();
+      return {
+        transcript: extra.transcript || "",
+        last_user_text: extra.last_user_text || extra.transcript || "",
+        requested_mode: extra.requested_mode || "",
+        conversation_state: shell ? shell.getAttribute("data-state") : "",
+        user_visible: !document.hidden,
+        camera_enabled: !!camOn,
+        seconds_since_user_audio: Math.max(0, (Date.now() - lastHeard) / 1000),
+        is_tool_wait: !!extra.is_tool_wait,
+        is_external_action: !!extra.is_external_action,
+        risk_flags: extra.risk_flags || [],
+        desktop_context: extra.desktop_context || {}
+      };
+    }
+
+    function mapDirectorStateToSpeechState(state) {
+      if (state === "work_focus" || state === "high_risk" || state === "waiting") return "thinking";
+      if (state === "idle") return "idle";
+      return "listening";
+    }
+
+    function applyDirectorDecision(decision, reason) {
+      if (!decision || typeof decision !== "object") return;
+      window.__sophieLastDirectorDecision = decision;
+      try {
+        if (window.__sophieAvatarCompositor && typeof window.__sophieAvatarCompositor.dispatch === "function") {
+          window.__sophieAvatarCompositor.dispatch({
+            type: "speech_state",
+            state: mapDirectorStateToSpeechState(decision.state),
+            owner: "persona-director",
+            reason: reason || decision.state
+          });
+        }
+      } catch (e) {
+        log("[Director] avatar apply fail: " + e.message);
+      }
+      try {
+        log("[Director] " + decision.state + " lane=" + (decision.realtime && decision.realtime.lane) + " risk=" + decision.risk_level);
+      } catch (ignore) {}
+    }
+
+    function runPersonaDirector(extra, reason) {
+      return fetch("/director/decide", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(collectDirectorPayload(extra))
+      })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (decision) {
+          if (decision) applyDirectorDecision(decision, reason);
+          return decision;
+        })
+        ["catch"](function (e) {
+          log("[Director] decide fail: " + e.message);
+          return null;
+        });
+    }
 
     function askNotifPermissionOnce() {
       if (typeof Notification === "undefined") return;
@@ -2699,6 +2763,9 @@
               } catch (e) {}
               // v1.9 感知層 · Edward 語音輸入 = 更新 lastVoiceInputTs
               try { if (window.__sophieMicHeard) window.__sophieMicHeard(); } catch (e) {}
+              if (userText && userText.trim()) {
+                runPersonaDirector({ transcript: userText }, "user-transcript");
+              }
             } else if (data.type === "vision.emotion" || data.type === "vp.vision.emotion") {
               try {
                 var vState = data.state || (data.payload && data.payload.state);
@@ -2747,6 +2814,11 @@
                   catch (jErr) { brainArgs = {}; log("brain args parse fail: " + jErr.message); }
                   var endpoint = "/brain/" + fnName;
                   log("[BRAIN] " + fnName + " call · args=" + rawArgs.slice(0, 100));
+                  runPersonaDirector({
+                    transcript: (brainArgs.question || brainArgs.task || brainArgs.content || ""),
+                    requested_mode: "work",
+                    is_tool_wait: true
+                  }, "tool-wait:" + fnName);
                   fetch(endpoint, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -2825,6 +2897,7 @@
                         output = JSON.stringify(result).slice(0, 500);
                       }
                       log("[BRAIN] " + fnName + " result: " + String(output).slice(0, 80));
+                      runPersonaDirector({ requested_mode: "companion", is_tool_wait: false }, "tool-result:" + fnName);
                       // 把 function result 回傳給 OpenAI realtime · 蘇菲會接續講
                       try {
                         dc.send(JSON.stringify({
@@ -2897,6 +2970,7 @@
         log("SDP exchange OK (answer len=" + answerSdp.length + ")");
 
         setState("in-call");
+        runPersonaDirector({ requested_mode: "companion" }, "call-start");
         startTimer();
         startBtn.disabled = false;
         // v1.9 感知層 · 通話中 mic active
@@ -3029,6 +3103,7 @@
       micBtn.setAttribute("aria-pressed", "true");
       camBtn.setAttribute("aria-pressed", "true");
       setState("idle");
+      runPersonaDirector({ conversation_state: "idle", user_visible: !document.hidden }, "call-end");
       // v1.9 感知層 · 通話結束 mic inactive
       try { if (window.__sophieSetMicActive) window.__sophieSetMicActive(false); } catch (e) {}
       // v1.3.5 · 通話結束 · 重啟待機豐富輪播
@@ -3150,6 +3225,7 @@
     // ===== v1.9 感知層 · 訊號 1 + 4 瀏覽器端 detect · 每 30s 推一次 =====
     (function setupPerceptionLoop() {
       var lastVoiceInputTs = Date.now();
+      window.__sophieLastVoiceInputTs = lastVoiceInputTs;
       var micActive = false;
       var visibilityState = document.visibilityState || "visible";
 
@@ -3161,6 +3237,7 @@
       // 4. mic 偵測 (蘇菲對話中聽到聲音 = lastVoiceInputTs 更新)
       window.__sophieMicHeard = function () {
         lastVoiceInputTs = Date.now();
+        window.__sophieLastVoiceInputTs = lastVoiceInputTs;
       };
       // 對話開始時 micActive = true (由 startConversation 設)
       window.__sophieSetMicActive = function (active) {

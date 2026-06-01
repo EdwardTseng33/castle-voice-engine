@@ -31,6 +31,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from castle.dispatch import build_realtime_tools
+from castle.server.persona_director import build_director_contract, decide_persona_state
 
 PERSONAS_DIR = Path(__file__).resolve().parent.parent / "personas"
 OPENAI_REALTIME_URL = "https://api.openai.com/v1/realtime/calls"
@@ -45,6 +46,20 @@ class TokenRequest(BaseModel):
     persona: str = "sophie"
     voice: str | None = None
     model: str | None = None
+
+
+class DirectorRequest(BaseModel):
+    transcript: str | None = None
+    last_user_text: str | None = None
+    requested_mode: str | None = None
+    conversation_state: str | None = None
+    user_visible: bool | None = None
+    camera_enabled: bool | None = None
+    seconds_since_user_audio: float | None = None
+    desktop_context: dict | None = None
+    risk_flags: list[str] | None = None
+    is_external_action: bool = False
+    is_tool_wait: bool = False
 
 
 def _load_persona(name):
@@ -65,7 +80,7 @@ def _build_instructions(persona_data):
         suffix = "\n\n--- Output language ---\nAlways respond in English. Keep replies short, conversational, and warm."
     else:
         suffix = "\n\n--- Output language ---\nAlways respond in Traditional Chinese (zh-TW / Taiwan Mandarin) unless Edward explicitly switches to English. Keep replies short, conversational, and warm."
-    return prompt + suffix
+    return prompt + suffix + build_director_contract()
 
 
 def _resolve_voice(persona_data, requested_voice):
@@ -176,3 +191,20 @@ def attach_realtime_routes(app):
             headers["x-realtime-warning"] = warning
             headers["x-realtime-fallback-from"] = req_model
         return PlainTextResponse(content=answer, media_type="application/sdp", headers=headers)
+
+    @app.post("/director/decide")
+    async def director_decide(req: DirectorRequest):
+        payload = req.model_dump() if hasattr(req, "model_dump") else req.dict()
+        decision = decide_persona_state(payload)
+        return JSONResponse(content=decision.to_dict())
+
+    @app.get("/director/status")
+    async def director_status():
+        sample = decide_persona_state({"conversation_state": "idle"})
+        return JSONResponse(content={
+            "ok": True,
+            "name": "sophie_persona_director",
+            "purpose": "fast deterministic state layer for Realtime, Claude, and avatar routing",
+            "states": ["idle", "listening", "thinking", "speaking", "private_care", "work_focus", "high_risk", "waiting"],
+            "sample": sample.to_dict(),
+        })
