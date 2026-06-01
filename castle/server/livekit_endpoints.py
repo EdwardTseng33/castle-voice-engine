@@ -193,6 +193,48 @@ def attach_livekit_routes(app):
             }
         )
 
+    @app.get("/livekit/diag")
+    async def _livekit_diag(request: Request):
+        """v0.10 Phase 2-B diag · query LiveKit room state directly."""
+        room = request.query_params.get("room")
+        if not room:
+            return JSONResponse({"ok": False, "detail": "room query param missing"}, status_code=400)
+        api_key, api_secret, url = _resolve_livekit_creds()
+        if not (api_key and api_secret and url):
+            return JSONResponse({"ok": False, "detail": "creds missing"}, status_code=503)
+        try:
+            from livekit import api as lkapi  # type: ignore
+        except ImportError:
+            return JSONResponse({"ok": False, "detail": "livekit-api SDK not installed"}, status_code=503)
+        try:
+            lk = lkapi.LiveKitAPI(url=url, api_key=api_key, api_secret=api_secret)
+            rooms_resp = await lk.room.list_rooms(lkapi.ListRoomsRequest(names=[room]))
+            parts_resp = await lk.room.list_participants(lkapi.ListParticipantsRequest(room=room))
+            await lk.aclose()
+        except Exception as e:
+            logger.exception("[livekit] diag fail")
+            return JSONResponse({"ok": False, "detail": f"livekit query fail: {str(e)[:300]}"}, status_code=500)
+        return {
+            "ok": True,
+            "room": room,
+            "rooms_found": len(rooms_resp.rooms),
+            "rooms": [
+                {"name": r.name, "num_participants": r.num_participants, "creation_time": r.creation_time}
+                for r in rooms_resp.rooms
+            ],
+            "participants_count": len(parts_resp.participants),
+            "participants": [
+                {
+                    "identity": p.identity,
+                    "name": p.name,
+                    "track_count": len(p.tracks),
+                    "joined_at": p.joined_at,
+                    "tracks": [{"sid": t.sid, "type": t.type, "muted": t.muted} for t in p.tracks],
+                }
+                for p in parts_resp.participants
+            ],
+        }
+
     @app.get("/livekit/health")
     async def _livekit_health():
         """Public health check - does not expose secret."""

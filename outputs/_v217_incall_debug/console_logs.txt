@@ -1,0 +1,20 @@
+[log] [sophie] AvatarDirector init OK
+[log] [sophie] [AvatarDirector] play idle · /static/sophie-idle.mp4 · owner=init-idle · t=1779738500907
+[log] [animPool] idle init OK via AvatarDirector src=idle
+[log] [animPool] preload primed 15/16
+[log] [animPool] greeting scheduled (first open or TTL expired)
+[log] [animPool] idle rotator v2.0.16 started · 30-60s 待機輪播 · 講話期間跳過 · 4 variants 嘴閉版
+[log] [sophie] Voice Path v2.0.16 ready - revert talking idle (idle 嘴閉 / 講話切上層) - 2026-05-25
+[log] [sophie] [LIPSYNC DISABLED] add ?lipsync=1 to test phrase-matched mp4
+[log] [PhraseMatcher] manifest loaded · 100 phrases
+[log] [sophie] PhraseMatcher ready · 100 phrases
+[log] [animPool] playAction skipped · disabled for anti-flicker stable mode: greeting
+[log] [sophie] [animPool] playAction skipped · disabled for anti-flicker stable mode: greeting
+[warn] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes">
+[error] Failed to load resource: the server responded with a status of 404 ()
+[log] [animPool] preCallRotation v2.0.15 start · rich pool · idle 65 / stroke-hair 15 / playful 12 / greeting 8 · 14-22s · preload-first swap
+[log] [sophie] [animPool] preCallRotation v2.0.15 start · rich pool · idle 65 / stroke-hair 15 / playful 12 / greeting 8 · 14-22s · preload-first swap
+[log] [sophie] sw registered
+[log] [animPool] speaking start · upper layer on (sophie-speaking 嘴律動)
+[log] [sophie] [animPool] speaking start · upper layer on (sophie-speaking 嘴律動)
+[log] [test] startSpeaking fired in in-call mode

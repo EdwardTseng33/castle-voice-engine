@@ -1,0 +1,8 @@
+[animPool] idle rotator v2.0.16 started · 30-60s 待機輪播 · 講話期間跳過 · 4 variants 嘴閉版
+[sophie] Voice Path v2.0.19 ready - readyState guard + load buffer warming - 2026-05-26
+[animPool] preCallRotation v2.0.15 start · rich pool · idle 65 / stroke-hair 15 / playful 12 / greeting 8 · 14-22s · preload-first swap
+[sophie] [animPool] preCallRotation v2.0.15 start · rich pool · idle 65 / stroke-hair 15 / playful 12 / greeting 8 · 14-22s · preload-first swap
+[animPool] v2.0.19 speaking activate · readyState=4 (immediate)
+[sophie] [animPool] v2.0.19 speaking activate · readyState=4 (immediate)
+[animPool] speaking start · upper layer on (sophie-speaking 嘴律動)
+[sophie] [animPool] speaking start · upper layer on (sophie-speaking 嘴律動)

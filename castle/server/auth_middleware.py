@@ -142,10 +142,5 @@ def verify_signed_cookie(cookie_value: str) -> str | None:
 
 
 def is_public_path(path: str) -> bool:
-    """Check if path bypasses auth (auth flow + health + static auth.html)."""
-    if path in PUBLIC_EXACT:
-        return True
-    for prefix in PUBLIC_PREFIX:
-        if path.startswith(prefix):
-            return True
-    return False
+    """v0.9.8 emergency · Edward 5/25 拍「拿掉 Google 登入」· 全 PUBLIC 個人用。"""
+    return True

@@ -855,6 +855,38 @@
   })();
   </script>
 
+  <!-- v2.0.40 · 除錯顯示 · ?debug=1 開 · Edward 在 iPhone 開一下截圖、讓蘇菲看真實數字解橘帶 -->
+  <script>
+  (function () {
+    try {
+      var qs = new URLSearchParams(location.search || "");
+      if (qs.get("debug") !== "1") return;
+      function paint() {
+        var d = document.getElementById("__dbg") || (function () {
+          var el = document.createElement("div");
+          el.id = "__dbg";
+          el.style.cssText = "position:fixed;left:6px;top:90px;z-index:99999;background:rgba(0,0,0,.82);color:#0f0;font:11px/1.5 monospace;padding:8px 10px;border-radius:8px;max-width:62vw;pointer-events:none;white-space:pre";
+          document.body.appendChild(el);
+          return el;
+        })();
+        var v = document.getElementById("liveVideo");
+        var sh = document.getElementById("shell");
+        function bot(el) { return el ? Math.round(el.getBoundingClientRect().bottom) : -1; }
+        var dm = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ? "standalone"
+               : (window.navigator && window.navigator.standalone ? "ios-standalone" : "browser");
+        d.textContent =
+          "VER 2.0.40-app-height\n" +
+          "mode " + dm + "\n" +
+          "innerH " + window.innerHeight + " / screenH " + window.screen.height + "\n" +
+          "appHeight " + getComputedStyle(document.documentElement).getPropertyValue("--app-height").trim() + "\n" +
+          "shellBottom " + bot(sh) + "\n" +
+          "videoBottom " + bot(v) + " / gap " + (window.innerHeight - bot(v));
+      }
+      window.addEventListener("load", function () { setTimeout(paint, 600); setInterval(paint, 2000); });
+    } catch (e) {}
+  })();
+  </script>
+
   <div class="shell" id="shell" data-state="idle">
 
     <header class="top">
@@ -2441,14 +2473,24 @@
       } catch (e) {}
       // v2.0.38 · Edward 6/1 catch「點 Start 一直卡正在喚醒中」· 連不上時不再永遠轉圈
       //   15s 還沒 ready → 關 overlay + 給可行動錯誤 (最常見 = 麥克風沒授權 / 沒登入 / 網路擋)
+      // v2.0.40 · Edward 6/1「第一次點 Start 連不上跳紅字、第二次才好」
+      //   root cause: Modal 冷啟動第一次 /sdp 慢 (5-20s)、15s watchdog 太早跳紅字嚇人
+      //   修: ① 連上了 (in-call) 就安靜收 overlay、不報錯 (只是還沒開口、連線 OK)
+      //       ② 只有「連線真的沒成功」(沒到 in-call) 才報錯 ③ 給冷啟 22s
       try { if (window.__sophieReadyWatchdog) clearTimeout(window.__sophieReadyWatchdog); } catch (e) {}
       window.__sophieReadyWatchdog = setTimeout(function () {
         if (window.__sophieReady) return;
+        var _connected = shell && shell.getAttribute("data-state") === "in-call";
         try { var _row = document.getElementById("readyOverlay"); if (_row) _row.classList.remove("is-active"); } catch (e) {}
         try { startBtn.disabled = false; } catch (e) {}
-        showError("連不上蘇菲 · 檢查：① 麥克風有沒有允許 ② 重新整理頁面 ③ 還不行用無痕視窗");
-        log("[READY WATCHDOG] 15s 未 ready · 關 overlay + 提示用戶");
-      }, 15000);
+        if (_connected) {
+          // 連線成功、只是蘇菲還沒講第一句 (冷啟慢) · 安靜收 overlay、不報錯
+          log("[READY WATCHDOG] 連線 OK (in-call) 但蘇菲未開口 · 安靜收 overlay · 不報錯");
+        } else {
+          showError("連不上蘇菲 · 檢查：① 麥克風有沒有允許 ② 重新整理頁面 ③ 還不行用無痕視窗");
+          log("[READY WATCHDOG] 22s 未連上 (非 in-call) · 報錯");
+        }
+      }, 22000);
       // v1.3.5 · 通話開始 · 停 pre-call 待機輪播 (in-call 由 GPT 主導)
       if (animPool && typeof animPool.stopPreCallRotation === "function") {
         try { animPool.stopPreCallRotation(); } catch (e) {}
