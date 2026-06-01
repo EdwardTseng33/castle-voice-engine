@@ -828,6 +828,19 @@
       .top { padding-top: max(env(safe-area-inset-top), 16px); }
       .bottom { padding-bottom: max(env(safe-area-inset-bottom), 16px); }
     }
+    /* v2.0.39 · Edward 6/1 PWA 截圖 catch · 「加到主畫面」(standalone) 專屬 · 不影響 Safari/桌面 */
+    /*   問題1 底部橘帶: shell height:100dvh 在 standalone 比實體螢幕短 → 露出 body 橘底 */
+    /*   問題2 自拍框被動態島擋: self-view top 沒避開 safe-area */
+    /*   修: 影片框 position:fixed inset:0 撐滿整個實體螢幕 (不靠 dvh 高度) · 控制列/標題 z-index 在上 */
+    @media (display-mode: standalone), (display-mode: fullscreen) {
+      .stage-canvas {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+      }
+      .top, .bottom { z-index: 20; }
+      .self-view { top: calc(env(safe-area-inset-top, 0px) + 10px) !important; }
+    }
   </style>
 </head>
 <body>
@@ -1774,7 +1787,7 @@
   <script src="/static/session-memory.js?v=2.0.6"></script>
   <script src="/static/conversation-memory.js?v=2.0.6"></script>
   <script src="/static/avatar-director.js?v=2.0.6"></script>
-  <script src="/static/animation-pool.js?v=2.0.38-ready-watchdog"></script>
+  <script src="/static/animation-pool.js?v=2.0.39-pwa-fullscreen"></script>
   <script src="/static/phrase-matcher.js?v=0.4.x-semantic"></script>
   <!-- viseme-poc-v0.1 · 業界輕量 lipsync (Duix / Tavus / HeyGen 同款路線 · CPU 即可) -->
   <!-- feature flag: ?viseme=1 啟動 · 預設 off · 不影響主線 -->
