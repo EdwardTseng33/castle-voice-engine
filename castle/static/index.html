@@ -855,6 +855,24 @@
   })();
   </script>
 
+  <!-- v2.0.41 · Edward 6/1「第一次點 Start 連不上、第二次才行」根治 (層 1/2) -->
+  <!--   病根: Modal 伺服器沒人用 2 分鐘後關機、第一次連線=去叫醒它=失敗、第二次它醒了=秒連 -->
+  <!--   修: 打開頁面就先偷偷戳一下 /health 把它叫醒 · 用戶看畫面+按 Start 之前它已暖機好 · 第一次點直接連 -->
+  <!--   (不開長期保溫、不燒錢 · 只 1 次喚醒戳 · 配合層 2 連線自動重試兜底放久了又睡著的情況) -->
+  <script>
+  (function () {
+    function warmUp() {
+      try {
+        fetch("/health", { method: "GET", cache: "no-store", keepalive: true })
+          .then(function () { try { console.log("[warmup] 蘇菲伺服器已預先喚醒"); } catch (e) {} })
+          .catch(function () {});
+      } catch (e) {}
+    }
+    if (document.readyState === "complete" || document.readyState === "interactive") { warmUp(); }
+    else { window.addEventListener("DOMContentLoaded", warmUp); }
+  })();
+  </script>
+
   <!-- v2.0.40 · 除錯顯示 · ?debug=1 開 · Edward 在 iPhone 開一下截圖、讓蘇菲看真實數字解橘帶 -->
   <script>
   (function () {
@@ -875,7 +893,7 @@
         var dm = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ? "standalone"
                : (window.navigator && window.navigator.standalone ? "ios-standalone" : "browser");
         d.textContent =
-          "VER 2.0.41-no-orange\n" +
+          "VER 2.0.42-warmstart\n" +
           "mode " + dm + "\n" +
           "innerH " + window.innerHeight + " / screenH " + window.screen.height + "\n" +
           "appHeight " + getComputedStyle(document.documentElement).getPropertyValue("--app-height").trim() + "\n" +
@@ -1829,7 +1847,7 @@
   <script src="/static/session-memory.js?v=2.0.6"></script>
   <script src="/static/conversation-memory.js?v=2.0.6"></script>
   <script src="/static/avatar-director.js?v=2.0.6"></script>
-  <script src="/static/animation-pool.js?v=2.0.41-no-orange"></script>
+  <script src="/static/animation-pool.js?v=2.0.42-warmstart"></script>
   <script src="/static/phrase-matcher.js?v=0.4.x-semantic"></script>
   <!-- viseme-poc-v0.1 · 業界輕量 lipsync (Duix / Tavus / HeyGen 同款路線 · CPU 即可) -->
   <!-- feature flag: ?viseme=1 啟動 · 預設 off · 不影響主線 -->
@@ -2488,9 +2506,9 @@
           log("[READY WATCHDOG] 連線 OK (in-call) 但蘇菲未開口 · 安靜收 overlay · 不報錯");
         } else {
           showError("連不上蘇菲 · 檢查：① 麥克風有沒有允許 ② 重新整理頁面 ③ 還不行用無痕視窗");
-          log("[READY WATCHDOG] 22s 未連上 (非 in-call) · 報錯");
+          log("[READY WATCHDOG] 28s 未連上 (非 in-call) · 報錯");
         }
-      }, 22000);
+      }, 28000);
       // v1.3.5 · 通話開始 · 停 pre-call 待機輪播 (in-call 由 GPT 主導)
       if (animPool && typeof animPool.stopPreCallRotation === "function") {
         try { animPool.stopPreCallRotation(); } catch (e) {}
@@ -3719,27 +3737,46 @@
         await peerConn.setLocalDescription(offer);
         log("offer created (sdp len=" + offer.sdp.length + ")");
 
-        var resp = await fetch("/sdp?persona=sophie&model=gpt-realtime-2", {
-          method: "POST",
-          headers: { "Content-Type": "application/sdp" },
-          body: offer.sdp
-        });
-        if (!resp.ok) {
-          var errText = await resp.text();
-          throw new Error("SDP backend " + resp.status + ": " + errText.slice(0, 200));
-        }
-        var instrB64 = resp.headers.get("x-realtime-instructions-b64");
-        if (instrB64) {
+        // v2.0.41 · Edward 6/1「第一次連不上、第二次才行」根治 (層 2/2 · 自動重試)
+        //   病根: Modal 伺服器睡著時第一次連線=叫醒它=失敗。層 1 (打開頁面預熱) 多數情況已避免、
+        //   但放久了又睡著時仍會冷。這裡讓連線「自動再試 1 次」: 第一次叫醒 (失敗)、第二次它醒了 (成功)。
+        //   用戶只看到「喚醒中」轉久一點、不用自己點第二次。最多試 2 次、再不行才真報錯。
+        var answerSdp = null;
+        var _sdpAttempt = 0;
+        while (true) {
+          _sdpAttempt++;
           try {
-            window.__sophieInstructions = decodeURIComponent(escape(atob(instrB64)));
-            log("instructions loaded from header (len=" + window.__sophieInstructions.length + ")");
-          } catch (e) {
-            log("instructions decode fail: " + e.message);
+            var resp = await fetch("/sdp?persona=sophie&model=gpt-realtime-2", {
+              method: "POST",
+              headers: { "Content-Type": "application/sdp" },
+              body: offer.sdp
+            });
+            if (!resp.ok) {
+              var errText = await resp.text();
+              throw new Error("SDP backend " + resp.status + ": " + errText.slice(0, 200));
+            }
+            var instrB64 = resp.headers.get("x-realtime-instructions-b64");
+            if (instrB64) {
+              try {
+                window.__sophieInstructions = decodeURIComponent(escape(atob(instrB64)));
+                log("instructions loaded from header (len=" + window.__sophieInstructions.length + ")");
+              } catch (e) {
+                log("instructions decode fail: " + e.message);
+              }
+            }
+            answerSdp = await resp.text();
+            break; // 連上了
+          } catch (sdpErr) {
+            if (_sdpAttempt >= 2) {
+              log("[SDP] 重試後仍失敗 (" + _sdpAttempt + " 次): " + sdpErr.message);
+              throw sdpErr;
+            }
+            log("[SDP] 第 " + _sdpAttempt + " 次失敗 (多半是伺服器冷啟動) · 1.8s 後自動重試: " + sdpErr.message);
+            await new Promise(function (r) { setTimeout(r, 1800); });
           }
         }
-        var answerSdp = await resp.text();
         await peerConn.setRemoteDescription({ type: "answer", sdp: answerSdp });
-        log("SDP exchange OK (answer len=" + answerSdp.length + ")");
+        log("SDP exchange OK (answer len=" + answerSdp.length + " · attempts=" + _sdpAttempt + ")");
 
         setState("in-call");
         startTimer();
