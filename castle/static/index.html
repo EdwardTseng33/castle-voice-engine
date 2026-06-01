@@ -85,6 +85,9 @@
       width: 100vw;
       height: 100vh;
       height: 100dvh;
+      /* v2.0.40 · iPhone PWA standalone 真實高度 · JS 量 window.innerHeight 寫進 --app-height */
+      /*   (100dvh 在 standalone 算不準、比實體螢幕短 → 底部露橘底)· 有 --app-height 時優先用它撐滿 */
+      height: var(--app-height, 100dvh);
       /* v1.9.1 · shell 底色改 Sophie 主色橘 · 配合 viewport-fit=cover + safe-area = 滿到 status bar */
       background: var(--sophie-warm);
       display: flex;
@@ -828,22 +831,29 @@
       .top { padding-top: max(env(safe-area-inset-top), 16px); }
       .bottom { padding-bottom: max(env(safe-area-inset-bottom), 16px); }
     }
-    /* v2.0.39 · Edward 6/1 PWA 截圖 catch · 「加到主畫面」(standalone) 專屬 · 不影響 Safari/桌面 */
-    /*   問題1 底部橘帶: shell height:100dvh 在 standalone 比實體螢幕短 → 露出 body 橘底 */
-    /*   問題2 自拍框被動態島擋: self-view top 沒避開 safe-area */
-    /*   修: 影片框 position:fixed inset:0 撐滿整個實體螢幕 (不靠 dvh 高度) · 控制列/標題 z-index 在上 */
+    /* v2.0.40 · Edward 6/1 PWA 截圖 catch · 「加到主畫面」(standalone) 專屬 · 不影響 Safari/桌面 */
+    /*   問題: standalone 模式 100dvh 比實體螢幕短 → 底部露 body 橘底。自拍框被動態島擋。 */
+    /*   v2.0.39 用 stage position:fixed → 高度塌成 0 (壞修) · 撤掉 */
+    /*   v2.0.40 改業界標準: JS 量真實 window.innerHeight 寫進 --app-height · shell 用它撐滿 (見 body 底 script) */
     @media (display-mode: standalone), (display-mode: fullscreen) {
-      .stage-canvas {
-        position: fixed;
-        inset: 0;
-        z-index: 0;
-      }
-      .top, .bottom { z-index: 20; }
       .self-view { top: calc(env(safe-area-inset-top, 0px) + 10px) !important; }
     }
   </style>
 </head>
 <body>
+
+  <script>
+  /* v2.0.40 · Edward 6/1 PWA 底部橘帶 · iPhone 主畫面 app (standalone) 100dvh 算不準比實體螢幕短 */
+  /*   業界標準解: 量真實 window.innerHeight 寫進 --app-height · shell CSS 優先用它撐滿、不靠 dvh */
+  (function () {
+    function setAppHeight() {
+      try { document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px'); } catch (e) {}
+    }
+    setAppHeight();
+    window.addEventListener('resize', setAppHeight);
+    window.addEventListener('orientationchange', function () { setTimeout(setAppHeight, 300); });
+  })();
+  </script>
 
   <div class="shell" id="shell" data-state="idle">
 
@@ -1787,7 +1797,7 @@
   <script src="/static/session-memory.js?v=2.0.6"></script>
   <script src="/static/conversation-memory.js?v=2.0.6"></script>
   <script src="/static/avatar-director.js?v=2.0.6"></script>
-  <script src="/static/animation-pool.js?v=2.0.39-pwa-fullscreen"></script>
+  <script src="/static/animation-pool.js?v=2.0.40-app-height"></script>
   <script src="/static/phrase-matcher.js?v=0.4.x-semantic"></script>
   <!-- viseme-poc-v0.1 · 業界輕量 lipsync (Duix / Tavus / HeyGen 同款路線 · CPU 即可) -->
   <!-- feature flag: ?viseme=1 啟動 · 預設 off · 不影響主線 -->
