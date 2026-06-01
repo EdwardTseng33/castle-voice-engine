@@ -81,6 +81,7 @@ def fastapi_app():
     from castle.server.livekit_endpoints import attach_livekit_routes  # v0.10 Phase 2 LiveKit WebRTC SFU
     from castle.server.vision_now_endpoints import attach_vision_now_routes  # v0.4.0 真視覺接通
     from castle.server.lipsync_match_endpoint import attach_lipsync_match_routes  # v0.4.x 意思向量比對
+    from castle.server.eval_endpoints import attach_eval_routes  # TEST-ONLY 2026-06-02 calcifer model eval
 
     attach_realtime_routes(fastapi_instance)
     attach_camera_routes(fastapi_instance)
@@ -90,6 +91,7 @@ def fastapi_app():
     attach_brain_routes(fastapi_instance)  # v1.6.0 雙腦混合 · ask_claude / dispatch_howl / dispatch_code
     attach_livekit_routes(fastapi_instance)  # v0.10 Phase 2: LiveKit WebRTC SFU integration
     attach_vision_now_routes(fastapi_instance)  # v0.4.0 (2026-05-27): 前端送 frame → Claude vision · Edward 拍板「動視覺」
+    attach_eval_routes(fastapi_instance)  # TEST-ONLY: /brain/ask_gpt /brain/eval_vision /brain/list_gpt_models (model eval)
 
     # v1.5.0 · 嘴對齊 100 句預生 mp4 serve · 從 modal.Volume sophie-lipsync-cache 讀
     import os as _os
