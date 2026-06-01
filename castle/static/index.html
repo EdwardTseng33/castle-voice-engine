@@ -1687,6 +1687,7 @@
     function collectDirectorPayload(extra) {
       extra = extra || {};
       var lastHeard = window.__sophieLastVoiceInputTs || Date.now();
+      var prev = window.__sophieLastDirectorDecision;
       return {
         transcript: extra.transcript || "",
         last_user_text: extra.last_user_text || extra.transcript || "",
@@ -1698,7 +1699,9 @@
         is_tool_wait: !!extra.is_tool_wait,
         is_external_action: !!extra.is_external_action,
         risk_flags: extra.risk_flags || [],
-        desktop_context: extra.desktop_context || {}
+        desktop_context: extra.desktop_context || {},
+        prev_state: (prev && prev.state) || "",
+        requested_intimacy: (typeof window.__sophieIntimacyCap === "number") ? window.__sophieIntimacyCap : null
       };
     }
 

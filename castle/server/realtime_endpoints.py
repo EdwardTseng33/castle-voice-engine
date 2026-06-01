@@ -60,6 +60,8 @@ class DirectorRequest(BaseModel):
     risk_flags: list[str] | None = None
     is_external_action: bool = False
     is_tool_wait: bool = False
+    prev_state: str | None = None
+    requested_intimacy: int | None = None
 
 
 def _load_persona(name):

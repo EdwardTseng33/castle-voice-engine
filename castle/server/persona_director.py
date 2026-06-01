@@ -136,6 +136,8 @@ def decide_persona_state(payload: dict[str, Any]) -> DirectorDecision:
     is_tool_wait = bool(payload.get("is_tool_wait"))
     is_external_action = bool(payload.get("is_external_action"))
     user_visible = payload.get("user_visible")
+    prev_state = _lower_text(payload.get("prev_state") or "")
+    intimacy_cap = _intimacy_cap(payload.get("requested_intimacy"))
 
     reasons: list[str] = []
     risk_level = "low"
@@ -157,6 +159,12 @@ def decide_persona_state(payload: dict[str, Any]) -> DirectorDecision:
     if is_care:
         reasons.append("care intent")
 
+    # "先接住情緒、再辦事" blend: fatigue + a work ask in the same turn.
+    # We still route the work, but the voice acknowledges the person first.
+    care_then_work = is_care and (is_work or is_meeting or is_focused_coding) and risk_level != "high"
+    if care_then_work:
+        reasons.append("care-then-work blend")
+
     if risk_level == "high":
         state: DirectorState = "high_risk"
         intimacy = 0
@@ -166,7 +174,7 @@ def decide_persona_state(payload: dict[str, Any]) -> DirectorDecision:
         reasons.append("tool wait")
     elif is_work or is_meeting or is_focused_coding:
         state = "work_focus"
-        intimacy = 1
+        intimacy = 2 if care_then_work else 1
     elif is_care:
         state = "private_care"
         intimacy = 3
@@ -175,8 +183,17 @@ def decide_persona_state(payload: dict[str, Any]) -> DirectorDecision:
         intimacy = 1
         reasons.append("silent or away")
     else:
-        state = "listening"
-        intimacy = 2
+        # Ambiguous turn: keep light momentum so one neutral sentence does not
+        # whiplash Sophie out of a warm/work mode she was already holding.
+        if prev_state in {"private_care", "work_focus"} and seconds_since_audio < 12:
+            state = prev_state  # type: ignore[assignment]
+            intimacy = 3 if prev_state == "private_care" else 1
+            reasons.append("sticky from prev_state")
+        else:
+            state = "listening"
+            intimacy = 2
+
+    intimacy = _apply_intimacy_cap(intimacy, intimacy_cap, reasons)
 
     call_claude = state in {"work_focus", "high_risk"} or _needs_deep_brain(transcript)
     lane: Literal["fast", "deep"] = "deep" if call_claude else "fast"
@@ -188,11 +205,21 @@ def decide_persona_state(payload: dict[str, Any]) -> DirectorDecision:
         state=state,
         intimacy_level=intimacy,
         risk_level=risk_level,  # type: ignore[arg-type]
-        realtime=_build_realtime_directive(state, lane, call_claude, is_meeting),
-        claude=_build_claude_directive(state, call_claude, transcript, risk_level),
+        realtime=_build_realtime_directive(state, lane, call_claude, is_meeting, intimacy, care_then_work),
+        claude=_build_claude_directive(state, call_claude, transcript, risk_level, care_then_work),
         avatar=_build_avatar_directive(state, user_visible),
         reasons=tuple(reasons),
     )
+
+
+# Graduated warmth so "intimacy" is felt in the voice, not just a number.
+# 0 = neutral professional, 3 = closest private-assistant warmth.
+_INTIMACY_TONE = {
+    0: "neutral and professional, no affectionate coloring",
+    1: "focused, with a quiet undertone of care",
+    2: "warm and attentive, lightly partial to Edward",
+    3: "soft, low-voice, openly fond of Edward but never saccharine",
+}
 
 
 def _build_realtime_directive(
@@ -200,25 +227,33 @@ def _build_realtime_directive(
     lane: Literal["fast", "deep"],
     call_claude: bool,
     is_meeting: bool,
+    intimacy: int = 1,
+    care_then_work: bool = False,
 ) -> RealtimeDirective:
+    tone = _INTIMACY_TONE.get(intimacy, _INTIMACY_TONE[1])
     if state == "high_risk":
-        return RealtimeDirective(lane, "clear, restrained, confirmation-seeking", "我先幫你把風險按住，這一步不要急。", 5.0, True, call_claude, "wait for a full user turn")
+        return RealtimeDirective(lane, "clear, restrained, confirmation-seeking; " + tone, "我先幫你把風險按住，這一步不要急。", 5.0, True, call_claude, "wait for a full user turn")
     if state == "work_focus":
-        return RealtimeDirective(lane, "focused, concise, privately supportive", "等我一下，我替你看重點。", 4.0, True, call_claude, "short acknowledgement before deep work")
+        if care_then_work:
+            return RealtimeDirective(lane, "acknowledge that Edward is tired first, then move to the task; " + tone, "我聽到你累了。先接住，再一起把這件事辦掉。", 5.0, True, call_claude, "soft acknowledgement, then short work preamble")
+        return RealtimeDirective(lane, "focused, concise, privately supportive; " + tone, "等我一下，我替你看重點。", 4.0, True, call_claude, "short acknowledgement before deep work")
     if state == "private_care":
-        return RealtimeDirective(lane, "warm, low-voice, subtly partial to Edward", "我在，先把今天交給我一點。", 7.0, True, call_claude, "allow soft pauses")
+        return RealtimeDirective(lane, "warm, low-voice, subtly partial to Edward; " + tone, "我在，先把今天交給我一點。", 7.0, True, call_claude, "allow soft pauses")
     if state == "waiting":
-        return RealtimeDirective(lane, "calm, present, not verbose", "我正在處理，先別替我緊張。", 3.0, True, call_claude, "no filler response")
-    style = "quiet, professional, minimal" if is_meeting else "natural, attentive, lightly affectionate"
+        return RealtimeDirective(lane, "calm, present, not verbose; " + tone, "我正在處理，先別替我緊張。", 3.0, True, call_claude, "no filler response")
+    style = "quiet, professional, minimal" if is_meeting else "natural, attentive; " + tone
     return RealtimeDirective(lane, style, "嗯，我聽著。", 4.0, True, call_claude, "normal server VAD")
 
 
-def _build_claude_directive(state: DirectorState, should_call: bool, transcript: str, risk_level: str) -> ClaudeDirective:
+def _build_claude_directive(state: DirectorState, should_call: bool, transcript: str, risk_level: str, care_then_work: bool = False) -> ClaudeDirective:
     if not should_call:
         return ClaudeDirective(False, "No Claude call needed. Realtime can answer with a short relational response.", "one short spoken response", "normal")
     if state == "high_risk":
         return ClaudeDirective(True, "Assess risk, missing facts, required confirmation, and safest next action.", "decision summary, risk flags, confirmation question, next step", "strict confirmation before money/legal/delete/credential/external-send actions")
-    return ClaudeDirective(True, ("Deep work request from Edward: " + transcript[:240]).strip(), "result first, then next action, artifact or blocker if any", "task-first; keep Sophie warmth secondary")
+    posture = "task-first; keep Sophie warmth secondary"
+    if care_then_work:
+        posture = "Edward is tired: open by acknowledging that in one line, then deliver the result; keep it gentle but still finish the task"
+    return ClaudeDirective(True, ("Deep work request from Edward: " + transcript[:240]).strip(), "result first, then next action, artifact or blocker if any", posture)
 
 
 def _build_avatar_directive(state: DirectorState, user_visible: Any) -> AvatarDirective:
@@ -245,6 +280,24 @@ def _needs_deep_brain(text: str) -> bool:
 
 def _contains_any(text: str, terms: tuple[str, ...]) -> bool:
     return any(term.lower() in text for term in terms)
+
+
+def _intimacy_cap(value: Any) -> int | None:
+    """Edward-facing strength dial. None = no cap; 0-3 clamps max warmth."""
+    if value is None or value == "":
+        return None
+    try:
+        capped = int(value)
+    except (TypeError, ValueError):
+        return None
+    return max(0, min(3, capped))
+
+
+def _apply_intimacy_cap(intimacy: int, cap: int | None, reasons: list[str]) -> int:
+    if cap is not None and intimacy > cap:
+        reasons.append("intimacy capped to " + str(cap))
+        return cap
+    return intimacy
 
 
 def _lower_text(value: Any) -> str:

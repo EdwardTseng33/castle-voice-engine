@@ -37,6 +37,48 @@ class PersonaDirectorTests(unittest.TestCase):
         self.assertIn("high-risk", contract)
         self.assertIn("Claude", contract)
 
+    def test_care_then_work_acknowledges_fatigue_before_task(self):
+        decision = decide_persona_state({"transcript": "我好累，但幫我看一下 slack"})
+
+        # still routes the work, but voice + brain lead with the person
+        self.assertEqual(decision.state, "work_focus")
+        self.assertTrue(decision.claude.should_call)
+        self.assertIn("care-then-work blend", decision.reasons)
+        self.assertIn("tired", decision.claude.safety_posture)
+        self.assertGreaterEqual(decision.intimacy_level, 2)
+
+    def test_intimacy_cap_clamps_warmth(self):
+        decision = decide_persona_state(
+            {"transcript": "陪我一下", "requested_intimacy": 1}
+        )
+
+        self.assertEqual(decision.state, "private_care")
+        self.assertEqual(decision.intimacy_level, 1)
+        self.assertTrue(any("intimacy capped" in r for r in decision.reasons))
+
+    def test_intimacy_tone_is_graduated_in_voice(self):
+        warm = decide_persona_state({"transcript": "陪我一下"})
+        capped = decide_persona_state(
+            {"transcript": "陪我一下", "requested_intimacy": 0}
+        )
+
+        self.assertIn("fond", warm.realtime.style)
+        self.assertNotEqual(warm.realtime.style, capped.realtime.style)
+
+    def test_sticky_prev_state_avoids_whiplash(self):
+        # a neutral filler turn should not yank Sophie out of private_care
+        decision = decide_persona_state(
+            {"transcript": "嗯嗯", "prev_state": "private_care"}
+        )
+
+        self.assertEqual(decision.state, "private_care")
+        self.assertIn("sticky from prev_state", decision.reasons)
+
+    def test_neutral_turn_without_history_is_listening(self):
+        decision = decide_persona_state({"transcript": "嗯嗯"})
+
+        self.assertEqual(decision.state, "listening")
+
 
 if __name__ == "__main__":
     unittest.main()
