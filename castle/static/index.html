@@ -2090,8 +2090,14 @@
         "acknowledgement": "/static/sophie-acknowledgement.mp4",
         "happy": "/static/sophie-happy.mp4",
         "intimate-greeting": "/static/sophie-intimate-greeting.mp4",
-        "intimate-farewell": "/static/sophie-intimate-farewell.mp4"
+        "intimate-farewell": "/static/sophie-intimate-farewell.mp4",
+        // v2-live · pre-call warm clips (fade layer only · 不碰底層 idle src)
+        "greeting": "/static/sophie-greeting.mp4",
+        "playful": "/static/sophie-playful.mp4"
       };
+      // v2-live · pre-call 專屬節流 (獨立於 in-call FrequencyGuard · 低頻防抽搐)
+      var _preCallLastFire = {};
+      var PRECALL_COOLDOWN_MS = 18000; // 同一支至少隔 18s
       var emoVideo = document.getElementById("liveVideoEmotion");
       if (!emoVideo) {
         try { log("[emotion] liveVideoEmotion element missing - engine off"); } catch (e) {}
@@ -2122,10 +2128,23 @@
       }
       window.__sophieFadeOutEmotion = fadeOut;
 
-      function playEmotionClip(name) {
-        if (window.__sophieInCall !== true) {
-          try { log("[emotion] skip (not in-call): " + name); } catch (e) {}
-          return false;
+      function playEmotionClip(name, opts) {
+        var preCall = !!(opts && opts.preCall);
+        // 守門: in-call 路徑要求 __sophieInCall===true; pre-call 路徑要求 ===false (未 Start)
+        if (preCall) {
+          if (window.__sophieInCall === true) {
+            try { log("[emotion] precall skip (now in-call): " + name); } catch (e) {}
+            return false;
+          }
+          if (document.hidden) {
+            try { log("[emotion] precall skip (tab hidden): " + name); } catch (e) {}
+            return false;
+          }
+        } else {
+          if (window.__sophieInCall !== true) {
+            try { log("[emotion] skip (not in-call): " + name); } catch (e) {}
+            return false;
+          }
         }
         var src = EMOTION_SRC[name];
         if (!src) {
@@ -2136,13 +2155,23 @@
           try { log("[emotion] skip (speaking/lipsync active): " + name); } catch (e) {}
           return false;
         }
-        try {
-          if (window.animPool && window.animPool.frequencyGuard &&
-              !window.animPool.frequencyGuard.canTrigger(name)) {
-            log("[emotion] throttled (cooldown): " + name);
+        // 節流: pre-call 走專屬 cooldown; in-call 走既有 FrequencyGuard
+        if (preCall) {
+          var _now = Date.now();
+          if (_preCallLastFire[name] && (_now - _preCallLastFire[name]) < PRECALL_COOLDOWN_MS) {
+            try { log("[emotion] precall throttled: " + name); } catch (e) {}
             return false;
           }
-        } catch (e) {}
+          _preCallLastFire[name] = _now;
+        } else {
+          try {
+            if (window.animPool && window.animPool.frequencyGuard &&
+                !window.animPool.frequencyGuard.canTrigger(name)) {
+              log("[emotion] throttled (cooldown): " + name);
+              return false;
+            }
+          } catch (e) {}
+        }
 
         if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
         if (endHandler) { try { emoVideo.removeEventListener("ended", endHandler); } catch (e) {} endHandler = null; }
@@ -2166,7 +2195,9 @@
 
         var activate = function () {
           // 淡入前再確認沒有突然開始講話 (race)
-          if (isSpeakingNow() || window.__sophieInCall !== true) { fadeOut("race-abort"); return; }
+          // in-call 路徑: 要求仍 in-call; pre-call 路徑: 要求仍未 in-call (剛 Start 就放棄)
+          var stillValid = preCall ? (window.__sophieInCall !== true) : (window.__sophieInCall === true);
+          if (isSpeakingNow() || !stillValid) { fadeOut("race-abort"); return; }
           try { emoVideo.currentTime = 0; } catch (eCt) {}
           var pp = emoVideo.play();
           if (pp && pp["catch"]) pp["catch"](function () {});
@@ -2203,12 +2234,107 @@
         return true;
       }
       window.__sophiePlayEmotion = playEmotionClip;
+      // v2-live · Task A · pre-call 預覽入口 (走 fade 層 · 不碰底層 idle src · 不會閃)
+      window.__sophiePlayEmotionPreCall = function (name) {
+        return playEmotionClip(name, { preCall: true });
+      };
+
+      // v2-live · Task A · pre-call 情緒預覽輪播
+      //   底層 idle 一直靜靜 loop (poster 兜底) · 上層 fade 偶爾淡入一個溫暖小動作再淡出
+      //   絕不翻 __sophieEnableAvatarIdleRotation (那條換底層 video.src = 三者搶 = 閃)
+      //   排除 intimate-* (訪客場景不適合 · 對齊 _pickPreCallRich 排除)
+      var _preCallRotTimer = null;
+      // 權重: 大多不播 (露出底層純 idle) · 偶爾一個溫暖小動作
+      function _pickPreCallEmotion() {
+        var r = Math.random();
+        if (r < 0.45) return null;            // 45% 什麼都不播 = 純 idle 露出
+        if (r < 0.66) return "stroke-hair";   // 21% 摸頭髮 (柔)
+        if (r < 0.81) return "happy";         // 15% 開心
+        if (r < 0.92) return "greeting";      // 11% 打招呼
+        return "acknowledgement";             // 8%  輕點頭
+      }
+      function _schedulePreCallRot() {
+        // 12-22s 一次 · 只在頁面前景且未 in-call 時
+        var delay = 12000 + Math.floor(Math.random() * 10000);
+        _preCallRotTimer = setTimeout(function () {
+          if (window.__sophieInCall !== true && !document.hidden && !isSpeakingNow()) {
+            var pick = _pickPreCallEmotion();
+            if (pick) {
+              try { window.__sophiePlayEmotionPreCall(pick); } catch (e) {}
+            }
+          }
+          if (_preCallRotTimer !== null) _schedulePreCallRot();
+        }, delay);
+      }
+      window.__sophieStartPreCallEmotionPreview = function () {
+        if (_preCallRotTimer) return;
+        if (window.__sophieInCall === true) return;
+        try { log("[emotion] pre-call emotion preview started (fade layer · 12-22s)"); } catch (e) {}
+        _schedulePreCallRot();
+      };
+      window.__sophieStopPreCallEmotionPreview = function () {
+        if (_preCallRotTimer) { clearTimeout(_preCallRotTimer); _preCallRotTimer = null; }
+        if (emoVideo.classList.contains("is-visible")) fadeOut("pre-call preview stopped");
+        try { log("[emotion] pre-call emotion preview stopped"); } catch (e) {}
+      };
 
       window.__sophieEmotionYieldToSpeaking = function () {
         if (emoVideo.classList.contains("is-visible")) fadeOut("yield to speaking");
       };
       try { log("[emotion] fade engine ready - clips=" + Object.keys(EMOTION_SRC).length); } catch (e) {}
+
+      // v2-live · Task A · 頁面載入後自動啟動 pre-call 預覽 (未 Start 即生動)
+      //   in-call 開始時 endpoint 會 stop (見 startConversation) · 結束回 pre-call 再啟
+      try {
+        if (document.readyState === "complete" || document.readyState === "interactive") {
+          setTimeout(function () { if (window.__sophieInCall !== true) window.__sophieStartPreCallEmotionPreview(); }, 2500);
+        } else {
+          window.addEventListener("load", function () {
+            setTimeout(function () { if (window.__sophieInCall !== true) window.__sophieStartPreCallEmotionPreview(); }, 2500);
+          });
+        }
+      } catch (e) {}
     })();
+
+    // ============================================================
+    // v2-live · Task B · vision 訊號 -> 情緒淡入層映射
+    //   把後端真實 vision 標籤 (FaceMesh 表情 + pose/hands 手勢) 接到 __sophiePlayEmotion
+    //   只在通話中 · 讓位 speaking/lipsync · 走 FrequencyGuard 冷卻 (__sophiePlayEmotion 內建)
+    //   真實標籤來源 (grep castle/multimodal/pose_hands_dispatch.py + camera.py):
+    //     pose/hands signal.animation: task-handoff(absent) / acknowledgement(waving,chin_rest)
+    //                                  / playful(hands_up) / greeting(returning,edward_returned)
+    //     emotion state (FaceMesh):    happy / apologetic / acknowledgement / resigned
+    //   映射到情緒層 6 clip (stroke-hair/task-received/acknowledgement/happy/intimate-*):
+    var VISION_EMOTION_MAP = {
+      // --- 表情 (emotion_latest / vision.emotion event) ---
+      "happy":          "happy",          // 微笑 -> 開心
+      "acknowledgement":"acknowledgement",// 驚訝張嘴 / 揮手 / 思考 -> 輕點頭認到
+      "apologetic":     "stroke-hair",    // 皺眉/難過 -> 變柔 (摸頭髮安撫)
+      "resigned":       "stroke-hair",    // 疲累眼半閉 -> 變柔
+      // --- 手勢 (pose_hands_latest signal.animation) ---
+      "playful":        "happy",          // hands_up 興奮/正向 -> 開心
+      "greeting":       "acknowledgement",// returning 回到鏡頭 -> 點頭招呼 (intimate-* 訪客不適合)
+      // task-handoff (absent 離開鏡頭) 故意不映射 -> 人離開不播情緒臉
+      "task-handoff":   null
+    };
+    // 把一個 vision 標籤反射成情緒臉 (走淡入層 · 通話中 only)
+    window.__sophieVisionToEmotion = function (visionLabel, src) {
+      if (!visionLabel) return false;
+      if (window.__sophieInCall !== true) return false;
+      if (!Object.prototype.hasOwnProperty.call(VISION_EMOTION_MAP, visionLabel)) {
+        // 不在映射表內的標籤 (如未知) -> 不動情緒層 (交回既有 playAction 路徑)
+        return false;
+      }
+      var clip = VISION_EMOTION_MAP[visionLabel];
+      if (!clip) {
+        try { log("[vision->emotion] " + visionLabel + " -> (skip · no emotion face)"); } catch (e) {}
+        return false;
+      }
+      var ok = false;
+      try { ok = !!(window.__sophiePlayEmotion && window.__sophiePlayEmotion(clip)); } catch (e) {}
+      try { log("[vision->emotion] " + (src || "?") + " · " + visionLabel + " -> " + clip + (ok ? " (fade-in)" : " (gated)")); } catch (e) {}
+      return ok;
+    };
 
     // ============================================================
     // persona-director/v2-live · Director client (POST /director/decide)
@@ -3810,7 +3936,10 @@
                 var vConf  = (typeof data.confidence === "number") ? data.confidence : (data.payload && data.payload.confidence);
                 if (vState && (vConf == null || vConf >= 0.7)) {
                   log("vision.emotion -> " + vState + " (conf=" + (vConf == null ? "n/a" : vConf.toFixed(2)) + ")");
-                  if (animPool && typeof animPool.playAction === "function") {
+                  // v2-live · Task B · 先試情緒淡入層 (通話中 only) · 命中就不再換底層
+                  var _emoOk = false;
+                  try { _emoOk = !!(window.__sophieVisionToEmotion && window.__sophieVisionToEmotion(vState, "ws-event")); } catch (eVm) {}
+                  if (!_emoOk && animPool && typeof animPool.playAction === "function") {
                     animPool.playAction(vState);
                   }
                 }
@@ -4042,6 +4171,8 @@
 
         setState("in-call");
         // persona-director/v2-live · 進通話 = 啟用情緒淡入引擎 + 跑 Director call-start
+        // v2-live · Task A · 停 pre-call 預覽 (in-call 自有節奏 · 避免兩路搶 fade 層)
+        try { if (window.__sophieStopPreCallEmotionPreview) window.__sophieStopPreCallEmotionPreview(); } catch (ePcStop) {}
         window.__sophieInCall = true;
         window.__sophieCamOn = camOn;
         try { if (window.__sophieRunDirector) window.__sophieRunDirector({ phase: "call-start" }); } catch (e) { log("[director] call-start fail: " + e.message); }
@@ -4170,7 +4301,10 @@
             if (!j || !j.state) return;
             if (typeof j.confidence === "number" && j.confidence < 0.7) return;
             log("vision.emotion (poll) -> " + j.state + " conf=" + (j.confidence || 0).toFixed(2));
-            if (animPool && typeof animPool.playAction === "function") {
+            // v2-live · Task B · 先試情緒淡入層 (通話中 only) · 命中就不再換底層
+            var _emoOk2 = false;
+            try { _emoOk2 = !!(window.__sophieVisionToEmotion && window.__sophieVisionToEmotion(j.state, "emotion-poll")); } catch (eVm2) {}
+            if (!_emoOk2 && animPool && typeof animPool.playAction === "function") {
               animPool.playAction(j.state);
             }
           })["catch"](function (e) {
@@ -4220,6 +4354,10 @@
             var anim = sig.animation;
             log("pose_hands · " + (sig.from || "?") + " -> " + (sig.to || "?") + " · anim=" + anim + " · " + (sig.reason || ""));
             if (!animPool || typeof animPool.playAction !== "function") return;
+            // v2-live · Task B · 手勢先試情緒淡入層 (通話中 only) · 命中就不再換底層
+            var _emoOk3 = false;
+            try { _emoOk3 = !!(window.__sophieVisionToEmotion && window.__sophieVisionToEmotion(anim, "pose-hands·" + (sig.reason || ""))); } catch (eVm3) {}
+            if (_emoOk3) return;
             if (sig.reason === "edward_returned" && typeof animPool.playGreetingNoThrottle === "function") {
               animPool.playGreetingNoThrottle();
             } else {
@@ -4250,6 +4388,8 @@
       setTimeout(function () {
         window.__sophieInCall = false;
         try { if (window.__sophieFadeOutEmotion) window.__sophieFadeOutEmotion("call-end cleanup"); } catch (e) {}
+        // v2-live · Task A · 通話結束回到 pre-call 預覽
+        try { if (window.__sophieStartPreCallEmotionPreview) window.__sophieStartPreCallEmotionPreview(); } catch (ePcStart) {}
       }, 3000);
       stopEmotionPoll();
       stopPoseHandsPoll();  // v1.1.3
