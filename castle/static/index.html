@@ -430,6 +430,18 @@
       will-change: opacity;
     }
     .live-video-speaking.is-visible { opacity: 1; }
+    /* persona-director/v2-live · 情緒影片獨立淡入層 (解硬切閃爍) ·
+       比照 speaking 層做法 (opacity 0->1 140ms) · z=2 (跟 speaking 同層、兩者互斥不同時亮) ·
+       只在通話中、非講話、過 FrequencyGuard 冷卻時才亮 · 絕不打斷 speaking / lipsync ·
+       不走 _playRaw / director.play() (那會硬切底層 z1 idle = 閃) · 自帶 src 自帶淡入 */
+    .live-video-emotion {
+      z-index: 2;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 140ms ease-out;
+      will-change: opacity;
+    }
+    .live-video-emotion.is-visible { opacity: 1; }
     /* v1.9.7 · 砍雙層回單 · idle 永遠在 · 命中 lipsync 才切片 · 切片時 opacity 0.75 隱載入空檔 */
     .live-video.is-switching { opacity: 1; transition: none; }
 
@@ -943,6 +955,15 @@
         loop
         preload="none"
         src="/static/sophie-speaking.mp4"
+      ></video>
+      <!-- persona-director/v2-live · 情緒影片淡入層 · 跟 speaking 同 z=2 · 兩者互斥 ·
+           src 由 playEmotionClip() 動態填 · 平常 opacity 0 (idle 透出) · 不 loop (情緒播完淡出) -->
+      <video
+        class="live-video live-video-emotion"
+        id="liveVideoEmotion"
+        playsinline
+        muted
+        preload="none"
       ></video>
       <audio class="live-audio" id="liveAudio" autoplay playsinline></audio>
 
@@ -2052,6 +2073,232 @@
       }
     }
 
+
+    // ============================================================
+    // persona-director/v2-live · emotion fade engine + Director client
+    //   give emotion clips (stroke-hair / task-received / acknowledgement /
+    //   happy / intimate-*) a dedicated fade layer like the speaking layer
+    //   (opacity 140ms). hard cut -> fade in/out = fixes flicker.
+    //   guards: only in-call / never while speaking-lipsync / respect
+    //   FrequencyGuard cooldown / never touch z1 idle / fade out on ended.
+    // ============================================================
+    window.__sophieInCall = false;
+    (function initEmotionFadeEngine() {
+      var EMOTION_SRC = {
+        "stroke-hair": "/static/sophie-stroke-hair.mp4",
+        "task-received": "/static/sophie-task-received.mp4",
+        "acknowledgement": "/static/sophie-acknowledgement.mp4",
+        "happy": "/static/sophie-happy.mp4",
+        "intimate-greeting": "/static/sophie-intimate-greeting.mp4",
+        "intimate-farewell": "/static/sophie-intimate-farewell.mp4"
+      };
+      var emoVideo = document.getElementById("liveVideoEmotion");
+      if (!emoVideo) {
+        try { log("[emotion] liveVideoEmotion element missing - engine off"); } catch (e) {}
+        window.__sophiePlayEmotion = function () {};
+        return;
+      }
+      var hideTimer = null;
+      var endHandler = null;
+
+      function isSpeakingNow() {
+        if (window.__sophieLipsyncActive === true) return true;
+        if (window.__sophieVisualMode === "speaking" || window.__sophieVisualMode === "lipsync") return true;
+        try {
+          if (window.animPool && window.animPool.speakingCtrl &&
+              window.animPool.speakingCtrl.isActive && window.animPool.speakingCtrl.isActive()) return true;
+        } catch (e) {}
+        return false;
+      }
+
+      function fadeOut(reason) {
+        if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+        if (endHandler) { try { emoVideo.removeEventListener("ended", endHandler); } catch (e) {} endHandler = null; }
+        emoVideo.classList.remove("is-visible");
+        setTimeout(function () {
+          try { if (!emoVideo.classList.contains("is-visible")) emoVideo.pause(); } catch (e) {}
+        }, 200);
+        try { log("[emotion] fadeOut - " + (reason || "")); } catch (e) {}
+      }
+      window.__sophieFadeOutEmotion = fadeOut;
+
+      function playEmotionClip(name) {
+        if (window.__sophieInCall !== true) {
+          try { log("[emotion] skip (not in-call): " + name); } catch (e) {}
+          return false;
+        }
+        var src = EMOTION_SRC[name];
+        if (!src) {
+          try { log("[emotion] unknown clip: " + name); } catch (e) {}
+          return false;
+        }
+        if (isSpeakingNow()) {
+          try { log("[emotion] skip (speaking/lipsync active): " + name); } catch (e) {}
+          return false;
+        }
+        try {
+          if (window.animPool && window.animPool.frequencyGuard &&
+              !window.animPool.frequencyGuard.canTrigger(name)) {
+            log("[emotion] throttled (cooldown): " + name);
+            return false;
+          }
+        } catch (e) {}
+
+        if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+        if (endHandler) { try { emoVideo.removeEventListener("ended", endHandler); } catch (e) {} endHandler = null; }
+
+        // 比照 speaking 層 (_setSpeakingLayer) 的 readyState guard 做法:
+        // 1. src 變了才重設 + 顯式 .load() (preload=none · 不 load 不會 fetch -> readyState 卡 0)
+        // 2. 不在 load 前設 currentTime (會 abort)
+        // 3. play() + 加 is-visible 都放到 canplay 後 (readyState>=2) · 1500ms fallback 保險
+        var srcChanged = false;
+        try {
+          if (!emoVideo.currentSrc || emoVideo.currentSrc.indexOf(src) === -1) {
+            emoVideo.src = src;
+            srcChanged = true;
+          }
+          emoVideo.loop = false;
+          emoVideo.muted = true;
+        } catch (e) {
+          try { log("[emotion] setSrc fail: " + e.message); } catch (e2) {}
+          return false;
+        }
+
+        var activate = function () {
+          // 淡入前再確認沒有突然開始講話 (race)
+          if (isSpeakingNow() || window.__sophieInCall !== true) { fadeOut("race-abort"); return; }
+          try { emoVideo.currentTime = 0; } catch (eCt) {}
+          var pp = emoVideo.play();
+          if (pp && pp["catch"]) pp["catch"](function () {});
+          emoVideo.classList.add("is-visible"); // CSS 140ms 淡入
+          endHandler = function () { fadeOut("clip ended: " + name); };
+          emoVideo.addEventListener("ended", endHandler, { once: true });
+          hideTimer = setTimeout(function () { fadeOut("safety timeout: " + name); }, 9000);
+          try { log("[emotion] fade-in active: " + name + " · rs=" + emoVideo.readyState); } catch (e) {}
+        };
+
+        if (emoVideo.readyState >= 2) {
+          activate();
+        } else {
+          try { if (srcChanged) emoVideo.load(); } catch (eL) {}
+          var fired = false;
+          var onReady = function () {
+            if (fired) return; fired = true;
+            try { emoVideo.removeEventListener("canplay", onReady); } catch (e) {}
+            try { emoVideo.removeEventListener("loadeddata", onReady); } catch (e) {}
+            activate();
+          };
+          emoVideo.addEventListener("canplay", onReady, { once: true });
+          emoVideo.addEventListener("loadeddata", onReady, { once: true });
+          setTimeout(function () {
+            if (fired) return; fired = true;
+            try { emoVideo.removeEventListener("canplay", onReady); } catch (e) {}
+            try { emoVideo.removeEventListener("loadeddata", onReady); } catch (e) {}
+            try { log("[emotion] load timeout 1500ms fallback · rs=" + emoVideo.readyState); } catch (e) {}
+            activate();
+          }, 1500);
+        }
+
+        try { log("[emotion] play requested: " + name); } catch (e) {}
+        return true;
+      }
+      window.__sophiePlayEmotion = playEmotionClip;
+
+      window.__sophieEmotionYieldToSpeaking = function () {
+        if (emoVideo.classList.contains("is-visible")) fadeOut("yield to speaking");
+      };
+      try { log("[emotion] fade engine ready - clips=" + Object.keys(EMOTION_SRC).length); } catch (e) {}
+    })();
+
+    // ============================================================
+    // persona-director/v2-live · Director client (POST /director/decide)
+    // ============================================================
+    window.__sophiePrevDirectorState = null;
+    function collectDirectorPayload(extra) {
+      var pl = {
+        transcript: (extra && extra.transcript) || window.__sophieLastUserText || "",
+        requested_mode: (extra && extra.requested_mode) || null,
+        is_tool_wait: !!(extra && extra.is_tool_wait),
+        seconds_since_user_audio: 0,
+        user_visible: !document.hidden,
+        camera_enabled: !!window.__sophieCamOn,
+        prev_state: window.__sophiePrevDirectorState || null,
+        requested_intimacy: (typeof window.__sophieIntimacyCap === "number") ? window.__sophieIntimacyCap : null
+      };
+      try {
+        if (window.animPool && typeof window.animPool.msSinceAudio === "function") {
+          pl.seconds_since_user_audio = Math.round(window.animPool.msSinceAudio() / 1000);
+        }
+      } catch (e) {}
+      if (extra) {
+        for (var k in extra) { if (extra.hasOwnProperty(k)) pl[k] = extra[k]; }
+      }
+      return pl;
+    }
+
+    function applyDirectorDecision(decision, ctx) {
+      if (!decision || !decision.state) return;
+      var state = decision.state;
+      var reasons = decision.reasons || [];
+      var careThenWork = false;
+      for (var i = 0; i < reasons.length; i++) {
+        if (String(reasons[i]).indexOf("care-then-work blend") !== -1) { careThenWork = true; break; }
+      }
+      window.__sophiePrevDirectorState = state;
+      try { log("[director] state=" + state + " intimacy=" + decision.intimacy_level + " reasons=" + reasons.join(",")); } catch (e) {}
+
+      var phase = (ctx && ctx.phase) || "";
+      var play = window.__sophiePlayEmotion || function () {};
+
+      if (state === "high_risk") {
+        if (window.__sophieFadeOutEmotion) window.__sophieFadeOutEmotion("high_risk steady");
+        return;
+      }
+      if (state === "private_care") {
+        if (phase === "call-start") { play("intimate-greeting"); }
+        else { play("stroke-hair"); }
+        return;
+      }
+      if (state === "work_focus") {
+        if (careThenWork) { play("acknowledgement"); }
+        else { play("task-received"); }
+        return;
+      }
+      if (state === "waiting") {
+        play("acknowledgement");
+        return;
+      }
+      if (phase === "tool-result") {
+        play("happy");
+        return;
+      }
+      if (phase === "call-end") {
+        play("intimate-farewell");
+        return;
+      }
+    }
+
+    function runPersonaDirector(extra) {
+      var payload = collectDirectorPayload(extra);
+      var ctx = { phase: (extra && extra.phase) || "" };
+      return fetch("/director/decide", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }).then(function (r) { return r.json(); })
+        .then(function (decision) {
+          if (ctx.phase === "call-end" && decision && decision.state === "private_care") {
+            applyDirectorDecision(decision, { phase: "call-end" });
+          } else {
+            applyDirectorDecision(decision, ctx);
+          }
+          return decision;
+        })["catch"](function (e) {
+          try { log("[director] decide fail: " + e.message); } catch (e2) {}
+          return null;
+        });
+    }
+    window.__sophieRunDirector = runPersonaDirector;
     // v1.1.1 · 環境感知 · visibilitychange listener
     // 切走 → idleRotator.pause() (節省 CPU · 不再隨機切手勢)
     // 回前景非通話中 → 12% 機率 acknowledgement (蘇菲輕點頭認到你回來)
@@ -3260,6 +3507,7 @@
             if (isAudioOutputDelta && !window.__sophieSpeakingTriggered &&
                 animPool && typeof animPool.startSpeaking === "function") {
               window.__sophieSpeakingTriggered = true;
+              try { if (window.__sophieEmotionYieldToSpeaking) window.__sophieEmotionYieldToSpeaking(); } catch (eY) {}
               // v1.9.14 · 霍爾刀 1 · 在 [FORCE] 分支也設 audio ts (避免後面 audio.delta 分支被跳過)
               window.__sophieAudioStartTs = Date.now();
               window.__sophieLipsyncActive = false;
@@ -3367,6 +3615,7 @@
               // v2.0.29 · Edward 5/27 字數選池 · 等 180ms 看 transcript 累積字數選對應長度影片
               if (!window.__sophieSpeakingTriggered && animPool && typeof animPool.startSpeaking === "function") {
                 window.__sophieSpeakingTriggered = true;
+              try { if (window.__sophieEmotionYieldToSpeaking) window.__sophieEmotionYieldToSpeaking(); } catch (eY) {}
                 window.__sophieAudioStartTs = Date.now();
                 window.__sophieLipsyncActive = false;
                 scheduleLipsyncKick(data.type);
@@ -3475,6 +3724,7 @@
               // v1.1.0 · 累積 transcript chunk · 餵桌面通知 body
               if (!window.__sophieSpeakingTriggered && animPool && typeof animPool.startSpeaking === "function") {
                 window.__sophieSpeakingTriggered = true;
+              try { if (window.__sophieEmotionYieldToSpeaking) window.__sophieEmotionYieldToSpeaking(); } catch (eY) {}
                 window.__sophieAudioStartTs = Date.now();
                 extendSpeakingHold(12000, data.type);
                 animPool.startSpeaking();
@@ -3546,6 +3796,14 @@
               } catch (e) {}
               // v1.9 感知層 · Edward 語音輸入 = 更新 lastVoiceInputTs
               try { if (window.__sophieMicHeard) window.__sophieMicHeard(); } catch (e) {}
+              // persona-director/v2-live · user 講完一句 = 跑 Director (判 listening / care / work / care-then-work)
+              try {
+                var _utxt = data.transcript || "";
+                if (_utxt.trim()) {
+                  window.__sophieLastUserText = _utxt;
+                  if (window.__sophieRunDirector) window.__sophieRunDirector({ phase: "user-transcript", transcript: _utxt });
+                }
+              } catch (eDir) { log("[director] user-transcript fail: " + eDir.message); }
             } else if (data.type === "vision.emotion" || data.type === "vp.vision.emotion") {
               try {
                 var vState = data.state || (data.payload && data.payload.state);
@@ -3594,6 +3852,8 @@
                   catch (jErr) { brainArgs = {}; log("brain args parse fail: " + jErr.message); }
                   var endpoint = "/brain/" + fnName;
                   log("[BRAIN] " + fnName + " call · args=" + rawArgs.slice(0, 100));
+                  // persona-director/v2-live · 派工到後端 = tool-wait · 跑 Director (waiting -> acknowledgement 偶發)
+                  try { if (window.__sophieRunDirector) window.__sophieRunDirector({ phase: "tool-wait", is_tool_wait: true }); } catch (eDw) {}
                   // v2.0.36 · 三個小點重 timing · 蘇菲呼叫智囊 (ask_claude / dispatch_*) 時亮、智囊回來關
                   // 配合 prompt 教蘇菲先開口承接「等等、我問問 Claude」· 用戶看到 = 知道她在等智囊
                   var _brainDots = (fnName === "ask_claude" || fnName === "dispatch_howl" || fnName === "dispatch_code");
@@ -3681,6 +3941,8 @@
                         output = JSON.stringify(result).slice(0, 500);
                       }
                       log("[BRAIN] " + fnName + " result: " + String(output).slice(0, 80));
+                      // persona-director/v2-live · 工具回來 = tool-result · 跑 Director (非 high_risk -> happy 低頻)
+                      try { if (window.__sophieRunDirector) window.__sophieRunDirector({ phase: "tool-result" }); } catch (eDr) {}
                       // v2.0.36 · 智囊回來 · 關三個小點
                       if (_brainDots) {
                         try {
@@ -3779,6 +4041,10 @@
         log("SDP exchange OK (answer len=" + answerSdp.length + " · attempts=" + _sdpAttempt + ")");
 
         setState("in-call");
+        // persona-director/v2-live · 進通話 = 啟用情緒淡入引擎 + 跑 Director call-start
+        window.__sophieInCall = true;
+        window.__sophieCamOn = camOn;
+        try { if (window.__sophieRunDirector) window.__sophieRunDirector({ phase: "call-start" }); } catch (e) { log("[director] call-start fail: " + e.message); }
         startTimer();
         startBtn.disabled = false;
         // v1.9 感知層 · 通話中 mic active
@@ -3978,6 +4244,13 @@
 
     function endConversation() {
       log("end cleanup");
+      // persona-director/v2-live · 掛斷前先跑 Director call-end (care 才放 farewell · 趁 in-call 還 true)
+      try { if (window.__sophieRunDirector) window.__sophieRunDirector({ phase: "call-end" }); } catch (eDe) {}
+      // 給 farewell 淡入 3s 後再關引擎 (避免立刻 inCall=false 擋掉 farewell)
+      setTimeout(function () {
+        window.__sophieInCall = false;
+        try { if (window.__sophieFadeOutEmotion) window.__sophieFadeOutEmotion("call-end cleanup"); } catch (e) {}
+      }, 3000);
       stopEmotionPoll();
       stopPoseHandsPoll();  // v1.1.3
       try { stopVisionNowPoll(); } catch (e) {}  // v2.0.34 真視覺接通
@@ -4049,6 +4322,7 @@
 
     camBtn.addEventListener("click", function () {
       camOn = !camOn;
+      window.__sophieCamOn = camOn; // persona-director/v2-live · Director payload 用
       if (localStream) {
         localStream.getVideoTracks().forEach(function (t) { t.enabled = camOn; });
       }
