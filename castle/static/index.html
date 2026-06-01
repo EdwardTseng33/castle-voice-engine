@@ -69,8 +69,8 @@
     html, body {
       height: 100%;
       overflow: hidden;
-      /* v1.9.1 · body 底色配合 Sophie 主色橘 · iPhone Safari PWA status bar 區域 = 同色滿版 */
-      background: var(--sophie-warm);
+      /* v2.0.41 · body 底色改純黑 (原橘 #C95B2E) · 杜絕任何模式下露橘帶 · 影片/stage 自有深色底 */
+      background: #000;
       font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text",
                    "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei",
                    sans-serif;
@@ -80,16 +80,15 @@
       -webkit-font-smoothing: antialiased;
     }
     .shell {
+      /* v2.0.41 · position:fixed + inset:0 = 釘住可視畫面四邊 = 瀏覽器/Web App 兩模式都滿版 */
+      /*   撤 v2.0.40 的 height:var(--app-height)/100dvh 覆寫 — 那是 standalone 露橘帶的元兇: */
+      /*   iOS Web App 回報的 innerHeight 比實體螢幕短一截、shell 撐不到底 → 露出後面底色 */
+      /*   fixed+inset:0 直接釘四邊、不靠任何高度數字、不會短 */
       position: fixed;
       inset: 0;
-      width: 100vw;
-      height: 100vh;
-      height: 100dvh;
-      /* v2.0.40 · iPhone PWA standalone 真實高度 · JS 量 window.innerHeight 寫進 --app-height */
-      /*   (100dvh 在 standalone 算不準、比實體螢幕短 → 底部露橘底)· 有 --app-height 時優先用它撐滿 */
-      height: var(--app-height, 100dvh);
-      /* v1.9.1 · shell 底色改 Sophie 主色橘 · 配合 viewport-fit=cover + safe-area = 滿到 status bar */
-      background: var(--sophie-warm);
+      /* v2.0.41 · 底色改純黑 (原橘 #C95B2E) · 萬一 iOS 仍有安全區縫隙也是黑邊融進暗部、不再露橘帶 */
+      /*   橘色當初是遮影片切換黑閃用、但 stage-canvas 自己有深色底圖 (line ~415) 已遮、body 橘是多餘且外漏 */
+      background: #000;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -818,7 +817,8 @@
     }
     @media (orientation: portrait) and (max-width: 600px) {
       html, body { height: 100dvh; }
-      .shell { width: 100vw; height: 100dvh; }
+      /* v2.0.41 · 不再覆寫 .shell 高度 — base 的 position:fixed+inset:0 已釘滿四邊 */
+      /*   (這裡舊的 height:100dvh 會把 standalone 高度算短、底部露帶、是橘帶第二元兇) */
       .live-video {
         position: absolute;
         inset: 0;
@@ -875,7 +875,7 @@
         var dm = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ? "standalone"
                : (window.navigator && window.navigator.standalone ? "ios-standalone" : "browser");
         d.textContent =
-          "VER 2.0.40-app-height\n" +
+          "VER 2.0.41-no-orange\n" +
           "mode " + dm + "\n" +
           "innerH " + window.innerHeight + " / screenH " + window.screen.height + "\n" +
           "appHeight " + getComputedStyle(document.documentElement).getPropertyValue("--app-height").trim() + "\n" +
@@ -1829,7 +1829,7 @@
   <script src="/static/session-memory.js?v=2.0.6"></script>
   <script src="/static/conversation-memory.js?v=2.0.6"></script>
   <script src="/static/avatar-director.js?v=2.0.6"></script>
-  <script src="/static/animation-pool.js?v=2.0.40-app-height"></script>
+  <script src="/static/animation-pool.js?v=2.0.41-no-orange"></script>
   <script src="/static/phrase-matcher.js?v=0.4.x-semantic"></script>
   <!-- viseme-poc-v0.1 · 業界輕量 lipsync (Duix / Tavus / HeyGen 同款路線 · CPU 即可) -->
   <!-- feature flag: ?viseme=1 啟動 · 預設 off · 不影響主線 -->
