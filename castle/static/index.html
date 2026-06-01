@@ -1774,7 +1774,7 @@
   <script src="/static/session-memory.js?v=2.0.6"></script>
   <script src="/static/conversation-memory.js?v=2.0.6"></script>
   <script src="/static/avatar-director.js?v=2.0.6"></script>
-  <script src="/static/animation-pool.js?v=2.0.37-single-greeting"></script>
+  <script src="/static/animation-pool.js?v=2.0.38-ready-watchdog"></script>
   <script src="/static/phrase-matcher.js?v=0.4.x-semantic"></script>
   <!-- viseme-poc-v0.1 · 業界輕量 lipsync (Duix / Tavus / HeyGen 同款路線 · CPU 即可) -->
   <!-- feature flag: ?viseme=1 啟動 · 預設 off · 不影響主線 -->
@@ -2416,6 +2416,16 @@
         if (_ro) _ro.classList.add("is-active");
         window.__sophieReady = false;
       } catch (e) {}
+      // v2.0.38 · Edward 6/1 catch「點 Start 一直卡正在喚醒中」· 連不上時不再永遠轉圈
+      //   15s 還沒 ready → 關 overlay + 給可行動錯誤 (最常見 = 麥克風沒授權 / 沒登入 / 網路擋)
+      try { if (window.__sophieReadyWatchdog) clearTimeout(window.__sophieReadyWatchdog); } catch (e) {}
+      window.__sophieReadyWatchdog = setTimeout(function () {
+        if (window.__sophieReady) return;
+        try { var _row = document.getElementById("readyOverlay"); if (_row) _row.classList.remove("is-active"); } catch (e) {}
+        try { startBtn.disabled = false; } catch (e) {}
+        showError("連不上蘇菲 · 檢查：① 麥克風有沒有允許 ② 重新整理頁面 ③ 還不行用無痕視窗");
+        log("[READY WATCHDOG] 15s 未 ready · 關 overlay + 提示用戶");
+      }, 15000);
       // v1.3.5 · 通話開始 · 停 pre-call 待機輪播 (in-call 由 GPT 主導)
       if (animPool && typeof animPool.stopPreCallRotation === "function") {
         try { animPool.stopPreCallRotation(); } catch (e) {}
@@ -2455,6 +2465,9 @@
           });
         } catch (mediaErr) {
           startBtn.disabled = false;
+          // v2.0.38 · 麥克風失敗也關「正在喚醒中」轉圈 + 清 watchdog (否則錯誤被轉圈蓋住、卡住)
+          try { var _roM = document.getElementById("readyOverlay"); if (_roM) _roM.classList.remove("is-active"); } catch (e) {}
+          try { if (window.__sophieReadyWatchdog) clearTimeout(window.__sophieReadyWatchdog); } catch (e) {}
           log("getUserMedia FAIL: " + mediaErr.name + " · " + mediaErr.message);
           if (mediaErr.name === "NotAllowedError" || mediaErr.name === "PermissionDeniedError") {
             showError("麥克風權限被擋 · 請到瀏覽器設定打開、再點 Start");
