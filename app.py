@@ -56,6 +56,11 @@ lipsync_volume = modal.Volume.from_name("sophie-lipsync-cache", create_if_missin
     image=image,
     timeout=120,
     scaledown_window=120,
+    # v2.1.2 (2026-06-02 . 卡西法) keep-warm: 解 Edward 一直撞的「第一次點 Start 失敗」=
+    #   scale-to-zero 後容器冷啟 (建 sandbox + import + load static) 的根。min_containers=1 讓
+    #   這個 *CPU 版 FastAPI app 容器* 常駐不睡。範圍刻意只到此 function = 唯一的 @app.function、
+    #   無 gpu= 規格 (預設 CPU)。GPU/MuseTalk 類在別處、不設常駐 (那才貴)。月費估算見 changelog。
+    min_containers=1,
     secrets=[
         modal.Secret.from_name("openai"),
         modal.Secret.from_name("anthropic-key"),

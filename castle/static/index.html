@@ -975,7 +975,7 @@
         var dm = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ? "standalone"
                : (window.navigator && window.navigator.standalone ? "ios-standalone" : "browser");
         d.textContent =
-          "VER 2.1.1\n" +
+          "VER 2.1.2\n" +
           "mode " + dm + "\n" +
           "innerH " + window.innerHeight + " / screenH " + window.screen.height + "\n" +
           "appHeight " + getComputedStyle(document.documentElement).getPropertyValue("--app-height").trim() + "\n" +
@@ -1143,7 +1143,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v2.1.1</span>
+          <span class="vm-version">v2.1.2</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -1152,6 +1152,13 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v2.1.2</span><span class="vm-entry-date">2026-06-02</span></header>
+          <ul class="vm-list">
+            <li>常駐保溫: 第一次點開不再要等冷啟、開頁即用 (解一直撞的「第一次點 Start 失敗」)</li>
+            <li>含 v2.1.1 的底部色帶根治 + 講話完整收句尾修正</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v2.1.1</span><span class="vm-entry-date">2026-06-02</span></header>
           <ul class="vm-list">
             <li>真機回歸修 (Edward 真 iPhone catch)</li>
@@ -1964,7 +1971,7 @@
   <script src="/static/session-memory.js?v=2.0.6"></script>
   <script src="/static/conversation-memory.js?v=2.0.6"></script>
   <script src="/static/avatar-director.js?v=2.0.6"></script>
-  <script src="/static/animation-pool.js?v=2.1.1"></script>
+  <script src="/static/animation-pool.js?v=2.1.2"></script>
   <script src="/static/phrase-matcher.js?v=0.4.x-semantic"></script>
   <!-- viseme-poc-v0.1 · 業界輕量 lipsync (Duix / Tavus / HeyGen 同款路線 · CPU 即可) -->
   <!-- feature flag: ?viseme=1 啟動 · 預設 off · 不影響主線 -->
