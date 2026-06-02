@@ -55,11 +55,16 @@ def attach_brain_routes(app):
         context = body.get("context", "")
         if not question or not isinstance(question, str):
             return JSONResponse({"ok": False, "detail": "question missing"}, status_code=400)
-        # v2.1.0 latency config (卡西法 6/1 · staging 實測校準):
-        #   實測 (warm · gen_ms): Sonnet@200 ~6.6-8.3s / Haiku@200 ~2.3-4.1s / @120 會截斷句子 (不可用)
+        # v2.1.1 max_tokens config (卡西法 6/2 · Edward 真 iPhone「講話卡/中斷」真因修 · staging 實測):
+        #   真因 (staging 連跑實測): v2.1.0 的 max_tokens=200 對中文太緊 (中文 ~1.7 token/字、120 字 ≈ 200+ token)。
+        #     當 Claude 偶爾想寫長一點的答案、200 直接把句子「切在字中間」(實測 TAIL 出現半截 UTF-8 byte) →
+        #     前端把這半句整段丟 OpenAI Realtime 講 → 語音唸到一半沒了 = Edward 聽到的「話被切斷」。
+        #     這是「間歇性」的 (短答案剛好 < 200 就正常、長答案才斷) → 所以 headless 短測抓不到、真機才現形。
+        #   修法: 天花板拉到 512 (給任何 ≤120 字答案都有把句子收完的餘裕)。
+        #     ★ 不會變慢: 用 messages.stream、生成在「最後一個 token」就停、不會把 512 budget 跑滿。
+        #       實測 512 天花板下、答案仍 ~80-93 字、gen_ms ~3.0-3.5s (跟 200 同速)、且 3/3 次都句尾完整收。
         #   預設模型走 env BRAIN_MODEL · Edward 可在 Modal Secret 一鍵切 Haiku、不必改 code
-        #   max_tokens 鎖 200 (≥200 才不會把答案切在句中、語音聽起來不會斷尾)
-        #   body 可帶 _model / _max_tokens 做臨時 A/B (測試用、不影響預設)
+        #   body 可帶 _model / _max_tokens 做臨時 A/B (測試用、不影響預設 · 範圍放寬到 100-1000)
         _env_model = os.environ.get("BRAIN_MODEL", "").strip()
         _test_model = body.get("_model")
         _test_maxtok = body.get("_max_tokens")
@@ -67,7 +72,7 @@ def attach_brain_routes(app):
             _test_model if isinstance(_test_model, str) and _test_model
             else (_env_model if _env_model else "claude-sonnet-4-6")
         )
-        use_maxtok = _test_maxtok if isinstance(_test_maxtok, int) and 100 <= _test_maxtok <= 500 else 200
+        use_maxtok = _test_maxtok if isinstance(_test_maxtok, int) and 100 <= _test_maxtok <= 1000 else 512
 
         api_key = _resolve_anthropic_key()
         if not api_key:
@@ -80,10 +85,10 @@ def attach_brain_routes(app):
 
         try:
             client = Anthropic(api_key=api_key)
-            # v2.1.0 latency fix (卡西法 6/1):
+            # v2.1.0 latency fix + v2.1.1 斷句修 (卡西法):
             #   舊: messages.create 非串流 + max_tokens=500 · 等整段生完才 return → 用戶乾等 5-15s
-            #   新: messages.stream 串流邊生邊累積 + max_tokens=200
-            #       生成在最後一個 token 即結束、不必等滿 500 budget · prompt 本就要求 ≤120 字
+            #   新: messages.stream 串流邊生邊累積 · 生成在最後一個 token 即結束、不必跑滿 budget。
+            #       v2.1.1 把天花板從 200 拉 512 (200 對中文偶爾切句中、見上面真因)、stream 仍同速。
             #   注意: 前端 (index.html ~4084) 把 answer 整段回 OpenAI Realtime 當 function_call_output、
             #         Realtime 是真正講話的語音模型、它需要「完整字串」才生語音。
             #         所以這裡不對前端逐字 stream (架構不支持)、stream 純為「最短生成時間」。
@@ -102,6 +107,8 @@ def attach_brain_routes(app):
                     "2. zh-TW 自然口語、不要 bullet point。"
                     "3. 直接給答案、不要前綴『讓我想想』之類。"
                     "4. 若需要更多上下文才能答、就直接說「我需要你補充 X」。"
+                    "5. ★最重要: 一定要把話「講完整」· 收在完整句尾 (句號/問號)。"
+                    "   你的回答會被唸成語音、半句斷掉聽起來像當機。寧可答短一點、也要把這一句說完。"
                 ),
                 messages=[
                     {"role": "user", "content": (

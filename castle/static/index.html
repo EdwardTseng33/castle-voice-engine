@@ -416,6 +416,15 @@
       /* 之前橘色閃頻 = video swap 時 stage 底色透出橘色非常明顯 · 深棕 = 接近 video 暗部 = 切換時不違和 */
       /* v2.0.31 · Edward 5/29 手機黑屏 catch · 放蘇菲靜態臉當底圖 · 影片沒載出來前也看到臉、不黑屏 */
       background: #1f120b url("/static/sophie-viseme-0.jpg") center/cover no-repeat;
+      /* v2.1.1 · Edward 6/2 真 iPhone catch「底部還是有一條帶 (v2.1.0 只是把黑換成橘陶土、帶子還在)」根治 · 卡西法
+         真因: 之前都在改 body/shell 的 fallback 底色 (黑→橘) = 換色不是消滅帶子。iOS standalone (加到主畫面)
+               底部 home-indicator 安全區那條、avatar 影片畫不到 → 露出後面任何底色 = 一定看得到一條帶。
+         真解 (結構、非換色): 讓「avatar 舞台」本身往下長進安全區、影片就鋪到實體螢幕最底、那條帶物理上不存在。
+               margin-bottom 取負的 env(safe-area-inset-bottom): standalone 時 = -34px 左右、stage 連同裡面所有
+               video 層 (idle/speaking/emotion/viseme 都 inset:0) 一起延伸蓋滿 home-indicator 區。
+         零回歸: 瀏覽器/桌面 env(safe-area-inset-bottom)=0 → margin = 0 → 完全無動作 (Chrome 實測 videoBottom 仍 = viewport)。
+         底部控制列 (.bottom · position:absolute;bottom:0 of shell) 不受 stage margin 影響、仍貼在可視底。 */
+      margin-bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
     }
     .live-video {
       position: absolute;
@@ -966,7 +975,7 @@
         var dm = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ? "standalone"
                : (window.navigator && window.navigator.standalone ? "ios-standalone" : "browser");
         d.textContent =
-          "VER 2.1.0\n" +
+          "VER 2.1.1\n" +
           "mode " + dm + "\n" +
           "innerH " + window.innerHeight + " / screenH " + window.screen.height + "\n" +
           "appHeight " + getComputedStyle(document.documentElement).getPropertyValue("--app-height").trim() + "\n" +
@@ -1134,7 +1143,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v2.1.0</span>
+          <span class="vm-version">v2.1.1</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -1143,6 +1152,14 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v2.1.1</span><span class="vm-entry-date">2026-06-02</span></header>
+          <ul class="vm-list">
+            <li>真機回歸修 (Edward 真 iPhone catch)</li>
+            <li>底部色帶根治: 讓 avatar 影片往下長進 home-indicator 安全區、鋪滿到實體螢幕最底 · 帶子物理上消失 (不是換色)</li>
+            <li>講話卡/中斷修: 深想腦答案不再被切在句中 (字數上限對中文太緊、偶爾斷句、唸到一半沒了) · 同速但句尾完整</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v2.1.0</span><span class="vm-entry-date">2026-06-02</span></header>
           <ul class="vm-list">
             <li>大功能批: 情緒腦 (Director) + 情緒臉淡入層 + 深想腦升 Sonnet 4.6</li>
@@ -1947,7 +1964,7 @@
   <script src="/static/session-memory.js?v=2.0.6"></script>
   <script src="/static/conversation-memory.js?v=2.0.6"></script>
   <script src="/static/avatar-director.js?v=2.0.6"></script>
-  <script src="/static/animation-pool.js?v=2.1.0"></script>
+  <script src="/static/animation-pool.js?v=2.1.1"></script>
   <script src="/static/phrase-matcher.js?v=0.4.x-semantic"></script>
   <!-- viseme-poc-v0.1 · 業界輕量 lipsync (Duix / Tavus / HeyGen 同款路線 · CPU 即可) -->
   <!-- feature flag: ?viseme=1 啟動 · 預設 off · 不影響主線 -->
