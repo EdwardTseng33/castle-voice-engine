@@ -975,7 +975,7 @@
         var dm = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ? "standalone"
                : (window.navigator && window.navigator.standalone ? "ios-standalone" : "browser");
         d.textContent =
-          "VER 2.1.2\n" +
+          "VER 2.1.3\n" +
           "mode " + dm + "\n" +
           "innerH " + window.innerHeight + " / screenH " + window.screen.height + "\n" +
           "appHeight " + getComputedStyle(document.documentElement).getPropertyValue("--app-height").trim() + "\n" +
@@ -1143,7 +1143,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v2.1.2</span>
+          <span class="vm-version">v2.1.3</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -1152,6 +1152,10 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v2.1.3</span><span class="vm-entry-date">2026-06-02</span></header>
+          <ul class="vm-entry-body">
+            <li>①止血: 開頭只載 1 支 idle、其餘 lazy (126MB→6MB) · speaking/講話片池延後到 Start</li>
+          </ul>
           <header class="vm-entry-head"><span class="vm-entry-ver">v2.1.2</span><span class="vm-entry-date">2026-06-02</span></header>
           <ul class="vm-list">
             <li>常駐保溫: 第一次點開不再要等冷啟、開頁即用 (解一直撞的「第一次點 Start 失敗」)</li>
@@ -1971,7 +1975,7 @@
   <script src="/static/session-memory.js?v=2.0.6"></script>
   <script src="/static/conversation-memory.js?v=2.0.6"></script>
   <script src="/static/avatar-director.js?v=2.0.6"></script>
-  <script src="/static/animation-pool.js?v=2.1.2"></script>
+  <script src="/static/animation-pool.js?v=2.1.3"></script>
   <script src="/static/phrase-matcher.js?v=0.4.x-semantic"></script>
   <!-- viseme-poc-v0.1 · 業界輕量 lipsync (Duix / Tavus / HeyGen 同款路線 · CPU 即可) -->
   <!-- feature flag: ?viseme=1 啟動 · 預設 off · 不影響主線 -->
@@ -2006,6 +2010,8 @@
     var qs = new URLSearchParams(window.location.search || "");
     // rebuild #2 · controller=new 走 AvatarStage · 預設 / old 走現狀 (止血陽春版)
     window.__sophieController = (qs.get("controller") === "new") ? "new" : "old";
+    // v2.1.3 · ?legacyPreload=1 才走舊版開頭預載整個片庫路徑 (debug / 量測 before/after baseline 用) · 預設 off
+    window.__sophieLegacyPreload = (qs.get("legacyPreload") === "1");
     window.__sophieAvatarStage = null;
     // v2.0.15-pre-call-rotation-on · Edward 5/25 catch · pre-call rotator 從來沒啟動 (flag = false 寫死)
     // 改 __sophieEnableAvatarIdleRotation = true · pre-call (未 Start) 走 rich pool (idle 65 / stroke-hair 15 / playful 12 / greeting 8)
@@ -2861,18 +2867,10 @@
         } else if (_sv) {
           log("[v2.0.19] speakingVideo already ready · readyState=" + _sv.readyState);
         }
-        // v2.0.30 · 預載 3s + 7s + 10s 講話池 (避免第一次切換時冷快取卡頓 · 5s 預設 element 已有)
-        ["/static/sophie-speak-3s.mp4", "/static/sophie-speak-7s.mp4", "/static/sophie-speak-10s.mp4"].forEach(function (src) {
-          try {
-            var pre = document.createElement("video");
-            pre.preload = "auto"; pre.muted = true; pre.style.display = "none";
-            pre.src = src;
-            document.body.appendChild(pre);
-            pre.load();
-            setTimeout(function () { try { pre.parentNode && pre.parentNode.removeChild(pre); } catch (e) {} }, 8000);
-          } catch (e) {}
-        });
-        log("[v2.0.29] speak pool preload: 3s + 10s 影片暖機中");
+        // v2.1.3 stop-bleed: no longer fetch 3s+7s+10s (~9.5MB) eagerly at Start, changed to lazy
+        //   setSpeakingSrc already does v.src+v.load() on demand at the moment a length is needed
+        //   first super-long sentence may take ~1s to switch to 10s clip; speaking main clip fallback; acceptable
+        log("[v2.1.3] speak pool lazy - not preloading 3 clips at Start");
         var _iv = document.getElementById("liveVideo");
         if (_iv && _iv.paused) {
           var _ivp = _iv.play();

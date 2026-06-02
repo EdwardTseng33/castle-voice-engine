@@ -441,9 +441,10 @@
       v.loop = true;
       v.muted = true;
       v.autoplay = true;
-      v.setAttribute("preload", "auto");
-      try { v.load(); } catch (loadErr) {}
-      try { v.pause(); } catch (pauseErr) {}
+      // v2.1.3 stop-bleed: do NOT preload=auto / load() at construct time (added +6.5MB to open)
+      //   speaking layer not needed before entering a call -> warm only when Start pressed
+      //   _setSpeakingLayer already has readyState guard + load() fallback (readyState<3 waits canplaythrough)
+      v.setAttribute("preload", "none");
     } catch (e) {}
   };
 
@@ -688,26 +689,35 @@
   };
 
   AnimationPool.prototype._preloadCriticalActions = function () {
-    var self = this;
-    // v2.0.32 mobile-perf-safe-fix #1 (root cause: open-page preload 15 large mp4)
-    //   desktop: keep original behavior (preload=auto all 16 - zero regression)
-    //   mobile: only preload idle variants (the only thing pre-call shows most) + preload=metadata
-    //           -> avoid ~95MB blast + 15 large videos retained in mobile RAM
-    var keys = IS_MOBILE ? IDLE_VARIANTS.slice() : Object.keys(ANIMATION_POOL);
-    var preloadMode = IS_MOBILE ? "metadata" : "auto";
-    var primed = 0;
-    keys.forEach(function (state) {
-      if (state === self.currentState) return;
-      if (!ANIMATION_POOL[state]) return;
-      var pre = document.createElement("video");
-      pre.preload = preloadMode;
-      pre.muted = true;
-      pre.src = ANIMATION_POOL[state];
-      pre.style.display = "none";
-      try { pre.load(); primed++; } catch (e) {}
-      self._preloaders[state] = pre;
-    });
-    this._log("preload primed " + primed + "/" + keys.length + " (mode=" + preloadMode + " mobile=" + IS_MOBILE + ")");
+    // v2.1.3 stop-bleed (root cause: open-page preload whole lib -> desktop 16 ~126MB / mobile 4 metadata)
+    //   open page only needs 1 idle: liveVideo tag already src=sophie-idle.mp4 + preload=metadata + autoplay loop,
+    //   _initIdle() also ensures play -> NO extra preload needed at open.
+    //   all other 15 lazy (load only at the moment they actually play):
+    //     doSwitchIdle/doSwitchPreCall = preload-first swap (own createElement+load; do NOT read _preloaders)
+    //     _playRaw (emotion) = this.video.src=src then canplay (does NOT read _preloaders)
+    //     setSpeakingSrc (speak) = v.src + v.load() on demand
+    //   grep confirms _preloaders only written here, no consumer depends on pre-warm -> zero functional regression.
+    //   ?legacyPreload=1 to use old path (debug / measurement baseline)
+    if (global.__sophieLegacyPreload === true) {
+      var self = this;
+      var keys = IS_MOBILE ? IDLE_VARIANTS.slice() : Object.keys(ANIMATION_POOL);
+      var preloadMode = IS_MOBILE ? "metadata" : "auto";
+      var primed = 0;
+      keys.forEach(function (state) {
+        if (state === self.currentState) return;
+        if (!ANIMATION_POOL[state]) return;
+        var pre = document.createElement("video");
+        pre.preload = preloadMode;
+        pre.muted = true;
+        pre.src = ANIMATION_POOL[state];
+        pre.style.display = "none";
+        try { pre.load(); primed++; } catch (e) {}
+        self._preloaders[state] = pre;
+      });
+      this._log("[legacy] preload primed " + primed + "/" + keys.length + " (mode=" + preloadMode + " mobile=" + IS_MOBILE + ")");
+      return;
+    }
+    this._log("v2.1.3 stop-bleed open preload SKIP (keep 1 idle by tag, rest lazy) mobile=" + IS_MOBILE);
   };
 
   AnimationPool.prototype.playAction = function (state) {
