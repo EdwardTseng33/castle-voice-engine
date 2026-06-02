@@ -12,6 +12,11 @@
 #       prod 必走這 script · 必經 Edward visual approval
 #
 # 設計：守門 logic 寫死 bash · 不靠 cognitive 紀律 · 不可繞過
+#
+# ⚠ 版本號紀律 (Edward 2026-06-02 catch「上線沒進版號 · 回歸看不出來」):
+#   每次 deploy 前、改過 code 就必須同步進版號 (4 處: index.html debug overlay VER /
+#   animation-pool.js?v= / castle/static/sw.js CACHE_VERSION / version modal vm-version + 加 changelog entry)。
+#   pre-ship-verify.sh [2b/5] 會自動驗 4 字串一致 · 不一致 = FAIL。版號不對齊不准上 prod。
 
 set -uo pipefail
 

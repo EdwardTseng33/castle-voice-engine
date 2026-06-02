@@ -69,8 +69,12 @@
     html, body {
       height: 100%;
       overflow: hidden;
-      /* v2.0.41 · body 底色改純黑 (原橘 #C95B2E) · 杜絕任何模式下露橘帶 · 影片/stage 自有深色底 */
-      background: #000;
+      /* v2.1.0 · Edward 6/2「手機底部黑底又露出」根治 · 卡西法
+         真因 (git 考證): v1.9.1 全頻沒黑邊 = body/shell/stage 全橘 #C95B2E → iOS standalone 底部安全區 (home indicator) 那條 fixed 內容繪不到的縫隙填橘 · 跟 avatar 暖背景融成一體 · 肉眼看不出。
+         v2.0.41 為了殺「影片切換橘閃」把 body/shell 一律改純黑 → 那條安全區縫隙從橘變黑 → 在暗 avatar 底下變明顯黑帶。
+         修法: 安全區 fallback 改回暖色 (取 avatar 主背景深陶土 #6e3a23) · 既不像純橘跟 · 又跟 avatar 暖場景融 · 不再露黑帶。
+         橘閃已由 stage-canvas 深棕底 (#1f120b) + 靜態臉 poster + preload-then-swap 在 video 層獨立解掉 · body 這層改暖色不會把橘閃帶回。 */
+      background: #6e3a23;
       font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text",
                    "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei",
                    sans-serif;
@@ -86,9 +90,9 @@
       /*   fixed+inset:0 直接釘四邊、不靠任何高度數字、不會短 */
       position: fixed;
       inset: 0;
-      /* v2.0.41 · 底色改純黑 (原橘 #C95B2E) · 萬一 iOS 仍有安全區縫隙也是黑邊融進暗部、不再露橘帶 */
-      /*   橘色當初是遮影片切換黑閃用、但 stage-canvas 自己有深色底圖 (line ~415) 已遮、body 橘是多餘且外漏 */
-      background: #000;
+      /* v2.1.0 · Edward 6/2 黑帶根治 (同 body 理由) · shell 底色跟 body 一致暖色 · iOS 安全區縫隙填暖色不露黑帶
+         其餘 stage-canvas 深棕底圖 (line ~415) 負責影片切換不閃 · 兩層职責分開。 */
+      background: #6e3a23;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -962,7 +966,7 @@
         var dm = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ? "standalone"
                : (window.navigator && window.navigator.standalone ? "ios-standalone" : "browser");
         d.textContent =
-          "VER 2.0.42-warmstart\n" +
+          "VER 2.1.0\n" +
           "mode " + dm + "\n" +
           "innerH " + window.innerHeight + " / screenH " + window.screen.height + "\n" +
           "appHeight " + getComputedStyle(document.documentElement).getPropertyValue("--app-height").trim() + "\n" +
@@ -1130,7 +1134,7 @@
       <header class="vm-header">
         <h2 class="vm-title" id="vmTitle">
           <span class="vm-name">蘇菲</span>
-          <span class="vm-version">v2.0.6</span>
+          <span class="vm-version">v2.1.0</span>
         </h2>
         <button type="button" class="vm-close" id="vmClose" aria-label="關閉">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -1139,6 +1143,16 @@
       <div class="vm-divider" aria-hidden="true"></div>
       <div class="vm-body">
         <article class="vm-entry vm-entry-latest">
+          <header class="vm-entry-head"><span class="vm-entry-ver">v2.1.0</span><span class="vm-entry-date">2026-06-02</span></header>
+          <ul class="vm-list">
+            <li>大功能批: 情緒腦 (Director) + 情緒臉淡入層 + 深想腦升 Sonnet 4.6</li>
+            <li>修手機底部黑帶: iOS 主畫面安全區改暖色融進 avatar · 不再露黑條</li>
+            <li>修「有回有些沒回」: 回應旗標卡死自動鬆開 (15s watchdog + error 兜底)</li>
+            <li>修前 30 秒卡頓: 首次安裝不再多 reload 一次 · 開頁順暢</li>
+            <li>恢復版本號紀律: 每次上線必更新版號 (上次停在 2.0.42 漏更)</li>
+          </ul>
+        </article>
+        <article class="vm-entry">
           <header class="vm-entry-head"><span class="vm-entry-ver">v2.0.6</span><span class="vm-entry-date">2026-05-24</span></header>
           <ul class="vm-list">
             <li>修對嘴測試: lipsync 結束後正確釋放 Director 鎖 · 可切回 idle</li>
@@ -1933,7 +1947,7 @@
   <script src="/static/session-memory.js?v=2.0.6"></script>
   <script src="/static/conversation-memory.js?v=2.0.6"></script>
   <script src="/static/avatar-director.js?v=2.0.6"></script>
-  <script src="/static/animation-pool.js?v=2.0.42-warmstart"></script>
+  <script src="/static/animation-pool.js?v=2.1.0"></script>
   <script src="/static/phrase-matcher.js?v=0.4.x-semantic"></script>
   <!-- viseme-poc-v0.1 · 業界輕量 lipsync (Duix / Tavus / HeyGen 同款路線 · CPU 即可) -->
   <!-- feature flag: ?viseme=1 啟動 · 預設 off · 不影響主線 -->
@@ -3111,6 +3125,16 @@
         // 開頭問候那 2 條路徑只檢查 __sophiePendingGreeting · 沒檢查 active response → 雙觸發
         // 統一 guard helper · 4 條送 response.create 都走這
         function sendResponseCreateGuarded(source) {
+          // v2.1.0 · 卡西法 6/2 · watchdog safety release ·「有回有些沒回」兜底:
+          //   旗標卡 active 超過 15s (任何正常 response 都遠短於此) = 一定是上輪沒收到 response.done 卡死了。
+          //   不靠單一 error 事件 catch — 這層保證「不管什麼原因卡住、15s 後一定能再開口」。
+          if (window.__sophieResponseActive && window.__sophieResponseActiveSince &&
+              (Date.now() - window.__sophieResponseActiveSince) > 15000) {
+            log("[WATCHDOG] __sophieResponseActive 卡 " + (Date.now() - window.__sophieResponseActiveSince) + "ms · 強制鬆開讓本輪 (" + source + ") 能回");
+            window.__sophieResponseActive = false;
+            window.__sophieResponseActiveSince = 0;
+            window.__sophieResponseCreateSentAt = 0;
+          }
           if (window.__sophieResponseActive) {
             log("[GUARD] skip response.create from " + source + " · response already active");
             return false;
@@ -3751,6 +3775,16 @@
               var _silent = _errMsg.indexOf("Cancellation failed") !== -1 ||
                             _errMsg.indexOf("no active response") !== -1 ||
                             _errMsg.indexOf("already has an active response") !== -1;
+              // v2.1.0 · 卡西法 6/2 ·「有回有些沒回」根因修:
+              //   server error 發生在 response.created 之後、但 response.done 永遠不來 →
+              //   __sophieResponseActive 永遠卡 true → guard 擋掉之後每一輪 response.create → 下一句不回。
+              //   修: 任何 error 都把 active 旗標鬆開 (除了「already has active」那種 — 那代表真的還在跑、別誤鬆)。
+              if (_errMsg.indexOf("already has an active response") === -1) {
+                if (window.__sophieResponseActive) log("[WATCHDOG] error 後強制鬆開 __sophieResponseActive · 避免下一句卡住不回");
+                window.__sophieResponseActive = false;
+                window.__sophieResponseActiveSince = 0;
+                window.__sophieResponseCreateSentAt = 0;
+              }
               if (!_silent) showError("OpenAI: " + _errMsg);
             } else if (data.type === "session.created" || data.type === "session.updated" ||
                        data.type === "response.created" || data.type === "response.done") {
@@ -3784,6 +3818,7 @@
                 window.__sophieSpeakingTriggered = false;
                 window.__sophiePhraseMatched = false;
                 window.__sophieResponseActive = true;
+                window.__sophieResponseActiveSince = Date.now();  // v2.1.0 · 卡西法 6/2 · watchdog 用 · 旗標卡住自動鬆開
                 window.__sophieResponseCreateSentAt = 0;  // v2.0.20 · 確認收到 · 清 sent timestamp
                 // v2.0.23 · response.created 也算 ready · 隱藏「正在喚醒蘇菲」overlay (蘇菲開始 response = 連線 100% OK)
                 if (!window.__sophieReady) {
@@ -3803,6 +3838,7 @@
                 clearLipsyncKick();
                 // v1.9.12 · response 結束 · 清標記
                 window.__sophieResponseActive = false;
+                window.__sophieResponseActiveSince = 0;  // v2.1.0 · 卡西法 · 正常收尾 · 清 watchdog 計時
                 window.__sophieResponseCreateSentAt = 0;  // v2.0.20 · response 結束 · 清 sent timestamp
                 if (window.__sophieSpeakingTriggered && !window.__sophieStopSpeakingTimer) {
                   window.__sophieStopSpeakingTimer = setTimeout(function () {
@@ -4626,9 +4662,16 @@
         }
       } catch (swkillErr) {}
       window.addEventListener("load", function () {
+        // v2.1.0 · 卡西法 6/2 ·「前 30 秒卡」根因修:
+        //   真因 (Chrome 側錄 evidence): 首次開頁 (或部署後第一次) SW install→activate→clients.claim 觸發
+        //   controllerchange → 舊 code 自動 location.reload() → 開頁約 10s 整個 avatar stack 重 init + 重抓 idle 影片
+        //   (側錄到 AvatarDirector init / preload primed / emotion engine ready 全在 ~1.7s 跟 ~10.1s 各跑一次 = 雙 init)。
+        //   reload 本身 + 重抓重 decode 影片 = 前段卡頓。修: 首次安裝 (controller 本來就 null) 不需要 reload —
+        //   code 是 network-only 本來就最新、沒有 stale code 要換。只有「真的換了一版 SW」(原本已有 controller) 才 reload。
+        var _hadControllerAtRegister = !!navigator.serviceWorker.controller;
         navigator.serviceWorker.register("/static/sw.js", { scope: "/static/" })
           .then(function (reg) {
-            log("sw registered");
+            log("sw registered · hadController=" + _hadControllerAtRegister);
             // v1.9.11 · 砍掉 auto-reload 干擾影片載入 · 只 check update、不強制 reload
             // 新 SW 安裝完 = 下次 Edward 自己刷新自然生效 (network-first 確保 HTML 拿到最新)
             try { reg.update(); } catch (e) {}
@@ -4657,6 +4700,12 @@
               var _swReloaded = false;
               navigator.serviceWorker.addEventListener("controllerchange", function () {
                 if (_swReloaded) return;
+                // v2.1.0 · 卡西法 · 首次安裝 (本來沒 controller) 不 reload · 避免開頁 ~10s 整個重 init 卡頓
+                //   code 是 network-only · 首次就是最新 · 沒 stale 要換 · reload 只是白白卡一次。
+                if (!_hadControllerAtRegister) {
+                  log("[v2.1.0] SW 首次安裝 · 跳過 reload (code 已最新 · 不卡開頁)");
+                  return;
+                }
                 var inCall = shell && shell.getAttribute("data-state") !== "idle";
                 if (inCall) return;
                 _swReloaded = true;
@@ -4669,7 +4718,7 @@
       });
     }
 
-    log("Voice Path v2.0.44 - avatar rebuild #2 stage1b (AvatarStage play race fix) - 2026-05-29");
+    log("Voice Path v2.1.0 - 情緒腦/情緒臉/Sonnet4.6 + 6/2 三修(手機黑帶/漏接/前30s卡) - 2026-06-02");
     if (window.__sophieEnableLipsync === true) {
       log("[LIPSYNC ENABLED] URL flag on");
       runLipsyncUrlTest();

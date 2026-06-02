@@ -137,6 +137,26 @@ echo "[2/5] SW cache 版本"
 SW_VER=$(curl -s $COOKIE_HEADER "$URL/static/sw.js" | grep "CACHE_VERSION =" | head -1 | sed -E "s/.*'(.*)'.*/\1/")
 echo "  SW CACHE_VERSION = $SW_VER"
 
+# v2.1.0 . calcifer 6/2 . VER discipline check (Edward 6/2 catch: shipped without bumping VER)
+#   4 version strings must agree: debug overlay VER / animation-pool ?v= / SW CACHE_VERSION / modal vm-version
+echo ""
+echo "[2b/5] discipline . version string consistency (Edward 6/2 catch)"
+IDX=$(curl -s $COOKIE_HEADER "$URL/static/index.html")
+VER_OVERLAY=$(echo "$IDX" | grep -oE 'VER [0-9]+\.[0-9]+\.[0-9]+[A-Za-z0-9.-]*' | head -1 | sed 's/^VER //; s/^v//')
+VER_POOL=$(echo "$IDX" | grep -oE 'animation-pool\.js\?v=[A-Za-z0-9.-]+' | head -1 | sed -E 's/.*v=//; s/^v//')
+VER_MODAL=$(echo "$IDX" | grep -oE 'class="vm-version">v[0-9]+\.[0-9]+\.[0-9]+[A-Za-z0-9.-]*<' | head -1 | sed -E 's/.*>v//; s/<.*//')
+SW_VER_PLAIN=$(echo "$SW_VER" | sed 's/^v//')
+echo "  debug overlay  VER = ${VER_OVERLAY:-<none>}"
+echo "  animation-pool ?v= = ${VER_POOL:-<none>}"
+echo "  modal vm-version   = ${VER_MODAL:-<none>}"
+echo "  SW CACHE_VERSION   = ${SW_VER_PLAIN:-<none>}"
+if [ "$VER_OVERLAY" = "$VER_POOL" ] && [ "$VER_OVERLAY" = "$VER_MODAL" ] && [ "$VER_OVERLAY" = "$SW_VER_PLAIN" ]; then
+  echo "OK 4 version strings agree ($VER_OVERLAY)"
+else
+  echo "FAIL version strings disagree . code changed without bumping VER (Edward 6/2 discipline) . align then deploy"
+  FAIL=1
+fi
+
 echo ""
 echo "[3/5] 4 個動畫狀態 mp4 reachable + Range 支援"
 for STATE in idle speaking task-received task-handoff; do
