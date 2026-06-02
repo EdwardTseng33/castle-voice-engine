@@ -65,7 +65,7 @@ def attach_brain_routes(app):
         _test_maxtok = body.get("_max_tokens")
         use_model = (
             _test_model if isinstance(_test_model, str) and _test_model
-            else (_env_model if _env_model else "claude-sonnet-4-5")
+            else (_env_model if _env_model else "claude-sonnet-4-6")
         )
         use_maxtok = _test_maxtok if isinstance(_test_maxtok, int) and 100 <= _test_maxtok <= 500 else 200
 
@@ -192,7 +192,7 @@ def attach_brain_routes(app):
         return {
             "ok": True,
             "anthropic_key": bool(_resolve_anthropic_key()),
-            "model": "claude-sonnet-4-5",
+            "model": "claude-sonnet-4-6",
         }
 
     # ===== v1.7.1 感知層 · 時間 / 天氣 / 工作狀態 =====
@@ -385,7 +385,7 @@ def attach_brain_routes(app):
                     "結尾留個鉤子讓 Edward 補充 (譬如『你還有什麼要我注意的嗎』)"
                 )
                 msg = cli.messages.create(
-                    model="claude-sonnet-4-5",
+                    model="claude-sonnet-4-6",
                     max_tokens=400,
                     system="你是 Sophie · Edward 個人 AI 特助 · 即將代他出席會議 · zh-TW 自然口語",
                     messages=[{"role": "user", "content": prompt_user}],
@@ -490,7 +490,7 @@ def attach_brain_routes(app):
                 "\n\n## 下次會議建議\n(若有後續)"
             )
             msg = cli.messages.create(
-                model="claude-sonnet-4-5",
+                model="claude-sonnet-4-6",
                 max_tokens=1500,
                 system="你是 Sophie · Edward 個人 AI 特助 · 剛剛代他出席會議 · 用 zh-TW 整理會後紀錄",
                 messages=[{"role": "user", "content": prompt_user}],
@@ -564,7 +564,7 @@ def attach_brain_routes(app):
                 "6. 蘇菲第一人稱『我』+『Edward / 你』、不矯飾"
             )
             msg = cli.messages.create(
-                model="claude-sonnet-4-5",
+                model="claude-sonnet-4-6",
                 max_tokens=300,
                 system="你是 Sophie · Edward 個人特助 + 陪伴 · zh-TW 自然口語",
                 messages=[{"role": "user", "content": prompt_user}],
@@ -646,7 +646,7 @@ def attach_brain_routes(app):
                     "不要說『以下幾點』類條列。"
                 )
                 msg = cli.messages.create(
-                    model="claude-sonnet-4-5",
+                    model="claude-sonnet-4-6",
                     max_tokens=300,
                     system="你是 Sophie · Edward 個人特助 · zh-TW 自然口語",
                     messages=[{"role": "user", "content": prompt_user}],
@@ -746,7 +746,7 @@ def attach_brain_routes(app):
                 "若工作狀態空、就先寒暄 + 問 Edward『今天想動什麼』。"
             )
             msg = client.messages.create(
-                model="claude-sonnet-4-5",
+                model="claude-sonnet-4-6",
                 max_tokens=300,
                 system=(
                     "你是 Sophie · Edward 個人特助。"
@@ -1080,7 +1080,7 @@ def attach_brain_routes(app):
                     "結尾問 Edward『你還有想驗證的假設嗎』"
                 )
                 msg = cli.messages.create(
-                    model="claude-sonnet-4-5",
+                    model="claude-sonnet-4-6",
                     max_tokens=500,
                     system="你是 Sophie · Edward 個人 AI 特助 · 即將代他跑需求訪談 · zh-TW 自然口語",
                     messages=[{"role": "user", "content": prompt_user}],
@@ -1178,7 +1178,7 @@ def attach_brain_routes(app):
                 "## 下一步建議\n(這場學到什麼 + 下次該問誰 / 問什麼)"
             )
             msg = cli.messages.create(
-                model="claude-sonnet-4-5",
+                model="claude-sonnet-4-6",
                 max_tokens=2000,
                 system="你是 Sophie · Edward 個人 AI 特助 · 剛跑完需求訪談 · 用 zh-TW 整理研究 insight",
                 messages=[{"role": "user", "content": prompt_user}],
