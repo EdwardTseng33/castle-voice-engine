@@ -1,4 +1,6 @@
-# Voice Path（castle-voice-engine runtime）· 產品護照
+# BeyondVoice 引擎（castle-voice-engine runtime）· 產品護照
+
+> 🔔 **2026-06-25 正式定名**：本產品對外名 = **BeyondVoice**（舊名 Voice Path 退役）。本檔描述的是 BeyondVoice 的**底層引擎** `castle-voice-engine`（技術代號、不對外露出）。定名詳情：`E:\BeyondVoice\00-定名與地圖\BeyondVoice-正式定名-2026-06-25.md`
 
 > 套用範本：`~/.claude/protocols/product-passport-template.md`
 > 配合 SOP：`~/.claude/sops/v5.4.x/v5.4.22-multi-product-portfolio.md`
